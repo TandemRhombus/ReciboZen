@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Bottom navigation -->
+    <string name="nav_home">Inicio</string>
+    <string name="nav_appliances">Aparatos</string>
+    <string name="nav_plan">Plan</string>
+    <string name="nav_history">Historial</string>
+
+    <!-- Generic actions reused across screens -->
+    <string name="action_back">Volver</string>
+    <string name="action_cancel">Cancelar</string>
+    <string name="action_save">Guardar</string>
+    <string name="action_continue">Continuar</string>
+    <string name="action_edit">Editar</string>
+    <string name="action_close">Cerrar</string>
+    <string name="action_register_reading">Registrar lectura</string>
+    <string name="user_avatar_initial">E</string>
+    <string name="content_desc_back">Regresar a la pantalla anterior</string>
+    <string name="content_desc_profile">Abrir tu perfil</string>
+
+    <!-- RzMeterDial (core component, shared by the readings feature) -->
+    <string name="dial_face_label">Carátula %1$d de 5</string>
+    <string name="dial_clockwise">Sentido horario</string>
+    <string name="dial_counterclockwise">Sentido antihorario</string>
+    <string name="dial_nudge_back">Girar la manecilla hacia atrás</string>
+    <string name="dial_nudge_forward">Girar la manecilla hacia adelante</string>
+    <string name="dial_reads_as">se lee</string>
+    <string name="dial_tap_hint">Toca cualquier carátula para volver a ella</string>
+    <string name="dial_select_face">Seleccionar carátula %1$d</string>
+    <string name="dial_face_content_description">Carátula %1$d de 5. Sentido %2$s. Valor interpretado: %3$d.</string>
+</resources>
