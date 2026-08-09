@@ -5,6 +5,10 @@ import com.recibozen.app.core.model.Appliance
 import com.recibozen.app.core.model.BillPeriod
 import com.recibozen.app.core.model.HistoryUnit
 import com.recibozen.app.core.model.ReadingMethod
+import com.recibozen.app.core.model.ElectricServiceIdentity
+import com.recibozen.app.core.model.ServiceCreationResult
+import com.recibozen.app.core.importer.ParsedCfeBill
+import com.recibozen.app.core.importer.BillImportResult
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -14,6 +18,8 @@ import kotlinx.coroutines.flow.StateFlow
  */
 interface ReciboZenRepository {
     val session: StateFlow<ReciboZenSessionState>
+    val electricServices: StateFlow<List<ElectricServiceIdentity>>
+    val importedBillHistory: StateFlow<List<BillPeriod>>
 
     fun appliances(state: ReciboZenSessionState = session.value): List<Appliance>
     fun appliance(id: String, state: ReciboZenSessionState = session.value): Appliance?
@@ -39,6 +45,10 @@ interface ReciboZenRepository {
     fun completeOnboarding()
     fun setMeterType(meterType: String)
     fun updateProfile(userName: String, householdName: String, location: String, goalMxn: Int)
+    fun updateElectricService(alias: String, serviceNumber: String, rmu: String, meterNumber: String, tariffCode: String)
+    fun addElectricService(alias: String, serviceNumber: String, rmu: String, meterNumber: String, tariffCode: String): ServiceCreationResult
+    fun selectElectricService(serviceId: String)
+    suspend fun importCfeBill(bill: ParsedCfeBill, sourceFileHash: String): BillImportResult
     fun setManualReadingDigits(digits: List<Int>)
     fun prepareReading(kwh: Int, method: ReadingMethod)
     fun confirmReading(kwh: Int, method: ReadingMethod)

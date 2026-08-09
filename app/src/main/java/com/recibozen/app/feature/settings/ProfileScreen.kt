@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -44,6 +45,9 @@ import androidx.navigation.NavHostController
 import com.recibozen.app.R
 import com.recibozen.app.core.components.RzCard
 import com.recibozen.app.core.components.RzFlowTopBar
+import com.recibozen.app.core.components.RzFilterChip
+import com.recibozen.app.core.calculation.TariffCatalog
+import com.recibozen.app.core.model.ElectricServiceValidator
 import com.recibozen.app.core.designsystem.RzExtraShapes
 import com.recibozen.app.core.designsystem.RzIcons
 import com.recibozen.app.core.designsystem.RzSpacing
@@ -66,6 +70,10 @@ data class ProfileUiState(
     val userName: String = DemoReciboZenData.USER_NAME,
     val userInitial: String = DemoReciboZenData.USER_INITIAL,
     val householdName: String = DemoReciboZenData.HOUSEHOLD_NAME,
+    val serviceAlias: String = DemoReciboZenData.HOUSEHOLD_NAME,
+    val serviceNumber: String = "",
+    val rmu: String = "",
+    val meterNumber: String = "",
     val tariff: String = DemoReciboZenData.TARIFF,
     val billingCycle: String = DemoReciboZenData.BILLING_CYCLE,
     val location: String = DemoReciboZenData.LOCATION,
@@ -79,6 +87,10 @@ class ProfileViewModel(private val repository: ReciboZenRepository) : ViewModel(
                 userName = state.userName,
                 userInitial = state.userName.firstOrNull()?.uppercase() ?: "?",
                 householdName = state.householdName,
+                serviceAlias = state.serviceAlias,
+                serviceNumber = state.serviceNumber,
+                rmu = state.rmu,
+                meterNumber = state.meterNumber,
                 tariff = state.tariff,
                 billingCycle = state.billingCycle,
                 location = state.location,
@@ -89,6 +101,9 @@ class ProfileViewModel(private val repository: ReciboZenRepository) : ViewModel(
 
     fun update(userName: String, householdName: String, location: String, goalMxn: Int) =
         repository.updateProfile(userName, householdName, location, goalMxn)
+
+    fun updateService(alias: String, serviceNumber: String, rmu: String, meterNumber: String, tariffCode: String) =
+        repository.updateElectricService(alias, serviceNumber, rmu, meterNumber, tariffCode)
 }
 
 @Composable
@@ -101,7 +116,9 @@ fun ProfileRoute(navController: NavHostController, repository: ReciboZenReposito
         onBack = { navController.popBackStack() },
         onNavigateAppearance = { navController.navigate(Routes.Appearance) },
         onNavigateStatesCatalog = { navController.navigate(Routes.StatesCatalog) },
+        onNavigateServices = { navController.navigate(Routes.Services) },
         onUpdateProfile = viewModel::update,
+        onUpdateService = viewModel::updateService,
     )
 }
 
@@ -111,9 +128,12 @@ fun ProfileScreen(
     onBack: () -> Unit,
     onNavigateAppearance: () -> Unit,
     onNavigateStatesCatalog: () -> Unit,
+    onNavigateServices: () -> Unit,
     onUpdateProfile: (String, String, String, Int) -> Unit,
+    onUpdateService: (String, String, String, String, String) -> Unit,
 ) {
     var showEditDialog by remember { mutableStateOf(false) }
+    var showServiceDialog by remember { mutableStateOf(false) }
     Scaffold(topBar = { RzFlowTopBar(title = stringResource(R.string.profile_title), onBack = onBack) }) { padding ->
         Column(
             modifier = Modifier
@@ -166,6 +186,19 @@ fun ProfileScreen(
                     icon = RzIcons.HomeWork,
                     label = stringResource(R.string.profile_row_household_goal),
                     onClick = { showEditDialog = true },
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                ProfileRow(
+                    icon = RzIcons.Bolt,
+                    label = stringResource(R.string.profile_row_service),
+                    trailing = uiState.serviceAlias,
+                    onClick = { showServiceDialog = true },
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                ProfileRow(
+                    icon = RzIcons.HomeWork,
+                    label = stringResource(R.string.profile_row_services),
+                    onClick = onNavigateServices,
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 ProfileRow(
@@ -233,6 +266,93 @@ fun ProfileScreen(
             },
         )
     }
+
+    if (showServiceDialog) {
+        var alias by remember(uiState.serviceAlias) { mutableStateOf(uiState.serviceAlias) }
+        var serviceNumber by remember(uiState.serviceNumber) { mutableStateOf(uiState.serviceNumber) }
+        var rmu by remember(uiState.rmu) { mutableStateOf(uiState.rmu) }
+        var meterNumber by remember(uiState.meterNumber) { mutableStateOf(uiState.meterNumber) }
+        var tariffCode by remember(uiState.tariff) { mutableStateOf(TariffCatalog.find(uiState.tariff)?.code ?: "1C") }
+        val serviceNumberValid = ElectricServiceValidator.isValidServiceNumber(serviceNumber)
+        AlertDialog(
+            onDismissRequest = { showServiceDialog = false },
+            title = { Text(stringResource(R.string.profile_service_edit_title)) },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(RzSpacing.sm),
+                ) {
+                    Text(
+                        stringResource(R.string.profile_service_edit_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    OutlinedTextField(
+                        alias,
+                        { alias = it.take(40) },
+                        label = { Text(stringResource(R.string.profile_service_alias)) },
+                        singleLine = true,
+                    )
+                    OutlinedTextField(
+                        serviceNumber,
+                        { serviceNumber = ElectricServiceValidator.normalizeServiceNumber(it) },
+                        label = { Text(stringResource(R.string.profile_service_number)) },
+                        supportingText = {
+                            Text(
+                                if (serviceNumberValid) stringResource(R.string.profile_service_number_hint)
+                                else stringResource(R.string.profile_service_number_error),
+                            )
+                        },
+                        isError = !serviceNumberValid,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                    )
+                    OutlinedTextField(
+                        rmu,
+                        { rmu = ElectricServiceValidator.normalizeRmu(it) },
+                        label = { Text(stringResource(R.string.profile_service_rmu)) },
+                        singleLine = true,
+                    )
+                    OutlinedTextField(
+                        meterNumber,
+                        { meterNumber = ElectricServiceValidator.normalizeMeterNumber(it) },
+                        label = { Text(stringResource(R.string.profile_service_meter_number)) },
+                        singleLine = true,
+                    )
+                    Text(stringResource(R.string.profile_service_tariff), style = MaterialTheme.typography.labelLarge)
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(RzSpacing.xs),
+                        verticalArrangement = Arrangement.spacedBy(RzSpacing.xs),
+                    ) {
+                        TariffCatalog.supported.forEach { tariff ->
+                            RzFilterChip(
+                                text = tariff.code,
+                                selected = tariff.code == tariffCode,
+                                onClick = { tariffCode = tariff.code },
+                            )
+                        }
+                    }
+                    Text(
+                        TariffCatalog.find(tariffCode)?.name.orEmpty(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = alias.isNotBlank() && serviceNumberValid,
+                    onClick = {
+                        onUpdateService(alias, serviceNumber, rmu, meterNumber, tariffCode)
+                        showServiceDialog = false
+                    },
+                ) { Text(stringResource(R.string.profile_edit_save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showServiceDialog = false }) { Text(stringResource(R.string.action_cancel)) }
+            },
+        )
+    }
 }
 
 @Composable
@@ -275,7 +395,9 @@ private fun ProfileScreenPreview() {
             onBack = {},
             onNavigateAppearance = {},
             onNavigateStatesCatalog = {},
+            onNavigateServices = {},
             onUpdateProfile = { _, _, _, _ -> },
+            onUpdateService = { _, _, _, _, _ -> },
         )
     }
 }

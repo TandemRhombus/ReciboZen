@@ -2,6 +2,20 @@ package com.recibozen.app.core.model
 
 enum class OpportunityLevel { HIGH, MEDIUM, NONE }
 
+enum class ApplianceCategory {
+    CLIMATE,
+    KITCHEN,
+    LAUNDRY,
+    ENTERTAINMENT,
+    COMPUTING,
+    LIGHTING,
+    WATER,
+    PERSONAL_CARE,
+    OTHER,
+}
+
+enum class ApplianceDataSource { CATALOG, USER_ESTIMATE, RECEIPT_INFERENCE }
+
 /**
  * One appliance card, either static (Refrigerador) or session-adjustable
  * (PlayStation 5's hours/week, wired through [ReciboZenRepository]).
@@ -23,4 +37,8 @@ data class Appliance(
     val standbySharePercent: Int? = null,
     val previousPeriodDeltaPercent: Int? = null,
     val calculationNote: String? = null,
+    val category: ApplianceCategory = ApplianceCategory.OTHER,
+    val powerWatts: Int? = null,
+    val standbyWatts: Int? = null,
+    val dataSource: ApplianceDataSource = ApplianceDataSource.RECEIPT_INFERENCE,
 )

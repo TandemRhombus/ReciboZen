@@ -6,6 +6,8 @@
     <string name="profile_row_dark_mode">Modo oscuro</string>
     <string name="profile_row_dark_mode_trailing">Ver</string>
     <string name="profile_row_household_goal">Datos del hogar y meta</string>
+    <string name="profile_row_service">Suministro y medidor</string>
+    <string name="profile_row_services">Mis suministros</string>
     <string name="profile_row_reminders">Recordatorios de lectura</string>
     <string name="profile_row_reminders_trailing">Cada 3 días</string>
     <string name="profile_row_privacy">Privacidad y fotos guardadas</string>
@@ -17,6 +19,25 @@
     <string name="profile_edit_location">Ciudad</string>
     <string name="profile_edit_goal">Meta por recibo (MXN)</string>
     <string name="profile_edit_save">Guardar cambios</string>
+    <string name="profile_service_edit_title">Identificar este suministro</string>
+    <string name="profile_service_edit_hint">El alias es para ti. El número de servicio, RMU y medidor se extraerán del recibo cuando sea posible; también puedes capturarlos ahora.</string>
+    <string name="profile_service_alias">Alias (ej. Casa Mérida)</string>
+    <string name="profile_service_number">Número de servicio (12 dígitos)</string>
+    <string name="profile_service_number_hint">Opcional; aparece en tu recibo.</string>
+    <string name="profile_service_number_error">Debe tener 12 dígitos.</string>
+    <string name="profile_service_rmu">RMU (opcional)</string>
+    <string name="profile_service_meter_number">Número de medidor (opcional)</string>
+    <string name="profile_service_tariff">Tarifa del recibo</string>
+    <string name="services_title">Mis suministros</string>
+    <string name="services_usage">%1$d de %2$d suministros activos</string>
+    <string name="services_active">Activo</string>
+    <string name="services_add">Agregar otro suministro</string>
+    <string name="services_meter_note">Cambiar el medidor físico de un mismo número de servicio no consume otro espacio del plan.</string>
+    <string name="services_limit_title">Tu plan incluye un suministro</string>
+    <string name="services_limit_body">ReciboZen Plus permitirá hasta 2 suministros activos y Familiar hasta 5. Puedes revisar un recibo antes de decidir; el límite se aplicará al confirmar el nuevo suministro.</string>
+    <string name="services_limit_ok">Entendido</string>
+    <string name="services_add_title">Nuevo suministro</string>
+    <string name="services_add_confirm">Crear suministro</string>
 
     <!-- Appearance / Modo oscuro -->
     <string name="appearance_title">Modo oscuro</string>

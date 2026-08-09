@@ -39,6 +39,7 @@ import com.recibozen.app.core.components.RzBarChart
 import com.recibozen.app.core.components.RzBarEntry
 import com.recibozen.app.core.components.RzCard
 import com.recibozen.app.core.components.RzSegmentedTabs
+import com.recibozen.app.core.components.RzSecondaryButton
 import com.recibozen.app.core.components.RzTabHeader
 import com.recibozen.app.core.designsystem.ReciboZenTheme
 import com.recibozen.app.core.designsystem.RzExtraShapes
@@ -57,6 +58,7 @@ import com.recibozen.app.navigation.rzViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -74,15 +76,20 @@ data class HistoryUiState(
 )
 
 class HistoryViewModel(private val repository: ReciboZenRepository) : ViewModel() {
-    val uiState: StateFlow<HistoryUiState> = repository.session
-        .map { state ->
-            val bills = repository.billHistory(state)
+    val uiState: StateFlow<HistoryUiState> = combine(
+        repository.session,
+        repository.importedBillHistory,
+    ) { state, importedBills ->
+            val projected = repository.billHistory(state).last { it.isProjected }
+            val pastBills = importedBills.ifEmpty {
+                repository.billHistory(state).filterNot { it.isProjected }
+            }
             HistoryUiState(
                 greetingName = state.userName,
                 householdName = state.householdName,
                 userInitial = state.userName.firstOrNull()?.uppercase() ?: "?",
-                currentPeriod = bills.last { it.isProjected },
-                pastBills = bills.filterNot { it.isProjected },
+                currentPeriod = projected,
+                pastBills = pastBills,
                 historyUnit = state.historyUnit,
                 readingsCountLabel = "${state.readings.size} lecturas recientes",
                 readings = state.readings,
@@ -103,6 +110,7 @@ fun HistoryRoute(navController: NavHostController, repository: ReciboZenReposito
         onProfileClick = { navController.navigate(Routes.Profile) },
         onUnitChange = viewModel::setHistoryUnit,
         onRegisterReading = { navController.navigate(Routes.ReadingMethod) },
+        onImportBill = { navController.navigate(Routes.BillImport) },
     )
 }
 
@@ -112,6 +120,7 @@ fun HistoryScreen(
     onProfileClick: () -> Unit,
     onUnitChange: (HistoryUnit) -> Unit,
     onRegisterReading: () -> Unit,
+    onImportBill: () -> Unit,
 ) {
     Scaffold(
         floatingActionButton = {
@@ -151,6 +160,12 @@ fun HistoryScreen(
                     stringResource(R.string.history_headline),
                     style = MaterialTheme.typography.headlineLarge,
                     color = MaterialTheme.colorScheme.onSurface,
+                )
+
+                RzSecondaryButton(
+                    text = stringResource(R.string.history_import_bill),
+                    onClick = onImportBill,
+                    modifier = Modifier.fillMaxWidth(),
                 )
 
                 CurrentPeriodProjectionCard(
@@ -453,6 +468,7 @@ private fun HistoryScreenPreview() {
             onProfileClick = {},
             onUnitChange = {},
             onRegisterReading = {},
+            onImportBill = {},
         )
     }
 }

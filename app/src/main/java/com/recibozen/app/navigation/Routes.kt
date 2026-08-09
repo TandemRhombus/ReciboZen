@@ -10,6 +10,7 @@ object Routes {
     const val Appliances = "appliances"
     const val Plan = "plan"
     const val History = "history"
+    const val BillImport = "bill_import"
     val bottomTabs = listOf(Home, Appliances, Plan, History)
 
     // Flow routes (pushed with a back-button top bar)
@@ -36,6 +37,7 @@ object Routes {
     const val HowWeCalculate = "how_we_calculate"
 
     const val Profile = "profile"
+    const val Services = "services"
     const val Appearance = "appearance"
     const val StatesCatalog = "states_catalog"
 }

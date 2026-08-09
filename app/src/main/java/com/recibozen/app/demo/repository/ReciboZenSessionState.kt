@@ -5,6 +5,7 @@ import com.recibozen.app.core.model.HistoryReadingEntry
 import com.recibozen.app.core.model.HistoryUnit
 import com.recibozen.app.core.model.PlanAction
 import com.recibozen.app.core.model.Appliance
+import com.recibozen.app.core.model.EntitlementTier
 import com.recibozen.app.demo.data.DemoReciboZenData
 
 /** User-owned state. The production repository persists this object with DataStore. */
@@ -14,6 +15,12 @@ data class ReciboZenSessionState(
     val themeMode: AppThemeMode = AppThemeMode.SYSTEM,
     val userName: String = DemoReciboZenData.USER_NAME,
     val householdName: String = DemoReciboZenData.HOUSEHOLD_NAME,
+    val serviceAlias: String = DemoReciboZenData.HOUSEHOLD_NAME,
+    val serviceNumber: String = "",
+    val rmu: String = "",
+    val meterNumber: String = "",
+    val activeServiceId: String = "legacy_service",
+    val entitlementTier: EntitlementTier = EntitlementTier.FREE,
     val location: String = DemoReciboZenData.LOCATION,
     val tariff: String = DemoReciboZenData.TARIFF,
     val billingCycle: String = DemoReciboZenData.BILLING_CYCLE,

@@ -4,7 +4,9 @@ Este proyecto comenzó como la conversión visual del prototipo **ReciboZen V2**
 
 ## Estado funcional actual (9 ago 2026)
 
-- DataStore conserva onboarding, tema, perfil, meta, tipo de medidor, aparatos, horas de uso, plan, lecturas, escenario solar y preferencias al cerrar el proceso.
+- DataStore conserva preferencias y estado de sesión; Room conserva hogares, suministros, medidores, recibos, cargos, historial y datasets de referencia.
+- Historial permite elegir un PDF de CFE, procesarlo localmente, revisar los campos detectados e importar el recibo y sus 11 periodos anteriores.
+- Perfil → Mis suministros permite nombrar y seleccionar servicios. Los límites viven en `EntitlementPolicy`: Gratis 1, Plus 2 y Familiar 5.
 - El arranque espera la hidratación de DataStore y abre Inicio si el onboarding ya fue completado.
 - `TariffEngine` aplica escalones progresivos configurables a los kWh observados/proyectados. La estimación se presenta como orientativa, no como cotización oficial de CFE.
 - Las horas de todos los aparatos configurables recalculan kWh, costo, participación, balance y proyección.
@@ -25,7 +27,7 @@ Este proyecto comenzó como la conversión visual del prototipo **ReciboZen V2**
    El APK queda en `app/build/outputs/apk/debug/app-debug.apk`.
 5. Para correrlo: `Run ▶` en Android Studio sobre un emulador o dispositivo con **minSdk 28** o superior.
 
-**Stack:** Kotlin 2.2.10 · AGP 9.3.1 · Compose BOM 2026.02.01 · Material 3 · Navigation Compose · ViewModel + StateFlow · DataStore Preferences · ML Kit Text Recognition · una sola `Activity` (`MainActivity`).
+**Stack:** Kotlin 2.2.10 · AGP 9.3.1 · Compose BOM 2026.02.01 · Material 3 · Navigation Compose · ViewModel + StateFlow · Room 2.8.4 · DataStore Preferences · ML Kit Text Recognition · una sola `Activity` (`MainActivity`).
 
 ## Estructura de carpetas
 
@@ -86,6 +88,8 @@ Los Composables **nunca** crean repositorios, ni calculan tarifas, ni conocen Na
 | `ReadingConfirm` | Confirmar lectura | flujo |
 | `HowWeCalculate` | Cómo lo calculamos | flujo |
 | `Profile` | Perfil | flujo |
+| `Services` | Mis suministros y selector activo | flujo |
+| `BillImport` | Selección, revisión e importación de recibo PDF | flujo |
 | `Appearance` | Modo oscuro / apariencia (funcional) | flujo |
 | `StatesCatalog` | Catálogo de estados y errores (referencia de diseño) | flujo |
 
@@ -102,14 +106,14 @@ Uno por pantalla, mismo patrón (`class XxxViewModel(repository: ReciboZenReposi
 - **plan**: `PlanViewModel`, `BalanceViewModel`, `DacViewModel`
 - **solar**: `SolarViewModel`
 - **readings**: `ReadingMethodViewModel`, `ReadingPhotoViewModel`, `ReadingPhotoUnclearViewModel`, `ReadingManualViewModel`, `ReadingDialViewModel`, `ReadingConfirmViewModel`, `HowWeCalculateViewModel`
-- **history**: `HistoryViewModel`
-- **settings**: `ProfileViewModel`, `AppearanceViewModel`, `StatesCatalogViewModel`
+- **history**: `HistoryViewModel`, `BillImportViewModel`
+- **settings**: `ProfileViewModel`, `ServicesViewModel`, `AppearanceViewModel`, `StatesCatalogViewModel`
 
 ## Dónde están los datos simulados
 
 Todo centralizado en **`demo/data/DemoReciboZenData.kt`**: meta, recibo base, aparatos, acciones del plan, historial de recibos, lecturas recientes, escenarios solares, datos de DAC/tarifa. Ningún feature tiene cifras sueltas fuera de ahí (excepto un puñado de literales estrictamente decorativos en `ApplianceSimulatorScreen.kt`, marcados como tales, porque ese simulador no representa ningún aparato real de la lista).
 
-El estado de usuario vive en **`demo/repository/ReciboZenSessionState.kt`** por compatibilidad con el handoff original y se muta únicamente mediante **`ReciboZenRepository`**. La app real crea **`PersistentReciboZenRepository`**, que reutiliza los cálculos reactivos y guarda el estado completo con DataStore. `DemoReciboZenRepository` permanece disponible para previews y pruebas aisladas.
+El estado de sesión vive en **`demo/repository/ReciboZenSessionState.kt`** por compatibilidad con el handoff original y se muta únicamente mediante **`ReciboZenRepository`**. La app real crea **`PersistentReciboZenRepository`**: DataStore guarda preferencias y Room es la fuente durable de suministros/recibos. `DemoReciboZenRepository` permanece disponible para previews y pruebas aisladas.
 
 ## Interacciones funcionales y persistentes
 
@@ -123,18 +127,21 @@ El estado de usuario vive en **`demo/repository/ReciboZenSessionState.kt`** por 
 - Editar nombre, hogar, ciudad y meta desde Perfil.
 - Agregar aparatos sugeridos o el aparato del simulador.
 - Generar/compartir el PDF del preestudio solar.
+- Importar un recibo CFE en PDF con texto nativo u OCR local, revisión humana, deduplicación por SHA-256 y persistencia del desglose/historial.
+- Crear, nombrar y seleccionar suministros respetando el límite del plan.
 
 ## Límites actuales
 
 - No hay login, backend ni sincronización entre dispositivos; el producto funciona sin conexión y guarda todo localmente.
-- No hay conexión/descarga automática desde CFE ni importador de PDF de recibos.
+- No hay conexión ni descarga automática desde CFE; el usuario elige el PDF desde el selector del sistema.
 - OCR reconoce números impresos/digitales; un medidor analógico de carátulas puede requerir el flujo interactivo de manecillas.
 - Las tarifas embebidas son una configuración estimativa. Antes de publicar se debe conectar una fuente oficial/versionada o permitir captura completa de tarifa, temporada, región, subsidios y cargos del recibo.
 - Las proyecciones solares usan escenarios deterministas, no irradiancia, geometría de techo ni una cotización de instalador.
 
 ## Integraciones necesarias antes de producción
 
-- Importación real de recibos y fuente oficial/versionada de tarifas y reglas DAC por región/temporada.
+- Fuente oficial/versionada de tarifas y reglas DAC por región/temporada; las tablas de datasets ya están preparadas y el formato de entrega está en `docs/REFERENCE_DATA_FORMAT.md`.
+- Google Play Billing y validación de suscripción para habilitar realmente Plus/Familiar; la política y el paywall funcional ya están separados del SKU.
 - Cuenta, backend, sincronización, cifrado y políticas de retención/borrado.
 - Motor solar basado en irradiancia y validación profesional del techo.
 - Pruebas instrumentadas adicionales para permisos/cámaras de fabricantes y accesibilidad completa.
@@ -163,10 +170,11 @@ El estado de usuario vive en **`demo/repository/ReciboZenSessionState.kt`** por 
 ## Verificación del MVP funcional
 
 - `./gradlew testDebugUnitTest assembleDebug`: **BUILD SUCCESSFUL**.
-- 5 pruebas unitarias pasan: escalones/clamp del motor y selección/normalización del OCR.
+- El parser tiene fixtures anonimizados de cuatro variantes: tarifa 1 de consumo bajo, tarifa 1 escalonada, 1B estacional y PDBT.
 - APK instalado en `Medium_Phone_API_36.0` sin borrar datos.
 - Onboarding → Inicio y reinicio: Inicio se restaura correctamente.
 - Lectura manual 18,426 → confirmación → Historial: guardada como “escrita” y conservada tras reiniciar el proceso.
 - Cámara nativa abierta desde “Escanear medidor”; una imagen sin cifras fue procesada localmente y mostró reintento sin crash.
 - Exportación solar creó un PDF de 84,021 bytes y abrió el selector nativo.
+- Un PDF real de tarifa 1 se importó en el emulador: 124 kWh, total, medidor y 11 periodos; apareció en Historial y sobrevivió el reinicio. La copia temporal del documento fue eliminada del emulador al terminar.
 - Revisión de `logcat`: sin `FATAL EXCEPTION` de ReciboZen durante los recorridos anteriores.

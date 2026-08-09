@@ -8,12 +8,21 @@ import com.recibozen.app.core.model.HistoryReadingEntry
 import com.recibozen.app.core.model.HistoryUnit
 import com.recibozen.app.core.model.PlanActionStatus
 import com.recibozen.app.core.model.ReadingMethod
+import com.recibozen.app.core.model.ElectricServiceValidator
+import com.recibozen.app.core.model.ElectricServiceIdentity
+import com.recibozen.app.core.model.EntitlementPolicy
+import com.recibozen.app.core.model.EntitlementTier
+import com.recibozen.app.core.model.ServiceCreationResult
+import com.recibozen.app.core.importer.ParsedCfeBill
+import com.recibozen.app.core.importer.BillImportResult
 import com.recibozen.app.core.components.MeterDialMath
+import com.recibozen.app.core.calculation.TariffCatalog
 import com.recibozen.app.demo.data.DemoReciboZenData
 import kotlin.math.roundToInt
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,6 +40,21 @@ open class DemoReciboZenRepository : ReciboZenRepository {
     protected val mutableSession = MutableStateFlow(ReciboZenSessionState())
     private val _session get() = mutableSession
     override val session: StateFlow<ReciboZenSessionState> = _session.asStateFlow()
+    protected val mutableElectricServices = MutableStateFlow(
+        listOf(
+            ElectricServiceIdentity(
+                alias = mutableSession.value.serviceAlias,
+                serviceNumber = mutableSession.value.serviceNumber,
+                rmu = mutableSession.value.rmu,
+                meterNumber = mutableSession.value.meterNumber,
+                tariffCode = TariffCatalog.find(mutableSession.value.tariff)?.code ?: "1C",
+                billingCycle = mutableSession.value.billingCycle,
+            ),
+        ),
+    )
+    override val electricServices: StateFlow<List<ElectricServiceIdentity>> = mutableElectricServices.asStateFlow()
+    protected val mutableImportedBillHistory = MutableStateFlow<List<BillPeriod>>(emptyList())
+    override val importedBillHistory: StateFlow<List<BillPeriod>> = mutableImportedBillHistory.asStateFlow()
 
     override fun appliances(state: ReciboZenSessionState): List<Appliance> {
         val adjusted = (DemoReciboZenData.appliances + state.customAppliances)
@@ -254,6 +278,92 @@ open class DemoReciboZenRepository : ReciboZenRepository {
             )
         }
     }
+
+    open override fun updateElectricService(
+        alias: String,
+        serviceNumber: String,
+        rmu: String,
+        meterNumber: String,
+        tariffCode: String,
+    ) {
+        val normalizedTariff = TariffCatalog.find(tariffCode)?.code ?: return
+        if (!ElectricServiceValidator.isValidServiceNumber(serviceNumber)) return
+        _session.update {
+            it.copy(
+                serviceAlias = alias.trim().ifEmpty { it.serviceAlias },
+                serviceNumber = ElectricServiceValidator.normalizeServiceNumber(serviceNumber),
+                rmu = ElectricServiceValidator.normalizeRmu(rmu),
+                meterNumber = ElectricServiceValidator.normalizeMeterNumber(meterNumber),
+                tariff = normalizedTariff,
+            )
+        }
+        mutableElectricServices.update { services ->
+            services.map { service ->
+                if (service.id == _session.value.activeServiceId) {
+                    service.copy(
+                        alias = _session.value.serviceAlias,
+                        serviceNumber = _session.value.serviceNumber,
+                        rmu = _session.value.rmu,
+                        meterNumber = _session.value.meterNumber,
+                        tariffCode = normalizedTariff,
+                    )
+                } else service
+            }
+        }
+    }
+
+    open override fun addElectricService(
+        alias: String,
+        serviceNumber: String,
+        rmu: String,
+        meterNumber: String,
+        tariffCode: String,
+    ): ServiceCreationResult {
+        val state = _session.value
+        val activeCount = electricServices.value.count { it.isActive }
+        val limit = EntitlementPolicy.activeServiceLimit(state.entitlementTier)
+        if (activeCount >= limit) {
+            val required = if (activeCount < EntitlementPolicy.activeServiceLimit(EntitlementTier.PLUS)) {
+                EntitlementTier.PLUS
+            } else EntitlementTier.FAMILY
+            return ServiceCreationResult(accepted = false, requiredTier = required)
+        }
+        if (alias.isBlank() || !ElectricServiceValidator.isValidServiceNumber(serviceNumber)) {
+            return ServiceCreationResult(accepted = false)
+        }
+        val normalizedTariff = TariffCatalog.find(tariffCode)?.code ?: return ServiceCreationResult(false)
+        val id = UUID.randomUUID().toString()
+        val service = ElectricServiceIdentity(
+            id = id,
+            alias = alias.trim(),
+            serviceNumber = ElectricServiceValidator.normalizeServiceNumber(serviceNumber),
+            rmu = ElectricServiceValidator.normalizeRmu(rmu),
+            meterNumber = ElectricServiceValidator.normalizeMeterNumber(meterNumber),
+            tariffCode = normalizedTariff,
+            billingCycle = state.billingCycle,
+        )
+        mutableElectricServices.update { it + service }
+        selectElectricService(id)
+        return ServiceCreationResult(accepted = true, serviceId = id)
+    }
+
+    override fun selectElectricService(serviceId: String) {
+        val service = electricServices.value.firstOrNull { it.id == serviceId && it.isActive } ?: return
+        _session.update {
+            it.copy(
+                activeServiceId = service.id,
+                serviceAlias = service.alias,
+                serviceNumber = service.serviceNumber,
+                rmu = service.rmu,
+                meterNumber = service.meterNumber,
+                tariff = service.tariffCode,
+                billingCycle = service.billingCycle,
+            )
+        }
+    }
+
+    override suspend fun importCfeBill(bill: ParsedCfeBill, sourceFileHash: String): BillImportResult =
+        BillImportResult(accepted = false, message = "La importación durable solo está disponible en el repositorio local.")
 
     override fun setManualReadingDigits(digits: List<Int>) {
         _session.update { it.copy(manualReadingDigits = digits) }

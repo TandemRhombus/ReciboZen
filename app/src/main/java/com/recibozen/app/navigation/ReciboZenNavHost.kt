@@ -27,8 +27,10 @@ import com.recibozen.app.feature.readings.ReadingMethodRoute
 import com.recibozen.app.feature.readings.ReadingPhotoRoute
 import com.recibozen.app.feature.readings.ReadingPhotoUnclearRoute
 import com.recibozen.app.feature.history.HistoryRoute
+import com.recibozen.app.feature.history.BillImportRoute
 import com.recibozen.app.feature.settings.AppearanceRoute
 import com.recibozen.app.feature.settings.ProfileRoute
+import com.recibozen.app.feature.settings.ServicesRoute
 import com.recibozen.app.feature.settings.StatesCatalogRoute
 import com.recibozen.app.feature.solar.SolarRoute
 
@@ -50,6 +52,7 @@ fun ReciboZenNavHost(
         composable(Routes.Appliances) { AppliancesRoute(navController, repository) }
         composable(Routes.Plan) { PlanRoute(navController, repository) }
         composable(Routes.History) { HistoryRoute(navController, repository) }
+        composable(Routes.BillImport) { BillImportRoute(navController, repository) }
 
         composable(Routes.PeriodAnalysis) { PeriodAnalysisRoute(navController, repository) }
         composable(Routes.ApplianceEmpty) { AppliancesEmptyRoute(navController, repository) }
@@ -76,6 +79,7 @@ fun ReciboZenNavHost(
         composable(Routes.HowWeCalculate) { HowWeCalculateRoute(navController, repository) }
 
         composable(Routes.Profile) { ProfileRoute(navController, repository) }
+        composable(Routes.Services) { ServicesRoute(navController, repository) }
         composable(Routes.Appearance) { AppearanceRoute(navController, repository) }
         composable(Routes.StatesCatalog) { StatesCatalogRoute(navController, repository) }
     }
