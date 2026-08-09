@@ -74,7 +74,22 @@ data class DacUiState(
 
 class DacViewModel(repository: ReciboZenRepository) : ViewModel() {
     val uiState: StateFlow<DacUiState> = repository.session
-        .map { DacUiState() }
+        .map { state ->
+            val history = repository.billHistory(state)
+            val monthlyAverage = history.map { period ->
+                if (state.billingCycle.contains("bi", ignoreCase = true)) period.consumptionKwh / 2 else period.consumptionKwh
+            }.filter { it > 0 }.average().takeIf { !it.isNaN() }?.toInt() ?: 0
+            val limit = DemoReciboZenData.REFERENCE_LIMIT_KWH
+            DacUiState(
+                rollingAverageKwh = monthlyAverage,
+                referenceLimitKwh = limit,
+                kwhOverLimit = (monthlyAverage - limit).coerceAtLeast(0),
+                kwhToReduce = (monthlyAverage - limit + 1).coerceAtLeast(0),
+                tariff = state.tariff,
+                todayMarkerFraction = (repository.energySummary(state).observedKwh.toFloat() /
+                    repository.energySummary(state).projectedKwh.coerceAtLeast(1)).coerceIn(0f, 1f),
+            )
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DacUiState())
 }
 

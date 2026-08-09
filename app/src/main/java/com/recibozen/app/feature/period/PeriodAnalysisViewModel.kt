@@ -12,8 +12,13 @@ class PeriodAnalysisViewModel(repository: ReciboZenRepository) : ViewModel() {
 
     val uiState: StateFlow<PeriodAnalysisUiState> = repository.session
         .map { state ->
+            val energy = repository.energySummary(state)
             PeriodAnalysisUiState(
                 lastReadingKwh = state.readings.firstOrNull()?.kwh ?: PeriodAnalysisUiState().lastReadingKwh,
+                observedKwh = energy.observedKwh,
+                observedDays = energy.observedDays,
+                costToDateMxn = energy.costToDateMxn,
+                projectedKwh = energy.projectedKwh,
             )
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PeriodAnalysisUiState())

@@ -128,10 +128,10 @@ object DemoReciboZenData {
     )
 
     val billHistory = listOf(
-        BillPeriod("Feb", 612),
-        BillPeriod("Abr", 704),
-        BillPeriod("Jun", 798),
-        BillPeriod("Ago", BASE_PROJECTED_MXN, isProjected = true),
+        BillPeriod("Feb", 612, consumptionKwh = 294),
+        BillPeriod("Abr", 704, consumptionKwh = 336),
+        BillPeriod("Jun", 798, consumptionKwh = 371),
+        BillPeriod("Ago", BASE_PROJECTED_MXN, isProjected = true, consumptionKwh = 382),
     )
 
     val pastPeriodComparison = PastPeriodComparison(

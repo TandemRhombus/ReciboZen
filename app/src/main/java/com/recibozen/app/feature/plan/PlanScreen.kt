@@ -69,6 +69,8 @@ data class PlanUiState(
     val rangeHighMxn: Int = DemoReciboZenData.BASE_PROJECTED_MXN,
     val isWithinGoal: Boolean = false,
     val planProgressFraction: Float = 0f,
+    val goalMxn: Int = DemoReciboZenData.GOAL_MXN,
+    val baselineMxn: Int = DemoReciboZenData.BASE_PROJECTED_MXN,
     val suggestionActions: List<PlanAction> = emptyList(),
     val verifiedAction: PlanAction? = null,
 )
@@ -80,14 +82,17 @@ class PlanViewModel(private val repository: ReciboZenRepository) : ViewModel() {
 
     private fun toUiState(state: ReciboZenSessionState): PlanUiState {
         val projection = repository.billProjection(state)
+        val energy = repository.energySummary(state)
         return PlanUiState(
-            greeting = "Buenas tardes, ${DemoReciboZenData.USER_NAME}",
-            householdName = DemoReciboZenData.HOUSEHOLD_NAME,
-            userInitial = DemoReciboZenData.USER_INITIAL,
+            greeting = "Buenas tardes, ${state.userName}",
+            householdName = state.householdName,
+            userInitial = state.userName.firstOrNull()?.uppercase() ?: "?",
             projectedMxn = projection.projectedMxn,
             rangeHighMxn = projection.rangeHighMxn,
             isWithinGoal = projection.isWithinGoal,
             planProgressFraction = projection.planProgressFraction,
+            goalMxn = state.goalMxn,
+            baselineMxn = energy.projectedCostMxn,
             suggestionActions = state.planActions.filter { it.status != PlanActionStatus.VERIFIED },
             verifiedAction = state.planActions.find { it.status == PlanActionStatus.VERIFIED },
         )
@@ -201,7 +206,7 @@ fun PlanScreen(
 
 @Composable
 private fun PlanSummaryCard(uiState: PlanUiState) {
-    val diffMxn = uiState.projectedMxn - DemoReciboZenData.GOAL_MXN
+    val diffMxn = uiState.projectedMxn - uiState.goalMxn
     val proyColor = if (uiState.isWithinGoal) RzTheme.extendedColors.success else MaterialTheme.colorScheme.onSurface
     val resumen = when {
         !uiState.isWithinGoal -> {
@@ -209,7 +214,7 @@ private fun PlanSummaryCard(uiState: PlanUiState) {
             val kwh = (diffMxn / 2.4).roundToInt()
             stringResource(R.string.plan_summary_above_goal, diffMxn, kwh)
         }
-        uiState.rangeHighMxn > DemoReciboZenData.GOAL_MXN ->
+        uiState.rangeHighMxn > uiState.goalMxn ->
             stringResource(R.string.plan_summary_within_goal_uncertain, uiState.rangeHighMxn)
         else -> stringResource(R.string.plan_summary_within_goal_confident)
     }
@@ -244,12 +249,12 @@ private fun PlanSummaryCard(uiState: PlanUiState) {
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                stringResource(R.string.plan_summary_goal_label, DemoReciboZenData.GOAL_MXN),
+                stringResource(R.string.plan_summary_goal_label, uiState.goalMxn),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.outline,
             )
             Text(
-                stringResource(R.string.plan_summary_no_change_label, DemoReciboZenData.BASE_PROJECTED_MXN),
+                stringResource(R.string.plan_summary_no_change_label, uiState.baselineMxn),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.outline,
             )

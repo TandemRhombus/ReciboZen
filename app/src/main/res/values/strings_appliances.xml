@@ -122,5 +122,6 @@
     <string name="appliances_simulator_per_period">/periodo</string>
     <string name="appliances_simulator_payback_note">La diferencia de precio podría recuperarse en unos %1$s con el uso que nos indicaste. No es una garantía.</string>
     <string name="appliances_simulator_save_scenario">Guardar escenario</string>
+    <string name="appliances_simulator_saved_scenario">Escenario guardado</string>
     <string name="appliances_simulator_add_home">Agregar a mi hogar</string>
 </resources>

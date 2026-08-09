@@ -37,10 +37,11 @@ fun ReciboZenNavHost(
     navController: NavHostController,
     repository: ReciboZenRepository,
     innerPadding: PaddingValues,
+    startDestination: String,
 ) {
     NavHost(
         navController = navController,
-        startDestination = Routes.Onboarding,
+        startDestination = startDestination,
         modifier = Modifier.padding(innerPadding),
     ) {
         composable(Routes.Onboarding) { OnboardingRoute(navController, repository) }

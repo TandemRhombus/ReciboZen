@@ -38,6 +38,7 @@ import com.recibozen.app.core.components.RzSecondaryButton
 import com.recibozen.app.core.designsystem.ReciboZenTheme
 import com.recibozen.app.core.designsystem.RzSpacing
 import com.recibozen.app.demo.repository.ReciboZenRepository
+import com.recibozen.app.core.model.ReadingMethod
 import com.recibozen.app.navigation.Routes
 import com.recibozen.app.navigation.rzViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -88,6 +89,7 @@ class ReadingDialViewModel(private val repository: ReciboZenRepository) : ViewMo
     fun setAngle(index: Int, angleDegrees: Float) = repository.setDialAngle(index, angleDegrees)
     fun toggleUnsure() = repository.toggleDialUnsure()
     fun setDigit(index: Int, digit: Int) = repository.setDialDigit(index, digit)
+    fun prepare() = repository.prepareReading(uiState.value.interpretedKwh, ReadingMethod.DIAL)
 }
 
 @Composable
@@ -103,6 +105,7 @@ fun ReadingDialRoute(navController: NavHostController, repository: ReciboZenRepo
         onPrevious = { viewModel.setSelectedIndex((uiState.selectedIndex - 1).coerceAtLeast(0)) },
         onNextOrReview = {
             if (uiState.selectedIndex == uiState.angles.lastIndex) {
+                viewModel.prepare()
                 navController.navigate(Routes.ReadingConfirm)
             } else {
                 viewModel.setSelectedIndex((uiState.selectedIndex + 1).coerceAtMost(uiState.angles.lastIndex))
@@ -111,7 +114,10 @@ fun ReadingDialRoute(navController: NavHostController, repository: ReciboZenRepo
         onToggleUnsure = viewModel::toggleUnsure,
         onPickLowDigit = { viewModel.setDigit(uiState.selectedIndex, uiState.unsureLowDigit) },
         onPickHighDigit = { viewModel.setDigit(uiState.selectedIndex, uiState.unsureHighDigit) },
-        onSave = { navController.navigate(Routes.ReadingConfirm) },
+        onSave = {
+            viewModel.prepare()
+            navController.navigate(Routes.ReadingConfirm)
+        },
     )
 }
 

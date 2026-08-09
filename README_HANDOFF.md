@@ -1,6 +1,17 @@
 # ReciboZen — Handoff Android nativo (Compose)
 
-Este proyecto es la conversión del prototipo de diseño **ReciboZen V2** (Claude Design, `ReciboZen v2.dc.html`) a un proyecto Android nativo compilable en Kotlin + Jetpack Compose. Es **solo interfaz**: navegación, componentes visuales, estados de pantalla y datos de demostración. No hay persistencia real, motor de tarifas, cámara/OCR, ni servicios externos — eso lo agrega el siguiente desarrollador sobre la arquitectura ya separada que se explica abajo.
+Este proyecto comenzó como la conversión visual del prototipo **ReciboZen V2** y ahora es un **MVP local-first funcional** en Kotlin + Jetpack Compose. Conserva la navegación y el diseño originales, pero ya incluye persistencia con DataStore, cálculo progresivo configurable, lecturas por manecillas/manual/foto, OCR local con ML Kit, edición de perfil/meta, aparatos editables, historial con kWh reales y exportación PDF del preestudio solar.
+
+## Estado funcional actual (9 ago 2026)
+
+- DataStore conserva onboarding, tema, perfil, meta, tipo de medidor, aparatos, horas de uso, plan, lecturas, escenario solar y preferencias al cerrar el proceso.
+- El arranque espera la hidratación de DataStore y abre Inicio si el onboarding ya fue completado.
+- `TariffEngine` aplica escalones progresivos configurables a los kWh observados/proyectados. La estimación se presenta como orientativa, no como cotización oficial de CFE.
+- Las horas de todos los aparatos configurables recalculan kWh, costo, participación, balance y proyección.
+- Los filtros de Aparatos ordenan/filtran realmente y las sugerencias/simulador pueden agregar aparatos persistentes.
+- Manual, manecillas y foto preparan el valor/método correcto antes de confirmar; las nuevas lecturas se fechan, aparecen en Historial y persisten.
+- Foto abre la cámara instalada mediante `TakePicture`, procesa la imagen en el dispositivo con ML Kit, permite reintentar/corregir y conservar o descartar el archivo.
+- Solar genera `preestudio_solar_recibozen.pdf` con `PdfDocument` y abre el selector nativo para guardarlo o compartirlo.
 
 ## Cómo abrir y compilar
 
@@ -14,7 +25,7 @@ Este proyecto es la conversión del prototipo de diseño **ReciboZen V2** (Claud
    El APK queda en `app/build/outputs/apk/debug/app-debug.apk`.
 5. Para correrlo: `Run ▶` en Android Studio sobre un emulador o dispositivo con **minSdk 28** o superior.
 
-**Stack:** Kotlin 2.2.10 · AGP 9.3.1 · Compose BOM 2026.02.01 · Material 3 · Navigation Compose · ViewModel + StateFlow · una sola `Activity` (`MainActivity`).
+**Stack:** Kotlin 2.2.10 · AGP 9.3.1 · Compose BOM 2026.02.01 · Material 3 · Navigation Compose · ViewModel + StateFlow · DataStore Preferences · ML Kit Text Recognition · una sola `Activity` (`MainActivity`).
 
 ## Estructura de carpetas
 
@@ -98,35 +109,35 @@ Uno por pantalla, mismo patrón (`class XxxViewModel(repository: ReciboZenReposi
 
 Todo centralizado en **`demo/data/DemoReciboZenData.kt`**: meta, recibo base, aparatos, acciones del plan, historial de recibos, lecturas recientes, escenarios solares, datos de DAC/tarifa. Ningún feature tiene cifras sueltas fuera de ahí (excepto un puñado de literales estrictamente decorativos en `ApplianceSimulatorScreen.kt`, marcados como tales, porque ese simulador no representa ningún aparato real de la lista).
 
-El estado de sesión (lo que el usuario puede tocar/cambiar) vive en **`demo/repository/ReciboZenSessionState.kt`** y se mutua únicamente a través de **`ReciboZenRepository`** (interfaz) / **`DemoReciboZenRepository`** (implementación en memoria, sin persistencia). Para conectar una fuente real, se reemplaza `DemoReciboZenRepository` por una implementación nueva de la misma interfaz — ningún Composable ni ViewModel necesita cambiar.
+El estado de usuario vive en **`demo/repository/ReciboZenSessionState.kt`** por compatibilidad con el handoff original y se muta únicamente mediante **`ReciboZenRepository`**. La app real crea **`PersistentReciboZenRepository`**, que reutiliza los cálculos reactivos y guarda el estado completo con DataStore. `DemoReciboZenRepository` permanece disponible para previews y pruebas aisladas.
 
-## Qué interacciones están simuladas (con efecto visible durante la sesión, no persistente)
+## Interacciones funcionales y persistentes
 
 - Agregar/quitar una acción del Plan (`repository.togglePlanAction`) — recalcula el recibo proyectado en vivo.
-- Ajustar horas/semana de la PlayStation 5 (`repository.setPs5HoursPerWeek`) — recalcula su costo/kWh y el de Aparatos.
+- Ajustar horas/semana de aparatos compatibles (`repository.setApplianceHoursPerWeek`) — recalcula costo, kWh, participación, balance y proyección.
 - Ajustar manecillas del medidor (`RzMeterDialCluster` + `repository.setDialAngle/nudgeDial/setDialDigit`) — matemática de ángulo→dígito idéntica a la del prototipo original.
 - Elegir escenario solar (Económico/Recomendado/Mayor cobertura).
-- Cambiar tema claro/oscuro/sistema (**esto sí es una función real y completa**, no solo visual de una pantalla: cambia el `ColorScheme` de toda la app).
-- Registrar una lectura (agrega una fila al historial de sesión).
+- Cambiar tema claro/oscuro/sistema en toda la app.
+- Registrar una lectura manual, por carátulas o por OCR con fecha, diferencia y método correctos.
 - Cambiar unidad Pesos/kWh en Historial.
+- Editar nombre, hogar, ciudad y meta desde Perfil.
+- Agregar aparatos sugeridos o el aparato del simulador.
+- Generar/compartir el PDF del preestudio solar.
 
-## Qué NO tiene lógica real (a propósito)
+## Límites actuales
 
-- Las pantallas de foto (`ReadingPhotoScreen`, `ReadingPhotoUnclearScreen`) son ilustraciones estáticas — no hay cámara ni OCR.
-- El simulador "¿Y si lo compro?" es enteramente demostrativo, no calcula nada a partir de datos reales.
-- "Descargar mi preestudio" en Solar es un botón sin acción (`{}`).
-- Ningún Composable calcula tarifas: los pocos cómputos que existen (recibo proyectado, lectura interpretada del dial, validación de lectura anómala) viven en `DemoReciboZenRepository`, no en la UI, y están explícitamente marcados como aritmética de demostración, no un motor de tarifas.
+- No hay login, backend ni sincronización entre dispositivos; el producto funciona sin conexión y guarda todo localmente.
+- No hay conexión/descarga automática desde CFE ni importador de PDF de recibos.
+- OCR reconoce números impresos/digitales; un medidor analógico de carátulas puede requerir el flujo interactivo de manecillas.
+- Las tarifas embebidas son una configuración estimativa. Antes de publicar se debe conectar una fuente oficial/versionada o permitir captura completa de tarifa, temporada, región, subsidios y cargos del recibo.
+- Las proyecciones solares usan escenarios deterministas, no irradiancia, geometría de techo ni una cotización de instalador.
 
-## Qué falta / integraciones pendientes para el siguiente desarrollador
+## Integraciones necesarias antes de producción
 
-- Persistencia real (Room/DataStore) reemplazando `DemoReciboZenRepository`.
-- Motor de tarifas y cálculo de consumo real.
-- Proyecciones y estimaciones DAC/solares reales.
-- Cámara + reconocimiento del medidor (OCR) para las pantallas de foto.
-- Importación real de recibos.
-- Sincronización / backend.
-- `feature/appliances/ApplianceUsageScreen.kt`: hoy solo persiste el cambio de horas para PS5 (única app. que el repo trackea reactivamente); Minisplit usa la misma UI pero su selección es local a la pantalla — extender el repositorio si se necesita que persista.
-- `HistoryScreen.kt`: el toggle kWh usa una conversión provisional (`amountMxn / 2.1`) porque `BillPeriod` no trae kWh real — reemplazar cuando exista esa cifra.
+- Importación real de recibos y fuente oficial/versionada de tarifas y reglas DAC por región/temporada.
+- Cuenta, backend, sincronización, cifrado y políticas de retención/borrado.
+- Motor solar basado en irradiancia y validación profesional del techo.
+- Pruebas instrumentadas adicionales para permisos/cámaras de fabricantes y accesibilidad completa.
 
 ## Decisiones visuales importantes
 
@@ -148,3 +159,14 @@ El estado de sesión (lo que el usuario puede tocar/cambiar) vive en **`demo/rep
 - Todas las rutas del grafo de navegación resuelven a una pantalla implementada (auditado 1:1 contra `ReciboZenNavHost.kt`).
 - Sin colisión de nombres de recursos entre los `strings_*.xml` de cada feature.
 - Sin código muerto conocido ni TODOs bloqueantes.
+
+## Verificación del MVP funcional
+
+- `./gradlew testDebugUnitTest assembleDebug`: **BUILD SUCCESSFUL**.
+- 5 pruebas unitarias pasan: escalones/clamp del motor y selección/normalización del OCR.
+- APK instalado en `Medium_Phone_API_36.0` sin borrar datos.
+- Onboarding → Inicio y reinicio: Inicio se restaura correctamente.
+- Lectura manual 18,426 → confirmación → Historial: guardada como “escrita” y conservada tras reiniciar el proceso.
+- Cámara nativa abierta desde “Escanear medidor”; una imagen sin cifras fue procesada localmente y mostró reintento sin crash.
+- Exportación solar creó un PDF de 84,021 bytes y abrió el selector nativo.
+- Revisión de `logcat`: sin `FATAL EXCEPTION` de ReciboZen durante los recorridos anteriores.

@@ -49,12 +49,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 
-/**
- * Demo-only filter labels shown as a scrollable chip row. Selecting one does
- * not currently reorder/filter [appliances] — there is no filtering concept
- * in [ReciboZenRepository] yet — it only changes which chip is highlighted.
- * See the class doc on [AppliancesViewModel] for the rationale.
- */
+/** Visible appliance list plus the active sorting/filter mode. */
 data class AppliancesUiState(
     val greetingUserName: String,
     val householdName: String,
@@ -64,12 +59,6 @@ data class AppliancesUiState(
     val selectedFilterIndex: Int,
 )
 
-/**
- * Owns the "Aparatos" tab root. The filter chip row is purely cosmetic in
- * this handoff build: [ReciboZenRepository] has no notion of appliance
- * filtering/sorting, so [onFilterSelected] only updates which chip is
- * highlighted and never reorders [AppliancesUiState.appliances].
- */
 class AppliancesViewModel(private val repository: ReciboZenRepository) : ViewModel() {
 
     private val selectedFilterIndex = MutableStateFlow(0)
@@ -85,14 +74,23 @@ class AppliancesViewModel(private val repository: ReciboZenRepository) : ViewMod
         initialValue = repository.session.value.toUiState(selectedFilterIndex.value),
     )
 
-    private fun ReciboZenSessionState.toUiState(filterIndex: Int) = AppliancesUiState(
-        greetingUserName = DemoReciboZenData.USER_NAME,
-        householdName = DemoReciboZenData.HOUSEHOLD_NAME,
-        userInitial = DemoReciboZenData.USER_INITIAL,
-        appliances = repository.appliances(this),
+    private fun ReciboZenSessionState.toUiState(filterIndex: Int): AppliancesUiState {
+        val all = repository.appliances(this)
+        val visible = when (filterIndex) {
+            1 -> all.sortedWith(compareBy(Appliance::room, Appliance::name))
+            2 -> all.filter { it.standbyCostMxn != null }.sortedByDescending { it.standbyCostMxn }
+            3 -> all.filter { it.confidence != ConfidenceLevel.HIGH }.sortedBy { it.name }
+            else -> all.sortedByDescending { it.costMxn }
+        }
+        return AppliancesUiState(
+        greetingUserName = userName,
+        householdName = householdName,
+        userInitial = userName.firstOrNull()?.uppercase() ?: "?",
+        appliances = visible,
         unidentifiedCostMxn = DemoReciboZenData.UNIDENTIFIED_COST_MXN,
         selectedFilterIndex = filterIndex,
     )
+    }
 
     fun onFilterSelected(index: Int) {
         selectedFilterIndex.value = index

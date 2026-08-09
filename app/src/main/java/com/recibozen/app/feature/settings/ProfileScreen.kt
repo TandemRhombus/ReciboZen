@@ -20,14 +20,22 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -60,12 +68,27 @@ data class ProfileUiState(
     val householdName: String = DemoReciboZenData.HOUSEHOLD_NAME,
     val tariff: String = DemoReciboZenData.TARIFF,
     val billingCycle: String = DemoReciboZenData.BILLING_CYCLE,
+    val location: String = DemoReciboZenData.LOCATION,
+    val goalMxn: Int = DemoReciboZenData.GOAL_MXN,
 )
 
-class ProfileViewModel(repository: ReciboZenRepository) : ViewModel() {
+class ProfileViewModel(private val repository: ReciboZenRepository) : ViewModel() {
     val uiState: StateFlow<ProfileUiState> = repository.session
-        .map { ProfileUiState() }
+        .map { state ->
+            ProfileUiState(
+                userName = state.userName,
+                userInitial = state.userName.firstOrNull()?.uppercase() ?: "?",
+                householdName = state.householdName,
+                tariff = state.tariff,
+                billingCycle = state.billingCycle,
+                location = state.location,
+                goalMxn = state.goalMxn,
+            )
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ProfileUiState())
+
+    fun update(userName: String, householdName: String, location: String, goalMxn: Int) =
+        repository.updateProfile(userName, householdName, location, goalMxn)
 }
 
 @Composable
@@ -78,6 +101,7 @@ fun ProfileRoute(navController: NavHostController, repository: ReciboZenReposito
         onBack = { navController.popBackStack() },
         onNavigateAppearance = { navController.navigate(Routes.Appearance) },
         onNavigateStatesCatalog = { navController.navigate(Routes.StatesCatalog) },
+        onUpdateProfile = viewModel::update,
     )
 }
 
@@ -87,7 +111,9 @@ fun ProfileScreen(
     onBack: () -> Unit,
     onNavigateAppearance: () -> Unit,
     onNavigateStatesCatalog: () -> Unit,
+    onUpdateProfile: (String, String, String, Int) -> Unit,
 ) {
+    var showEditDialog by remember { mutableStateOf(false) }
     Scaffold(topBar = { RzFlowTopBar(title = stringResource(R.string.profile_title), onBack = onBack) }) { padding ->
         Column(
             modifier = Modifier
@@ -139,7 +165,7 @@ fun ProfileScreen(
                 ProfileRow(
                     icon = RzIcons.HomeWork,
                     label = stringResource(R.string.profile_row_household_goal),
-                    onClick = null,
+                    onClick = { showEditDialog = true },
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 ProfileRow(
@@ -170,6 +196,42 @@ fun ProfileScreen(
                 )
             }
         }
+    }
+
+    if (showEditDialog) {
+        var userName by remember(uiState.userName) { mutableStateOf(uiState.userName) }
+        var householdName by remember(uiState.householdName) { mutableStateOf(uiState.householdName) }
+        var location by remember(uiState.location) { mutableStateOf(uiState.location) }
+        var goal by remember(uiState.goalMxn) { mutableStateOf(uiState.goalMxn.toString()) }
+        AlertDialog(
+            onDismissRequest = { showEditDialog = false },
+            title = { Text(stringResource(R.string.profile_edit_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(RzSpacing.sm)) {
+                    OutlinedTextField(userName, { userName = it }, label = { Text(stringResource(R.string.profile_edit_name)) })
+                    OutlinedTextField(householdName, { householdName = it }, label = { Text(stringResource(R.string.profile_edit_household)) })
+                    OutlinedTextField(location, { location = it }, label = { Text(stringResource(R.string.profile_edit_location)) })
+                    OutlinedTextField(
+                        goal,
+                        { goal = it.filter(Char::isDigit).take(6) },
+                        label = { Text(stringResource(R.string.profile_edit_goal)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = userName.isNotBlank() && householdName.isNotBlank() && location.isNotBlank() && goal.toIntOrNull() != null,
+                    onClick = {
+                        onUpdateProfile(userName, householdName, location, goal.toIntOrNull() ?: uiState.goalMxn)
+                        showEditDialog = false
+                    },
+                ) { Text(stringResource(R.string.profile_edit_save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditDialog = false }) { Text(stringResource(R.string.action_cancel)) }
+            },
+        )
     }
 }
 
@@ -208,6 +270,12 @@ private fun ProfileRow(
 @Composable
 private fun ProfileScreenPreview() {
     ReciboZenTheme {
-        ProfileScreen(uiState = ProfileUiState(), onBack = {}, onNavigateAppearance = {}, onNavigateStatesCatalog = {})
+        ProfileScreen(
+            uiState = ProfileUiState(),
+            onBack = {},
+            onNavigateAppearance = {},
+            onNavigateStatesCatalog = {},
+            onUpdateProfile = { _, _, _, _ -> },
+        )
     }
 }

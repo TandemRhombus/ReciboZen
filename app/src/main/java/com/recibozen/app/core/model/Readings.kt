@@ -7,6 +7,7 @@ data class HistoryReadingEntry(
     val dateLabel: String,
     val method: ReadingMethod,
     val note: String,
+    val timestampEpochMillis: Long? = null,
 )
 
 enum class HistoryUnit { MXN, KWH }
@@ -15,6 +16,7 @@ data class BillPeriod(
     val monthLabel: String,
     val amountMxn: Int,
     val isProjected: Boolean = false,
+    val consumptionKwh: Int = 0,
 )
 
 data class PastPeriodComparison(

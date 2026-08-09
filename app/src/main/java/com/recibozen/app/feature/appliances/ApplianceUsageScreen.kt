@@ -37,10 +37,9 @@ import com.recibozen.app.core.designsystem.ReciboZenTheme
 import com.recibozen.app.core.model.Appliance
 import com.recibozen.app.demo.repository.ReciboZenRepository
 import com.recibozen.app.navigation.rzViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
 /** The 4 selectable hour-range chips, each mapped to a single representative value/week. */
@@ -63,11 +62,8 @@ data class ApplianceUsageUiState(
 )
 
 /**
- * Only `"ps5"` is wired through [ReciboZenRepository.setPs5HoursPerWeek] (the
- * only appliance the repository tracks reactively). `"minisplit"` gets the
- * same picker UI and highlight, but the selection lives in [localHours] only
- * — an accepted simplification per the handoff brief, not persisted anywhere
- * else and not reflected in cost/kWh (no formula exists for it). Any other
+ * Every appliance with an hours estimate is updated through the repository.
+ * Any other
  * id (e.g. `"refrigerador"`, which has no "Editar uso" entry point) falls
  * back to [ApplianceUsageUiState.isSupported] = false instead of crashing.
  */
@@ -76,26 +72,20 @@ class ApplianceUsageViewModel(
     private val applianceId: String,
 ) : ViewModel() {
 
-    private val localHours = MutableStateFlow<Int?>(null)
-
-    val uiState: StateFlow<ApplianceUsageUiState> = combine(
-        repository.session,
-        localHours,
-    ) { session, local ->
-        toUiState(repository.appliance(applianceId, session), local)
+    val uiState: StateFlow<ApplianceUsageUiState> = repository.session.map { session ->
+        toUiState(repository.appliance(applianceId, session))
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = toUiState(repository.appliance(applianceId), localHours.value),
+        initialValue = toUiState(repository.appliance(applianceId)),
     )
 
-    private fun toUiState(appliance: Appliance?, local: Int?): ApplianceUsageUiState {
+    private fun toUiState(appliance: Appliance?): ApplianceUsageUiState {
         val baseHours = appliance?.hoursPerWeek ?: 0
-        val effectiveHours = if (applianceId == "minisplit") local ?: baseHours else baseHours
         return ApplianceUsageUiState(
             applianceId = applianceId,
             applianceName = appliance?.name,
-            hoursPerWeek = effectiveHours,
+            hoursPerWeek = baseHours,
             costMxn = appliance?.costMxn ?: 0,
             kwh = appliance?.kwh ?: 0,
             isSupported = appliance?.hoursPerWeek != null,
@@ -103,10 +93,7 @@ class ApplianceUsageViewModel(
     }
 
     fun onSelectHours(hours: Int) {
-        when (applianceId) {
-            "ps5" -> repository.setPs5HoursPerWeek(hours)
-            "minisplit" -> localHours.value = hours
-        }
+        repository.setApplianceHoursPerWeek(applianceId, hours)
     }
 }
 

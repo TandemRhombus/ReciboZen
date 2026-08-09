@@ -38,6 +38,7 @@ import com.recibozen.app.core.components.RzSecondaryButton
 import com.recibozen.app.core.designsystem.ReciboZenTheme
 import com.recibozen.app.core.designsystem.RzSpacing
 import com.recibozen.app.demo.repository.ReciboZenRepository
+import com.recibozen.app.core.model.ReadingMethod
 import com.recibozen.app.navigation.Routes
 import com.recibozen.app.navigation.rzViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -62,6 +63,7 @@ class ReadingManualViewModel(private val repository: ReciboZenRepository) : View
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ReadingManualUiState())
 
     fun setDigits(digits: List<Int>) = repository.setManualReadingDigits(digits)
+    fun prepare() = repository.prepareReading(uiState.value.digits.joinToString("").toInt(), ReadingMethod.MANUAL)
 }
 
 @Composable
@@ -73,7 +75,10 @@ fun ReadingManualRoute(navController: NavHostController, repository: ReciboZenRe
         uiState = uiState,
         onBack = { navController.popBackStack() },
         onDigitsChange = viewModel::setDigits,
-        onContinue = { navController.navigate(Routes.ReadingConfirm) },
+        onContinue = {
+            viewModel.prepare()
+            navController.navigate(Routes.ReadingConfirm)
+        },
         onPreferDial = { navController.navigate(Routes.ReadingDial) },
     )
 }

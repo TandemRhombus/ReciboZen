@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /**
  * The confirm screen always reflects the current dial/manual repository state
@@ -52,26 +53,41 @@ data class ReadingConfirmUiState(
     val averagePerDay: Double = 0.0,
     val isAbnormal: Boolean = false,
     val warningMessage: String? = null,
+    val method: ReadingMethod = ReadingMethod.DIAL,
 )
 
 class ReadingConfirmViewModel(private val repository: ReciboZenRepository) : ViewModel() {
     val uiState: StateFlow<ReadingConfirmUiState> = repository.session
         .map { state ->
-            val result = repository.dialReading(state)
+            val reading = state.pendingReadingKwh ?: repository.dialReading(state).valueKwh
+            val method = state.pendingReadingMethod ?: ReadingMethod.DIAL
+            val difference = reading - state.lastConfirmedReadingKwh
+            val latestTimestamp = state.readings.firstOrNull()?.timestampEpochMillis
+            val elapsedDays = latestTimestamp?.let { (System.currentTimeMillis() - it) / 86_400_000.0 }
+                ?.coerceAtLeast(0.25) ?: (76.0 / 24.0)
+            val average = difference / elapsedDays
+            val abnormal = difference < 0 || difference == 0 || average > 20.0
+            val warning = when {
+                difference < 0 -> "Esta lectura es menor que la anterior. Revisa el número o confirma si cambió el medidor."
+                difference == 0 -> "Tu lectura no cambió desde el último registro. Puedes guardarla si es correcta."
+                average > 20.0 -> "Esta lectura implicaría ${average.roundToInt()} kWh diarios, muy por encima de tu consumo habitual."
+                else -> null
+            }
             ReadingConfirmUiState(
-                readingKwh = result.valueKwh,
+                readingKwh = reading,
                 previousReadingKwh = state.lastConfirmedReadingKwh,
-                consumptionSinceKwh = result.consumptionSinceLast,
-                averagePerDay = result.averagePerDay,
-                isAbnormal = result.isAbnormal,
-                warningMessage = result.warningMessage,
+                consumptionSinceKwh = difference,
+                averagePerDay = average,
+                isAbnormal = abnormal,
+                warningMessage = warning,
+                method = method,
             )
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ReadingConfirmUiState())
 
     fun confirm() {
         val reading = uiState.value.readingKwh
-        repository.confirmReading(reading, ReadingMethod.DIAL)
+        repository.confirmReading(reading, uiState.value.method)
     }
 }
 

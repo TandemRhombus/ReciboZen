@@ -75,6 +75,7 @@ data class OnboardingUiState(
     val projectedMxn: Int = DemoReciboZenData.BASE_PROJECTED_MXN,
     val projectedRangeLowMxn: Int = DemoReciboZenData.BASE_PROJECTED_MXN - 36,
     val projectedRangeHighMxn: Int = DemoReciboZenData.BASE_PROJECTED_MXN + 44,
+    val meterType: String = DemoReciboZenData.METER_TYPE_SELECTED,
 )
 
 class OnboardingViewModel(private val repository: ReciboZenRepository) : ViewModel() {
@@ -84,13 +85,14 @@ class OnboardingViewModel(private val repository: ReciboZenRepository) : ViewMod
             val projection = repository.billProjection(session)
             OnboardingUiState(
                 step = session.onboardingStep,
-                householdName = DemoReciboZenData.HOUSEHOLD_NAME,
-                location = DemoReciboZenData.LOCATION,
-                billingCycle = DemoReciboZenData.BILLING_CYCLE,
-                goalMxn = DemoReciboZenData.GOAL_MXN,
+                householdName = session.householdName,
+                location = session.location,
+                billingCycle = session.billingCycle,
+                goalMxn = session.goalMxn,
                 projectedMxn = projection.projectedMxn,
                 projectedRangeLowMxn = projection.rangeLowMxn,
                 projectedRangeHighMxn = projection.rangeHighMxn,
+                meterType = session.meterType,
             )
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), OnboardingUiState())
@@ -104,6 +106,9 @@ class OnboardingViewModel(private val repository: ReciboZenRepository) : ViewMod
         val current = repository.session.value.onboardingStep
         repository.setOnboardingStep(current - 1)
     }
+
+    fun complete() = repository.completeOnboarding()
+    fun setMeterType(meterType: String) = repository.setMeterType(meterType)
 }
 
 /**
@@ -118,6 +123,7 @@ fun OnboardingRoute(navController: NavHostController, repository: ReciboZenRepos
     BackHandler(enabled = uiState.step > 0) { viewModel.previousStep() }
 
     fun goHome() {
+        viewModel.complete()
         navController.navigate(Routes.Home) {
             popUpTo(Routes.Onboarding) { inclusive = true }
         }
@@ -129,6 +135,7 @@ fun OnboardingRoute(navController: NavHostController, repository: ReciboZenRepos
         onPrimaryClick = {
             if (uiState.step >= 3) goHome() else viewModel.advanceStep()
         },
+        onMeterTypeSelected = viewModel::setMeterType,
     )
 }
 
@@ -137,6 +144,7 @@ fun OnboardingScreen(
     uiState: OnboardingUiState,
     onSkip: () -> Unit,
     onPrimaryClick: () -> Unit,
+    onMeterTypeSelected: (String) -> Unit = {},
 ) {
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
         Column(
@@ -157,7 +165,7 @@ fun OnboardingScreen(
             when (uiState.step) {
                 0 -> OnboardingStep0()
                 1 -> OnboardingStep1(uiState = uiState, onNext = onPrimaryClick)
-                2 -> OnboardingStep2()
+                2 -> OnboardingStep2(uiState.meterType, onMeterTypeSelected)
                 else -> OnboardingStep3(uiState = uiState)
             }
 
@@ -366,11 +374,11 @@ private val meterOptions = listOf(
 )
 
 @Composable
-private fun OnboardingStep2() {
-    // Selection here is local UI state only per the handoff spec — it does not persist to the
-    // repository. Pre-selected index 1 matches DemoReciboZenData.METER_TYPE_SELECTED ("De
-    // manecillas, 5 carátulas").
-    var selectedIndex by rememberSaveable { mutableIntStateOf(1) }
+private fun OnboardingStep2(selectedMeterType: String, onMeterTypeSelected: (String) -> Unit) {
+    val labels = meterOptions.map { stringResource(it.labelRes) }
+    var selectedIndex by rememberSaveable(selectedMeterType) {
+        mutableIntStateOf(labels.indexOfFirst { it == selectedMeterType }.takeIf { it >= 0 } ?: 1)
+    }
     val selectedDesc = stringResource(R.string.onboarding_meter_selected_desc)
 
     Column(verticalArrangement = Arrangement.spacedBy(RzSpacing.lg)) {
@@ -400,7 +408,10 @@ private fun OnboardingStep2() {
                         .fillMaxWidth()
                         .selectable(
                             selected = selected,
-                            onClick = { selectedIndex = index },
+                            onClick = {
+                                selectedIndex = index
+                                onMeterTypeSelected(labels[index])
+                            },
                             role = Role.RadioButton,
                         ),
                 ) {

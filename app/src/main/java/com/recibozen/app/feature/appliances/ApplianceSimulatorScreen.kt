@@ -37,6 +37,9 @@ import com.recibozen.app.core.designsystem.RzSpacing
 import com.recibozen.app.core.designsystem.RzTheme
 import com.recibozen.app.core.designsystem.ReciboZenTheme
 import com.recibozen.app.demo.repository.ReciboZenRepository
+import com.recibozen.app.core.model.Appliance
+import com.recibozen.app.core.model.ConfidenceLevel
+import com.recibozen.app.core.model.OpportunityLevel
 import com.recibozen.app.navigation.rzViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -44,17 +47,42 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
 /**
- * Entirely static demo content: a hypothetical new-minisplit purchase, not
- * tied to any appliance in [com.recibozen.app.demo.data.DemoReciboZenData.appliances].
- * Still routed through the repository session for architectural consistency,
- * even though nothing here reacts to it.
+ * Hypothetical purchase scenario calculated against the current projection.
+ * It can be saved or added as a persistent appliance in the household.
  */
-data class ApplianceSimulatorUiState(val isReady: Boolean = true)
+data class ApplianceSimulatorUiState(
+    val isReady: Boolean = true,
+    val isSaved: Boolean = false,
+    val currentProjectionMxn: Int = 0,
+    val addedCostLowMxn: Int = 280,
+    val addedCostHighMxn: Int = 390,
+)
 
-class ApplianceSimulatorViewModel(repository: ReciboZenRepository) : ViewModel() {
+class ApplianceSimulatorViewModel(private val repository: ReciboZenRepository) : ViewModel() {
     val uiState: StateFlow<ApplianceSimulatorUiState> = repository.session
-        .map { ApplianceSimulatorUiState() }
+        .map { state ->
+            ApplianceSimulatorUiState(
+                isSaved = state.savedSimulatorScenario,
+                currentProjectionMxn = repository.billProjection(state).projectedMxn,
+            )
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ApplianceSimulatorUiState())
+
+    fun saveScenario() = repository.saveSimulatorScenario()
+
+    fun addToHome() = repository.addAppliance(
+        Appliance(
+            id = "simulated_minisplit_1150w",
+            name = "Minisplit convencional 1,150 W",
+            room = "Hogar",
+            costMxn = 335,
+            kwh = 126,
+            sharePercent = 0,
+            hoursPerWeek = 25,
+            confidence = ConfidenceLevel.MEDIUM,
+            opportunity = OpportunityLevel.HIGH,
+        ),
+    )
 }
 
 @Composable
@@ -65,8 +93,11 @@ fun ApplianceSimulatorRoute(navController: NavHostController, repository: Recibo
     ApplianceSimulatorScreen(
         uiState = uiState,
         onBack = { navController.popBackStack() },
-        onSaveScenario = { navController.popBackStack() },
-        onAddToHome = { navController.popBackStack() },
+        onSaveScenario = { viewModel.saveScenario() },
+        onAddToHome = {
+            viewModel.addToHome()
+            navController.popBackStack()
+        },
     )
 }
 
@@ -109,9 +140,9 @@ fun ApplianceSimulatorScreen(
                 Text(
                     stringResource(
                         R.string.appliances_simulator_impact,
-                        "$280–$390",
-                        "$846",
-                        "$1,126–$1,236",
+                        "$${uiState.addedCostLowMxn}–$${uiState.addedCostHighMxn}",
+                        "$${uiState.currentProjectionMxn}",
+                        "$${uiState.currentProjectionMxn + uiState.addedCostLowMxn}–$${uiState.currentProjectionMxn + uiState.addedCostHighMxn}",
                     ),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -182,8 +213,9 @@ fun ApplianceSimulatorScreen(
 
             Row(horizontalArrangement = Arrangement.spacedBy(RzSpacing.md)) {
                 RzSecondaryButton(
-                    text = stringResource(R.string.appliances_simulator_save_scenario),
+                    text = stringResource(if (uiState.isSaved) R.string.appliances_simulator_saved_scenario else R.string.appliances_simulator_save_scenario),
                     onClick = onSaveScenario,
+                    enabled = !uiState.isSaved,
                     modifier = Modifier.weight(1f),
                 )
                 RzPrimaryButton(

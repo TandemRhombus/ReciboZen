@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
@@ -42,6 +43,7 @@ import com.recibozen.app.core.designsystem.RzSpacing
 import com.recibozen.app.core.designsystem.RzTheme
 import com.recibozen.app.core.model.MonthlyEnergyPoint
 import com.recibozen.app.core.model.SolarScenario
+import com.recibozen.app.core.export.SolarReportExporter
 import com.recibozen.app.demo.data.DemoReciboZenData
 import com.recibozen.app.demo.repository.ReciboZenRepository
 import com.recibozen.app.demo.repository.ReciboZenSessionState
@@ -51,7 +53,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
-/** Pushed flow screen "Preestudio solar": scenario tabs + month-by-month chart, no real export. */
+/** Pushed flow screen "Preestudio solar": scenarios, chart and native PDF export. */
 data class SolarUiState(
     val scenarios: List<SolarScenario> = DemoReciboZenData.solarScenarios,
     val selectedIndex: Int = DemoReciboZenData.DEFAULT_SOLAR_SCENARIO_INDEX,
@@ -71,7 +73,18 @@ class SolarViewModel(private val repository: ReciboZenRepository) : ViewModel() 
         .map { toUiState(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), toUiState(repository.session.value))
 
-    private fun toUiState(state: ReciboZenSessionState) = SolarUiState(selectedIndex = state.solarScenarioIndex)
+    private fun toUiState(state: ReciboZenSessionState) = SolarUiState(
+        selectedIndex = state.solarScenarioIndex,
+        location = state.location,
+        annualConsumptionKwh = repository.billHistory(state)
+            .filterNot { it.isProjected }
+            .map { it.consumptionKwh }
+            .filter { it > 0 }
+            .average()
+            .takeIf { !it.isNaN() }
+            ?.let { average -> (average * if (state.billingCycle.contains("bi", ignoreCase = true)) 6 else 12).toInt() }
+            ?: DemoReciboZenData.ANNUAL_CONSUMPTION_KWH,
+    )
 
     fun selectScenario(index: Int) {
         repository.setSolarScenarioIndex(index)
@@ -82,11 +95,20 @@ class SolarViewModel(private val repository: ReciboZenRepository) : ViewModel() 
 fun SolarRoute(navController: NavHostController, repository: ReciboZenRepository) {
     val viewModel = rzViewModel { SolarViewModel(repository) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     SolarScreen(
         uiState = uiState,
         onBack = { navController.popBackStack() },
         onScenarioSelected = viewModel::selectScenario,
-        onDownloadClick = {}, // Explicitly a no-op per the handoff brief: no real file export.
+        onDownloadClick = {
+            SolarReportExporter.createAndShare(
+                context = context,
+                householdName = repository.session.value.householdName,
+                location = uiState.location,
+                annualConsumptionKwh = uiState.annualConsumptionKwh,
+                scenario = uiState.selectedScenario,
+            )
+        },
     )
 }
 

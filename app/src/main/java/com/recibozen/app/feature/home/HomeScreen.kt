@@ -59,6 +59,7 @@ import com.recibozen.app.demo.repository.ReciboZenRepository
 import com.recibozen.app.navigation.Routes
 import com.recibozen.app.navigation.rzViewModel
 import kotlin.math.roundToInt
+import java.util.Locale
 
 /**
  * "Inicio" bottom-nav tab root. Owns its own [Scaffold] so it can pin the
@@ -343,7 +344,7 @@ private fun PaceCard(uiState: HomeUiState) {
                 value = uiState.dailyRateNow,
                 progressFraction = (uiState.dailyRateNow / 8.0).toFloat(),
                 color = RzTheme.extendedColors.warning,
-                contentDescription = stringResource(R.string.home_content_desc_pace_now, uiState.dailyRateNow.toString()),
+                contentDescription = stringResource(R.string.home_content_desc_pace_now, formatRate(uiState.dailyRateNow)),
                 modifier = Modifier.weight(1f),
             )
             PaceColumn(
@@ -351,7 +352,7 @@ private fun PaceCard(uiState: HomeUiState) {
                 value = uiState.dailyRateRecommended,
                 progressFraction = (uiState.dailyRateRecommended / 8.0).toFloat(),
                 color = RzTheme.extendedColors.success,
-                contentDescription = stringResource(R.string.home_content_desc_pace_recommended, uiState.dailyRateRecommended.toString()),
+                contentDescription = stringResource(R.string.home_content_desc_pace_recommended, formatRate(uiState.dailyRateRecommended)),
                 modifier = Modifier.weight(1f),
             )
         }
@@ -387,7 +388,7 @@ private fun PaceColumn(
     Column(modifier = modifier) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(
-            value.toString(),
+            formatRate(value),
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(top = 2.dp),
@@ -400,6 +401,8 @@ private fun PaceColumn(
         )
     }
 }
+
+private fun formatRate(value: Double): String = String.format(Locale.forLanguageTag("es-MX"), "%.1f", value)
 
 @Composable
 private fun PeriodChartCard(uiState: HomeUiState, onViewFullAnalysis: () -> Unit) {

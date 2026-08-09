@@ -11,6 +11,12 @@
     <string name="profile_row_privacy">Privacidad y fotos guardadas</string>
     <string name="profile_row_states_catalog">Estados y errores (referencia)</string>
     <string name="profile_disclaimer">Tus lecturas se guardan en tu teléfono. Puedes exportarlas o borrar las fotos sin perder las lecturas. ReciboZen es independiente y no está afiliada a ninguna empresa eléctrica.</string>
+    <string name="profile_edit_title">Datos del hogar</string>
+    <string name="profile_edit_name">Tu nombre</string>
+    <string name="profile_edit_household">Nombre del hogar</string>
+    <string name="profile_edit_location">Ciudad</string>
+    <string name="profile_edit_goal">Meta por recibo (MXN)</string>
+    <string name="profile_edit_save">Guardar cambios</string>
 
     <!-- Appearance / Modo oscuro -->
     <string name="appearance_title">Modo oscuro</string>

@@ -76,8 +76,15 @@ data class HistoryUiState(
 class HistoryViewModel(private val repository: ReciboZenRepository) : ViewModel() {
     val uiState: StateFlow<HistoryUiState> = repository.session
         .map { state ->
+            val bills = repository.billHistory(state)
             HistoryUiState(
+                greetingName = state.userName,
+                householdName = state.householdName,
+                userInitial = state.userName.firstOrNull()?.uppercase() ?: "?",
+                currentPeriod = bills.last { it.isProjected },
+                pastBills = bills.filterNot { it.isProjected },
                 historyUnit = state.historyUnit,
+                readingsCountLabel = "${state.readings.size} lecturas recientes",
                 readings = state.readings,
             )
         }
@@ -219,7 +226,7 @@ private fun CurrentPeriodProjectionCard(currentPeriod: BillPeriod, unit: History
         }
         Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(top = RzSpacing.sm)) {
             Text(
-                displayAmount(currentPeriod.amountMxn, unit),
+                displayAmount(currentPeriod, unit),
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -286,8 +293,9 @@ private fun PreviousBillsCard(
         val entries = pastBills.map { bill ->
             RzBarEntry(
                 categoryLabel = bill.monthLabel,
-                valueLabel = displayAmount(bill.amountMxn, unit),
-                heightFraction = bill.amountMxn.toFloat() / maxAmount.toFloat(),
+                valueLabel = displayAmount(bill, unit),
+                heightFraction = (if (unit == HistoryUnit.MXN) bill.amountMxn else bill.consumptionKwh).toFloat() /
+                    (if (unit == HistoryUnit.MXN) maxAmount else pastBills.maxOfOrNull { it.consumptionKwh }?.coerceAtLeast(1) ?: 1).toFloat(),
                 color = RzTheme.extendedColors.chartHistoryBar,
             )
         }
@@ -427,11 +435,10 @@ private fun methodLabel(method: ReadingMethod): String = when (method) {
  * derive an approximate kWh figure from the pesos amount purely for display
  * (not a real tariff calculation); flagged for the tariff-engine follow-up.
  */
-private fun displayAmount(amountMxn: Int, unit: HistoryUnit): String {
-    val formatted = formatThousands(amountMxn)
+private fun displayAmount(period: BillPeriod, unit: HistoryUnit): String {
     return when (unit) {
-        HistoryUnit.MXN -> "$" + formatted
-        HistoryUnit.KWH -> formatThousands((amountMxn / 2.1).roundToInt()) + " kWh"
+        HistoryUnit.MXN -> "$" + formatThousands(period.amountMxn)
+        HistoryUnit.KWH -> formatThousands(period.consumptionKwh) + " kWh"
     }
 }
 

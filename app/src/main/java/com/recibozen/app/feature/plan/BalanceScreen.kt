@@ -56,7 +56,19 @@ data class BalanceUiState(
 
 class BalanceViewModel(repository: ReciboZenRepository) : ViewModel() {
     val uiState: StateFlow<BalanceUiState> = repository.session
-        .map { BalanceUiState() }
+        .map { state ->
+            val observed = repository.energySummary(state).observedKwh
+            val explained = repository.appliances(state).sumOf { it.kwh }.coerceAtMost(observed)
+            val unexplained = (observed - explained).coerceAtLeast(0)
+            val explainedShare = if (observed == 0) 0 else (explained * 100f / observed).toInt().coerceIn(0, 100)
+            BalanceUiState(
+                explainedSharePercent = explainedShare,
+                unidentifiedSharePercent = 100 - explainedShare,
+                explainedKwh = explained,
+                unexplainedKwh = unexplained,
+                observedKwh = observed,
+            )
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), BalanceUiState())
 }
 

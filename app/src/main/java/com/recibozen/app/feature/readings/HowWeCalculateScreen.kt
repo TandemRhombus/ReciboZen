@@ -37,13 +37,32 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import java.util.Locale
 
-/** Entirely static explanatory copy -- no repository state drives this screen. */
-data class HowWeCalculateUiState(val placeholder: Boolean = true)
+data class HowWeCalculateUiState(
+    val observedKwh: Int = 0,
+    val observedDays: Int = 0,
+    val dailyAverageKwh: Double = 0.0,
+    val daysRemaining: Int = 0,
+    val projectedKwh: Int = 0,
+    val projectedMxn: Int = 0,
+    val tariff: String = "",
+)
 
 class HowWeCalculateViewModel(repository: ReciboZenRepository) : ViewModel() {
     val uiState: StateFlow<HowWeCalculateUiState> = repository.session
-        .map { HowWeCalculateUiState() }
+        .map { state ->
+            val energy = repository.energySummary(state)
+            HowWeCalculateUiState(
+                observedKwh = energy.observedKwh,
+                observedDays = energy.observedDays,
+                dailyAverageKwh = energy.dailyAverageKwh,
+                daysRemaining = energy.daysRemaining,
+                projectedKwh = energy.projectedKwh,
+                projectedMxn = repository.billProjection(state).projectedMxn,
+                tariff = state.tariff,
+            )
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HowWeCalculateUiState())
 }
 
@@ -75,10 +94,10 @@ fun HowWeCalculateScreen(uiState: HowWeCalculateUiState, onBack: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Column(modifier = Modifier.padding(top = RzSpacing.md), verticalArrangement = Arrangement.spacedBy(RzSpacing.md)) {
-                    CalcStep(1, stringResource(R.string.how_we_calculate_step1_label), stringResource(R.string.how_we_calculate_step1_body))
-                    CalcStep(2, stringResource(R.string.how_we_calculate_step2_label), stringResource(R.string.how_we_calculate_step2_body))
-                    CalcStep(3, stringResource(R.string.how_we_calculate_step3_label), stringResource(R.string.how_we_calculate_step3_body))
-                    CalcStep(4, stringResource(R.string.how_we_calculate_step4_label), stringResource(R.string.how_we_calculate_step4_body))
+                    CalcStep(1, stringResource(R.string.how_we_calculate_step1_label), "${uiState.observedKwh} kWh observados en ${uiState.observedDays} días entre lecturas.")
+                    CalcStep(2, stringResource(R.string.how_we_calculate_step2_label), "${formatOneDecimal(uiState.dailyAverageKwh)} kWh por día según el intervalo observado.")
+                    CalcStep(3, stringResource(R.string.how_we_calculate_step3_label), "Con ${uiState.daysRemaining} días restantes estimamos ${uiState.projectedKwh} kWh al cierre.")
+                    CalcStep(4, stringResource(R.string.how_we_calculate_step4_label), "Los escalones de ${uiState.tariff} dan una proyección aproximada de $${uiState.projectedMxn}.")
                 }
             }
 
@@ -147,6 +166,8 @@ private fun GlossaryLine(term: String, body: String) {
     }
     Text(text, style = MaterialTheme.typography.bodyMedium)
 }
+
+private fun formatOneDecimal(value: Double): String = String.format(Locale.forLanguageTag("es-MX"), "%.1f", value)
 
 @Preview(showBackground = true)
 @Composable

@@ -28,6 +28,9 @@ import com.recibozen.app.core.designsystem.RzIcons
 import com.recibozen.app.core.designsystem.RzSpacing
 import com.recibozen.app.core.designsystem.ReciboZenTheme
 import com.recibozen.app.demo.repository.ReciboZenRepository
+import com.recibozen.app.core.model.Appliance
+import com.recibozen.app.core.model.ConfidenceLevel
+import com.recibozen.app.core.model.OpportunityLevel
 import com.recibozen.app.navigation.rzViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -41,10 +44,36 @@ data class AppliancesEmptyUiState(val hasSuggestions: Boolean = true)
  * through [ReciboZenRepository.session] so the Route/ViewModel/UiState/Screen
  * shape matches every other feature screen.
  */
-class AppliancesEmptyViewModel(repository: ReciboZenRepository) : ViewModel() {
+class AppliancesEmptyViewModel(private val repository: ReciboZenRepository) : ViewModel() {
     val uiState: StateFlow<AppliancesEmptyUiState> = repository.session
         .map { AppliancesEmptyUiState() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppliancesEmptyUiState())
+
+    fun addSuggestion(name: String) {
+        val normalized = name.lowercase()
+            .replace(Regex("[^a-záéíóúñ0-9]+"), "_")
+            .trim('_')
+        val (kwh, hours) = when {
+            name.contains("Minisplit", ignoreCase = true) -> 128 to 25
+            name.contains("Refriger", ignoreCase = true) -> 56 to null
+            name.contains("Bomba", ignoreCase = true) -> 34 to 5
+            name.contains("Comput", ignoreCase = true) -> 42 to 20
+            else -> 30 to 14
+        }
+        repository.addAppliance(
+            Appliance(
+                id = "custom_$normalized",
+                name = name,
+                room = "Hogar",
+                costMxn = (kwh * 2.3).toInt(),
+                kwh = kwh,
+                sharePercent = 0,
+                hoursPerWeek = hours,
+                confidence = ConfidenceLevel.MEDIUM,
+                opportunity = OpportunityLevel.MEDIUM,
+            ),
+        )
+    }
 }
 
 @Composable
@@ -55,8 +84,14 @@ fun AppliancesEmptyRoute(navController: NavHostController, repository: ReciboZen
     AppliancesEmptyScreen(
         uiState = uiState,
         onBack = { navController.popBackStack() },
-        onAddFirstAppliance = { navController.popBackStack() },
-        onSuggestionClick = {},
+        onAddFirstAppliance = {
+            viewModel.addSuggestion("Televisión")
+            navController.popBackStack()
+        },
+        onSuggestionClick = { name ->
+            viewModel.addSuggestion(name)
+            navController.popBackStack()
+        },
     )
 }
 

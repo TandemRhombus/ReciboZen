@@ -1,5 +1,10 @@
 package com.recibozen.app.feature.readings
 
+import android.content.Context
+import android.graphics.BitmapFactory
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -19,8 +24,14 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -30,6 +41,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
+import androidx.core.content.FileProvider
 import com.recibozen.app.R
 import com.recibozen.app.core.components.RzCard
 import com.recibozen.app.core.components.RzFlowTopBar
@@ -40,39 +52,113 @@ import com.recibozen.app.core.designsystem.RzExtraShapes
 import com.recibozen.app.core.designsystem.RzIcons
 import com.recibozen.app.core.designsystem.RzSpacing
 import com.recibozen.app.core.designsystem.RzTheme
-import com.recibozen.app.demo.data.DemoReciboZenData
+import com.recibozen.app.core.model.ReadingMethod
+import com.recibozen.app.core.ocr.MeterReadingParser
 import com.recibozen.app.demo.repository.ReciboZenRepository
 import com.recibozen.app.navigation.Routes
 import com.recibozen.app.navigation.rzViewModel
-import kotlinx.coroutines.flow.SharingStarted
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import java.io.File
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import java.util.Locale
 
-/**
- * Static camera-viewfinder mockup — this build does no real capture/OCR. The
- * "detected reading" is the same fixed value used by [DemoReciboZenData.recentReadings]'s
- * most recent dial entry, so it lines up with what Historial later shows.
- */
-data class ReadingPhotoUiState(val detectedReadingKwh: Int = DemoReciboZenData.recentReadings.first().kwh)
+data class ReadingPhotoUiState(
+    val detectedReadingKwh: Int? = null,
+    val imageUri: String? = null,
+    val isProcessing: Boolean = false,
+    val errorMessage: String? = null,
+    val isPhotoKept: Boolean = false,
+    val imageRevision: Int = 0,
+)
 
-class ReadingPhotoViewModel(repository: ReciboZenRepository) : ViewModel() {
-    val uiState: StateFlow<ReadingPhotoUiState> = repository.session
-        .map { ReadingPhotoUiState() }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ReadingPhotoUiState())
+class ReadingPhotoViewModel(private val repository: ReciboZenRepository) : ViewModel() {
+    private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+    private val _uiState = MutableStateFlow(ReadingPhotoUiState())
+    val uiState: StateFlow<ReadingPhotoUiState> = _uiState.asStateFlow()
+    private var captureFile: File? = null
+
+    fun createCaptureUri(context: Context): Uri {
+        val directory = File(context.cacheDir, "reading_photos").apply { mkdirs() }
+        captureFile = File(directory, "medidor_${System.currentTimeMillis()}.jpg")
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", captureFile!!)
+        _uiState.value = ReadingPhotoUiState(imageUri = uri.toString())
+        return uri
+    }
+
+    fun processCapture(context: Context) {
+        val uri = _uiState.value.imageUri?.let(Uri::parse) ?: return
+        _uiState.update { it.copy(isProcessing = true, errorMessage = null, imageRevision = it.imageRevision + 1) }
+        val image = runCatching { InputImage.fromFilePath(context, uri) }.getOrElse {
+            _uiState.update { state -> state.copy(isProcessing = false, errorMessage = "capture") }
+            return
+        }
+        recognizer.process(image)
+            .addOnSuccessListener { text ->
+                val reading = MeterReadingParser.parse(text.text, repository.session.value.lastConfirmedReadingKwh)
+                if (reading != null) {
+                    repository.prepareReading(reading, ReadingMethod.PHOTO)
+                    _uiState.update { it.copy(detectedReadingKwh = reading, isProcessing = false, errorMessage = null) }
+                } else {
+                    _uiState.update { it.copy(isProcessing = false, errorMessage = "ocr") }
+                }
+            }
+            .addOnFailureListener {
+                _uiState.update { state -> state.copy(isProcessing = false, errorMessage = "ocr") }
+            }
+    }
+
+    fun captureCancelled() {
+        captureFile?.delete()
+        _uiState.value = ReadingPhotoUiState(errorMessage = "capture")
+    }
+
+    fun keepPhoto(context: Context) {
+        val source = captureFile ?: return
+        val targetDir = File(context.filesDir, "reading_photos").apply { mkdirs() }
+        val target = File(targetDir, source.name)
+        runCatching { source.inputStream().use { input -> target.outputStream().use(input::copyTo) } }
+            .onSuccess {
+                val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", target)
+                _uiState.update { it.copy(imageUri = uri.toString(), isPhotoKept = true) }
+            }
+    }
+
+    fun discardPhoto() {
+        captureFile?.delete()
+        captureFile = null
+        _uiState.update { it.copy(imageUri = null, isPhotoKept = false) }
+    }
+
+    override fun onCleared() {
+        recognizer.close()
+    }
 }
 
 @Composable
 fun ReadingPhotoRoute(navController: NavHostController, repository: ReciboZenRepository) {
     val viewModel = rzViewModel { ReadingPhotoViewModel(repository) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { captured ->
+        if (captured) viewModel.processCapture(context) else viewModel.captureCancelled()
+    }
+    val takePhoto = { cameraLauncher.launch(viewModel.createCaptureUri(context)) }
+
+    LaunchedEffect(Unit) { takePhoto() }
 
     ReadingPhotoScreen(
         uiState = uiState,
         onBack = { navController.popBackStack() },
         onConfirm = { navController.navigate(Routes.ReadingConfirm) },
         onFixResult = { navController.navigate(Routes.ReadingPhotoUnclear) },
+        onRetry = takePhoto,
+        onKeepPhoto = { viewModel.keepPhoto(context) },
+        onDiscardPhoto = viewModel::discardPhoto,
     )
 }
 
@@ -82,6 +168,9 @@ fun ReadingPhotoScreen(
     onBack: () -> Unit,
     onConfirm: () -> Unit,
     onFixResult: () -> Unit,
+    onRetry: () -> Unit,
+    onKeepPhoto: () -> Unit,
+    onDiscardPhoto: () -> Unit,
 ) {
     Scaffold(
         topBar = { RzFlowTopBar(title = stringResource(R.string.reading_photo_title), onBack = onBack) },
@@ -94,7 +183,7 @@ fun ReadingPhotoScreen(
                 .padding(horizontal = RzSpacing.screenHorizontal, vertical = RzSpacing.xl),
             verticalArrangement = Arrangement.spacedBy(RzSpacing.md),
         ) {
-            CameraViewfinderMock()
+            CapturedPhotoOrViewfinder(uiState.imageUri, uiState.imageRevision)
 
             RzCard(modifier = Modifier.fillMaxWidth()) {
                 Text(
@@ -102,9 +191,18 @@ fun ReadingPhotoScreen(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (uiState.isProcessing) {
+                    Text(
+                        stringResource(R.string.reading_photo_processing),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = RzSpacing.sm),
+                    )
+                }
+                uiState.detectedReadingKwh?.let { detected ->
                 Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(top = 2.dp)) {
                     Text(
-                        String.format(Locale("es", "MX"), "%,d", uiState.detectedReadingKwh),
+                        String.format(Locale("es", "MX"), "%,d", detected),
                         style = MaterialTheme.typography.displaySmall,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
@@ -115,6 +213,21 @@ fun ReadingPhotoScreen(
                         modifier = Modifier.padding(bottom = 4.dp),
                     )
                 }
+                }
+                uiState.errorMessage?.let { error ->
+                    Text(
+                        stringResource(if (error == "capture") R.string.reading_photo_capture_error else R.string.reading_photo_ocr_error),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = RzTheme.extendedColors.warningText,
+                        modifier = Modifier.padding(top = RzSpacing.sm),
+                    )
+                    RzSecondaryButton(
+                        text = stringResource(R.string.reading_photo_retry_button),
+                        onClick = onRetry,
+                        modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.sm),
+                    )
+                }
+                if (uiState.detectedReadingKwh != null) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(RzSpacing.xs),
@@ -143,6 +256,7 @@ fun ReadingPhotoScreen(
                     onClick = onFixResult,
                     modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.sm),
                 )
+                }
             }
 
             RzCard(modifier = Modifier.fillMaxWidth()) {
@@ -163,12 +277,12 @@ fun ReadingPhotoScreen(
                 ) {
                     RzSecondaryButton(
                         text = stringResource(R.string.reading_photo_keep_button),
-                        onClick = { /* no-op: demo build has no real photo storage */ },
+                        onClick = onKeepPhoto,
                         modifier = Modifier.weight(1f),
                     )
                     RzSecondaryButton(
                         text = stringResource(R.string.reading_photo_discard_button),
-                        onClick = { /* no-op: demo build has no real photo storage */ },
+                        onClick = onDiscardPhoto,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -182,6 +296,28 @@ fun ReadingPhotoScreen(
  * purpose: this box represents an opaque camera preview overlay, which stays
  * visually identical regardless of the app's light/dark theme.
  */
+@Composable
+private fun CapturedPhotoOrViewfinder(uriString: String?, imageRevision: Int, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val bitmap = remember(uriString, imageRevision) {
+        uriString?.let { value ->
+            runCatching {
+                context.contentResolver.openInputStream(Uri.parse(value))?.use(BitmapFactory::decodeStream)?.asImageBitmap()
+            }.getOrNull()
+        }
+    }
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap,
+            contentDescription = stringResource(R.string.reading_photo_viewfinder_caption),
+            contentScale = ContentScale.Crop,
+            modifier = modifier.fillMaxWidth().height(240.dp),
+        )
+    } else {
+        CameraViewfinderMock(modifier)
+    }
+}
+
 @Composable
 private fun CameraViewfinderMock(modifier: Modifier = Modifier) {
     val scrimColor = Color(0xFF2A3733)
@@ -230,6 +366,9 @@ private fun ReadingPhotoScreenPreview() {
             onBack = {},
             onConfirm = {},
             onFixResult = {},
+            onRetry = {},
+            onKeepPhoto = {},
+            onDiscardPhoto = {},
         )
     }
 }
