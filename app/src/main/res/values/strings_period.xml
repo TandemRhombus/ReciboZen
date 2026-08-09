@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="period_top_bar_title">Análisis del periodo</string>
+
+    <!-- Consumo acumulado chart card -->
+    <string name="period_chart_title">Consumo acumulado del periodo</string>
+    <string name="period_chart_axis_label">%1$d kWh</string>
+    <string name="period_info_box_title">%1$s · última lectura</string>
+    <string name="period_info_observed_reading">Lectura observada: %1$s kWh</string>
+    <string name="period_info_accumulated">Consumo acumulado: %1$d kWh</string>
+    <string name="period_info_cost_to_date">Costo estimado hasta hoy: $%1$d</string>
+    <string name="period_legend_observed">Observado</string>
+    <string name="period_legend_projected">Proyectado</string>
+    <string name="period_legend_goal">Trayectoria de la meta</string>
+    <string name="period_chart_start_label">18 jun</string>
+    <string name="period_chart_end_label">18 ago</string>
+    <string name="period_chart_today_label">hoy</string>
+
+    <!-- Dónde vas contra tu meta card -->
+    <string name="period_goal_progress_title">Dónde vas contra tu meta</string>
+    <string name="period_goal_label_today">Hoy %1$d</string>
+    <string name="period_goal_label_goal">Meta %1$d</string>
+    <string name="period_goal_label_projection">Proyección %1$d</string>
+    <string name="period_goal_label_surplus">Excedente %1$d</string>
+    <string name="period_goal_screen_reader_summary">Resumen para lectores de pantalla: consumo observado %1$d kWh, meta del periodo %2$d kWh, proyección al cierre %3$d kWh, inicio del rango excedente %4$d kWh.</string>
+
+    <!-- Footer -->
+    <string name="period_how_we_calculate">Cómo lo calculamos</string>
+</resources>

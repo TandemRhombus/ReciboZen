@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tab header -->
+    <string name="home_greeting">Buenas tardes, %1$s</string>
+
+    <!-- Recibo proyectado card -->
+    <string name="home_projected_period_label">Recibo proyectado · %1$s</string>
+    <string name="home_projection_chip">Proyección</string>
+    <string name="home_currency_suffix">MXN</string>
+    <string name="home_range_text">Podría quedar entre %1$s y %2$s</string>
+    <string name="home_status_over_goal">Vas a %1$s por encima de tu meta de %2$s. Faltan %3$d días.</string>
+    <string name="home_status_within_goal">Con tu plan cerrarías dentro de tu meta de %1$s. Faltan %2$d días.</string>
+    <string name="home_stat_goal_label">Tu meta</string>
+    <string name="home_stat_days_label">Faltan</string>
+    <string name="home_stat_days_value">%1$d días</string>
+    <string name="home_stat_observed_label">Observado hoy</string>
+    <string name="home_stat_observed_value">%1$d kWh</string>
+
+    <!-- "Lo que más puede ayudarte hoy" tip card -->
+    <string name="home_tip_eyebrow">LO QUE MÁS PUEDE AYUDARTE HOY</string>
+    <string name="home_tip_headline">Reduce 35 minutos diarios el uso del minisplit</string>
+    <string name="home_tip_savings">Ahorro estimado: %1$s por periodo. Cubriría cerca del 73%% de lo que necesitas bajar.</string>
+    <string name="home_chip_effort_low">Esfuerzo bajo</string>
+    <string name="home_chip_confidence_medium">Confianza media</string>
+    <string name="home_add_to_plan">Agregar a mi plan</string>
+    <string name="home_tracking">En seguimiento</string>
+    <string name="home_see_why">Ver por qué</string>
+
+    <!-- "Tu ritmo de consumo" card -->
+    <string name="home_pace_title">Tu ritmo de consumo</string>
+    <string name="home_pace_now_label">Ahora</string>
+    <string name="home_pace_recommended_label">Recomendado</string>
+    <string name="home_pace_explanation_prefix">Estás usando alrededor de </string>
+    <string name="home_pace_explanation_bold">%1$s kWh diarios más</string>
+    <string name="home_pace_explanation_suffix"> de lo recomendado para llegar a tu meta. Te quedan cerca de %1$d kWh para los próximos %2$d días.</string>
+
+    <!-- "Cómo va el periodo" card -->
+    <string name="home_period_title">Cómo va el periodo</string>
+    <string name="home_period_legend_observed">observado</string>
+    <string name="home_period_explanation">Llevas %1$d kWh en %2$d días. Si mantienes este ritmo, cerrarías cerca de %3$d kWh, unos %4$d por encima de tu meta.</string>
+    <string name="home_view_full_analysis">Ver análisis completo</string>
+
+    <!-- "Qué está influyendo más" card -->
+    <string name="home_influence_title">Qué está influyendo más</string>
+    <string name="home_view_all">Ver todos</string>
+    <string name="home_appliance_minisplit">Minisplit inverter</string>
+    <string name="home_appliance_refrigerador">Refrigerador</string>
+    <string name="home_appliance_ps5">PlayStation 5</string>
+    <string name="home_cost_share_format">$%1$d · %2$d%%</string>
+    <string name="home_unidentified">Todavía sin identificar</string>
+
+    <!-- "Qué tan confiable es esta estimación" card -->
+    <string name="home_confidence_title">Qué tan confiable es esta estimación</string>
+    <string name="home_confidence_medium_label">Confianza media</string>
+    <string name="home_confidence_explanation">Tenemos suficientes datos para orientarte, pero registrar dos lecturas más podría mejorar la estimación.</string>
+    <string name="home_confidence_bills_status">Recibos anteriores: %1$d cargados</string>
+    <string name="home_confidence_readings_hint">Con 2 lecturas adicionales mejoraría la estimación.</string>
+    <string name="home_confidence_schedules_status">Horarios de aparatos: faltan %1$d</string>
+    <string name="home_register_reading_button">Registrar una lectura</string>
+
+    <!-- Footer -->
+    <string name="home_how_we_calculate">Cómo lo calculamos</string>
+
+    <!-- Content descriptions -->
+    <string name="home_content_desc_pace_now">Ahora: %1$s kWh diarios</string>
+    <string name="home_content_desc_pace_recommended">Recomendado: %1$s kWh diarios</string>
+</resources>

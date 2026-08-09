@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="history_greeting">Buenas tardes, %1$s</string>
+    <string name="history_headline">Historial</string>
+
+    <string name="history_current_period_title">Periodo en curso — proyección</string>
+    <string name="history_current_period_badge">Proyección</string>
+    <string name="history_current_period_caption">El periodo (%1$s) todavía no termina: la cifra es una proyección, no un recibo.</string>
+
+    <string name="history_previous_bills_title">Recibos anteriores — valores reales</string>
+    <string name="history_unit_mxn">Pesos</string>
+    <string name="history_unit_kwh">kWh</string>
+    <string name="history_legend_real">Recibo real</string>
+    <string name="history_amount_mxn">$%1$s</string>
+    <string name="history_amount_kwh">%1$s kWh</string>
+
+    <string name="history_period_comparison_title">Periodo %1$s</string>
+    <string name="history_estimate_label">Estimación previa</string>
+    <string name="history_actual_label">Recibo real</string>
+    <string name="history_difference_label">Diferencia</string>
+    <string name="history_amount_signed_mxn">+$%1$s</string>
+
+    <string name="history_recent_readings_title">Lecturas recientes</string>
+    <string name="history_recent_readings_hint">Con 2 lecturas adicionales mejoraría la estimación.</string>
+    <string name="history_reading_value">%1$s kWh</string>
+    <string name="history_reading_method_dial">manecillas</string>
+    <string name="history_reading_method_manual">escrita</string>
+    <string name="history_reading_method_photo">foto</string>
+    <string name="history_reading_meta">%1$s · %2$s · %3$s</string>
+    <string name="history_footer">Los tramos sin lectura se muestran como calculados, no como observados.</string>
+</resources>

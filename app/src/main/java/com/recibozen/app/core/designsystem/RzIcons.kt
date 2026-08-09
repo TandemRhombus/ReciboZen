@@ -22,7 +22,6 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Monitoring
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Pending
 import androidx.compose.material.icons.filled.PhotoCamera
@@ -31,6 +30,7 @@ import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.SolarPower
 import androidx.compose.material.icons.filled.TaskAlt
 import androidx.compose.material.icons.filled.Timeline
@@ -72,7 +72,7 @@ object RzIcons {
     val ErrorInfo = Icons.Filled.Error
     val Info = Icons.Filled.Info
     val TaskAlt = Icons.Filled.TaskAlt
-    val Monitoring = Icons.Filled.Monitoring
+    val Monitoring = Icons.Filled.ShowChart
     val SolarPower = Icons.Filled.SolarPower
     val DonutSmall = Icons.Filled.DonutSmall
     val DarkMode = Icons.Filled.DarkMode

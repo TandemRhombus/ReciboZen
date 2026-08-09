@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ═══════ Preestudio solar ═══════ -->
+    <string name="solar_title">Preestudio solar</string>
+    <string name="solar_eyebrow">PREESTUDIO ORIENTATIVO</string>
+    <string name="solar_intro_headline">Cuántos paneles podrían reducir la energía que compras de la red</string>
+    <string name="solar_intro_body">Calculado con 9 recibos, tu ubicación y un techo inclinado sin sombras mayores. Consumo anual del hogar: %1$d kWh.</string>
+
+    <string name="solar_coverage_caption">de tu energía anual, aproximadamente</string>
+    <string name="solar_spec_panels">Paneles de 550 W</string>
+    <string name="solar_spec_system_power">Potencia del sistema</string>
+    <string name="solar_spec_area">Área aproximada</string>
+    <string name="solar_spec_production">Producción estimada</string>
+    <string name="solar_spec_grid_remaining">Seguiría viniendo de la red</string>
+    <string name="solar_spec_confidence">Confianza</string>
+    <string name="solar_confidence_medium">Media</string>
+
+    <string name="solar_monthly_title">Mes a mes: consumo y producción</string>
+    <string name="solar_legend_consumption">Consumo del hogar</string>
+    <string name="solar_legend_production">Producción estimada</string>
+    <string name="solar_monthly_caption">En mayo y junio tu consumo superaría la generación; en marzo y abril podrías tener excedentes.</string>
+
+    <string name="solar_reduce_title">Si reduces antes de instalar</string>
+    <string name="solar_reduce_current_label">Consumo actual</string>
+    <string name="solar_reduce_with_plan_label">Con tu plan aplicado</string>
+    <string name="solar_reduce_caption">Bajar tu consumo antes de instalar puede reducir el tamaño y el costo del sistema.</string>
+
+    <string name="solar_refine_title">Para afinar el preestudio</string>
+    <string name="solar_refine_subtitle">Opcional. Puedes responder solo lo que sepas.</string>
+    <string name="solar_refine_location">Ubicación general</string>
+    <string name="solar_refine_roof_type">Tipo de techo</string>
+    <string name="solar_refine_roof_type_value">Inclinado</string>
+    <string name="solar_refine_shading">Sombras cercanas</string>
+    <string name="solar_refine_available_space">Espacio disponible</string>
+    <string name="solar_refine_answer_action">Responder</string>
+
+    <string name="solar_disclaimer">Este es un preestudio orientativo. La generación real depende de la ubicación, orientación, sombras, clima, instalación, tarifa y condiciones del inmueble. No prometemos un recibo de cero pesos.</string>
+    <string name="solar_download_action">Descargar mi preestudio</string>
+</resources>

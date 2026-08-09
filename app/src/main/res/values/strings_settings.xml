@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Profile -->
+    <string name="profile_title">Tu perfil</string>
+    <string name="profile_subtitle">%1$s · %2$s · %3$s</string>
+    <string name="profile_row_dark_mode">Modo oscuro</string>
+    <string name="profile_row_dark_mode_trailing">Ver</string>
+    <string name="profile_row_household_goal">Datos del hogar y meta</string>
+    <string name="profile_row_reminders">Recordatorios de lectura</string>
+    <string name="profile_row_reminders_trailing">Cada 3 días</string>
+    <string name="profile_row_privacy">Privacidad y fotos guardadas</string>
+    <string name="profile_row_states_catalog">Estados y errores (referencia)</string>
+    <string name="profile_disclaimer">Tus lecturas se guardan en tu teléfono. Puedes exportarlas o borrar las fotos sin perder las lecturas. ReciboZen es independiente y no está afiliada a ninguna empresa eléctrica.</string>
+
+    <!-- Appearance / Modo oscuro -->
+    <string name="appearance_title">Modo oscuro</string>
+    <string name="appearance_section_title">Elige cómo se ve ReciboZen</string>
+    <string name="appearance_option_light">Claro</string>
+    <string name="appearance_option_dark">Oscuro</string>
+    <string name="appearance_option_system">Sistema</string>
+    <string name="appearance_option_selected_desc">Seleccionado</string>
+    <string name="appearance_preview_section_title">Así se ve tu recibo proyectado</string>
+    <string name="appearance_preview_label">Recibo proyectado · %1$s</string>
+    <string name="appearance_preview_badge">Proyección</string>
+    <string name="appearance_preview_price">$%1$d</string>
+    <string name="appearance_preview_range">Podría quedar entre $%1$d y $%2$d</string>
+    <string name="appearance_preview_warning">Vas $%1$d por encima de tu meta de $%2$d. Faltan %3$d días.</string>
+    <string name="appearance_meaning_note">El modo oscuro conserva el significado: violeta para proyección y acción, verde lima para la acción principal, verde para mejoras, ámbar para atención.</string>
+
+    <!-- States catalog -->
+    <string name="states_catalog_title">Estados y errores</string>
+    <string name="states_catalog_intro">Cómo se ve la app cuando algo falta o falla. Ningún error deja al usuario sin salida.</string>
+
+    <string name="states_catalog_eyebrow_loading">CALCULANDO</string>
+    <string name="states_catalog_loading_caption">Actualizando solo esta tarjeta; el resto de la pantalla sigue disponible.</string>
+
+    <string name="states_catalog_eyebrow_insufficient">INFORMACIÓN INSUFICIENTE</string>
+    <string name="states_catalog_insufficient_title">Todavía no podemos proyectar tu recibo</string>
+    <string name="states_catalog_insufficient_body">Registra una lectura para empezar. Con dos ya podemos estimar un ritmo.</string>
+    <string name="states_catalog_insufficient_action">Registrar lectura</string>
+
+    <string name="states_catalog_eyebrow_offline">SIN CONEXIÓN</string>
+    <string name="states_catalog_offline_title">Estás sin conexión</string>
+    <string name="states_catalog_offline_body">Puedes registrar lecturas y ver tus datos. Sincronizamos cuando vuelva el internet.</string>
+
+    <string name="states_catalog_eyebrow_dubious">LECTURA DUDOSA</string>
+    <string name="states_catalog_dubious_title">Esta lectura implicaría 46 kWh diarios</string>
+    <string name="states_catalog_dubious_body">Está muy por encima de tu promedio de 8.3. Puedes revisarla o guardarla si es correcta.</string>
+    <string name="states_catalog_dubious_review">Revisar</string>
+    <string name="states_catalog_dubious_save">Guardar</string>
+
+    <string name="states_catalog_registered_title">Lectura registrada</string>
+    <string name="states_catalog_registered_body">Consumiste 7.8 kWh desde ayer, 0.6 menos que tu promedio semanal. Tu proyección bajó $12.</string>
+
+    <string name="states_catalog_eyebrow_plan_empty">PLAN SIN ACCIONES</string>
+    <string name="states_catalog_plan_empty_title">Aún no tienes acciones en tu plan</string>
+    <string name="states_catalog_plan_empty_body">Cuando agregues una, aquí verás su seguimiento y si dio resultado.</string>
+
+    <string name="states_catalog_eyebrow_solar_low">SOLAR CON BAJA CONFIANZA</string>
+    <string name="states_catalog_solar_low_title">Podemos hacer una aproximación provisional</string>
+    <string name="states_catalog_solar_low_body">Con menos de 12 meses de recibos, el preestudio podría no representar bien las temporadas de calor.</string>
+</resources>

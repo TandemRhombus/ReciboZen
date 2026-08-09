@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Progress -->
+    <string name="onboarding_step_label">Paso %1$d de 4</string>
+
+    <!-- Step 0: Bienvenida -->
+    <string name="onboarding_step0_headline">Entiende tu consumo antes de que llegue el recibo.</string>
+    <string name="onboarding_step0_body">No necesitas conocimientos de electricidad. Nosotros traducimos las lecturas y los aparatos a pesos.</string>
+    <string name="onboarding_step0_bullets">· Sabrás cuánto podría llegar y si vas arriba de tu meta.\n· Verás qué aparatos influyen más.\n· Podrás registrar tu medidor aunque no sepas leerlo.</string>
+
+    <!-- Step 1: Configuración del hogar -->
+    <string name="onboarding_step1_title">Cuéntanos de tu hogar</string>
+    <string name="onboarding_step1_subtitle">Puedes saltar lo que no sepas; lo completamos después.</string>
+    <string name="onboarding_row_household_name">Nombre del hogar</string>
+    <string name="onboarding_row_location">Ubicación</string>
+    <string name="onboarding_row_billing_cycle">Cada cuánto llega tu recibo</string>
+    <string name="onboarding_row_goal">Meta de pago</string>
+    <string name="onboarding_goal_value">$%1$d</string>
+    <string name="onboarding_receipt_card_title">¿Tienes tu último recibo a la mano?</string>
+    <string name="onboarding_receipt_card_body">Con él calculamos tu tarifa y periodo automáticamente. También puedes escribir los datos.</string>
+    <string name="onboarding_action_take_photo">Tomar foto</string>
+    <string name="onboarding_action_type_manually">Escribir datos</string>
+
+    <!-- Step 2: Tipo de medidor -->
+    <string name="onboarding_step2_title">¿Cómo es tu medidor?</string>
+    <string name="onboarding_step2_subtitle">Con esto elegimos el método de captura más cómodo para ti.</string>
+    <string name="onboarding_meter_digital">Digital, con números</string>
+    <string name="onboarding_meter_5_dials">De manecillas, 5 carátulas</string>
+    <string name="onboarding_meter_4_dials">De manecillas, 4 carátulas</string>
+    <string name="onboarding_meter_unsure">No estoy seguro</string>
+    <string name="onboarding_meter_selected_desc">Seleccionado</string>
+    <string name="onboarding_meter_footnote">Si eliges «No estoy seguro», te mostramos las dos opciones para compararlas con tu medidor.</string>
+
+    <!-- Step 3: Primera estimación -->
+    <string name="onboarding_step3_eyebrow">YA PODEMOS DARTE UNA PRIMERA ESTIMACIÓN</string>
+    <string name="onboarding_step3_price">$%1$d</string>
+    <string name="onboarding_step3_range">Podría quedar entre $%1$d y $%2$d</string>
+    <string name="onboarding_step3_confidence_warning">Confianza baja por ahora: la calculamos con un solo recibo.</string>
+    <string name="onboarding_step3_body">Registra una lectura o agrega tus aparatos principales y la estimación mejorará en unos días.</string>
+    <string name="onboarding_step3_footnote">Todavía estamos aprendiendo sobre tu consumo. No te pediremos permisos que no necesites.</string>
+
+    <!-- Bottom buttons -->
+    <string name="onboarding_action_skip">Saltar</string>
+    <string name="onboarding_primary_step0">Configurar mi hogar</string>
+    <string name="onboarding_primary_step1">Continuar</string>
+    <string name="onboarding_primary_step2">Continuar</string>
+    <string name="onboarding_primary_step3">Ir a Inicio</string>
+</resources>

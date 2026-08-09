@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ═══════ Plan (bottom-nav tab root) ═══════ -->
+    <string name="plan_headline">Plan</string>
+    <string name="plan_subtitle">Sugerencias, lo que ya estás siguiendo y lo que ya se comprobó</string>
+
+    <string name="plan_summary_eyebrow">Con lo que llevas en tu plan cerrarías cerca de</string>
+    <string name="plan_summary_amount">$%1$d</string>
+    <!-- Above goal: never claim certainty about a savings that hasn\'t happened yet. -->
+    <string name="plan_summary_above_goal">Todavía faltan unos $%1$d pesos, cerca de %2$d kWh. Los ahorros que se traslapan no se suman dos veces.</string>
+    <!-- At/below goal but the upper end of the estimate range could still exceed the goal. -->
+    <string name="plan_summary_within_goal_uncertain">La estimación central queda dentro de tu meta, aunque el resultado podría llegar hasta $%1$d.</string>
+    <!-- At/below goal and the whole range is under the goal. -->
+    <string name="plan_summary_within_goal_confident">Ya estarías dentro de tu meta. Sigue registrando lecturas para comprobar el cambio.</string>
+    <string name="plan_summary_progress_description">Progreso hacia tu meta del periodo</string>
+    <string name="plan_summary_goal_label">Meta $%1$d</string>
+    <string name="plan_summary_no_change_label">Sin cambios $%1$d</string>
+
+    <string name="plan_suggestions_title">Sugerencias para ti</string>
+    <string name="plan_chip_suggested">Sugerencia</string>
+    <string name="plan_chip_tracking">En seguimiento</string>
+    <string name="plan_chip_verified">Resultado comprobado</string>
+    <string name="plan_action_meta">Ahorro estimado: %1$s · Esfuerzo %2$s · Confianza %3$s</string>
+    <string name="plan_tracking_since">En seguimiento desde %1$s</string>
+    <string name="plan_verified_since">En seguimiento desde el %1$s.</string>
+    <string name="plan_action_add">Agregar a mi plan</string>
+    <string name="plan_action_manage">Administrar</string>
+    <string name="plan_manage_dialog_title">Administrar sugerencia</string>
+    <string name="plan_manage_dialog_body">¿Quieres dejar de seguir \"%1$s\" en tu plan? Puedes volver a agregarla cuando quieras.</string>
+    <string name="plan_manage_dialog_confirm">Quitar de mi plan</string>
+
+    <string name="plan_effort_low">bajo</string>
+    <string name="plan_effort_medium">medio</string>
+    <string name="plan_effort_high">alto</string>
+    <string name="plan_confidence_low">baja</string>
+    <string name="plan_confidence_medium">media</string>
+    <string name="plan_confidence_high">alta</string>
+
+    <string name="plan_dac_link_title">Revisa tu promedio de consumo</string>
+    <string name="plan_dac_link_description">Tu promedio móvil está cerca del límite de referencia de tu tarifa. Reducir los próximos periodos podría ayudarte a mantenerte por debajo.</string>
+    <string name="plan_dac_link_action">Ver el detalle →</string>
+
+    <string name="plan_solar_link_title">Preestudio solar</string>
+    <string name="plan_solar_link_description">Con tu consumo actual, unos 6–7 paneles podrían cubrir cerca del 80% de tu energía anual.</string>
+    <string name="plan_solar_link_action">Ver escenarios →</string>
+
+    <string name="plan_balance_link_title">Balance de consumo</string>
+    <string name="plan_balance_link_description">Qué parte ya podemos explicar</string>
+
+    <!-- ═══════ Balance de consumo ═══════ -->
+    <string name="balance_title">Balance de consumo</string>
+    <string name="balance_explained_headline">Podemos explicar cerca del %1$d%% de tu consumo</string>
+    <string name="balance_explained_label">Explicado %1$d kWh</string>
+    <string name="balance_unidentified_label">Sin identificar %1$d kWh</string>
+    <string name="balance_explained_body">El %1$d%% restante podría venir de aparatos todavía no registrados, variaciones de uso o estimaciones incompletas. Tu medidor observó %2$d kWh en el periodo.</string>
+    <string name="balance_review_remaining_action">Revisar consumo restante</string>
+
+    <string name="balance_suspects_title">Podría venir de</string>
+
+    <string name="balance_overnight_title">Prueba de una noche</string>
+    <string name="balance_overnight_body">Registra una lectura antes de dormir y otra al despertar. Comparamos lo observado con lo esperado.</string>
+    <string name="balance_overnight_observed">Última prueba: tu hogar consumió %1$.1f kWh durante la noche.</string>
+    <string name="balance_overnight_expected">Esperábamos %1$.1f kWh de los aparatos registrados.</string>
+    <string name="balance_overnight_unexplained">Quedan cerca de %1$.1f kWh sin explicar.</string>
+    <string name="balance_overnight_footnote">Puede ser un aparato que no tenemos registrado. Si la diferencia continúa, puedes consultar a un electricista.</string>
+    <string name="balance_overnight_action">Iniciar la prueba</string>
+
+    <!-- ═══════ Promedio de consumo (DAC) ═══════ -->
+    <string name="dac_title">Promedio de consumo</string>
+    <string name="dac_headline">Tu promedio está cerca del límite de referencia</string>
+    <string name="dac_rolling_average_label">Promedio móvil</string>
+    <string name="dac_reference_limit_label">Límite de referencia</string>
+    <string name="dac_kwh_per_month">%1$d kWh/mes</string>
+    <string name="dac_over_limit_prefix">Estás unos </string>
+    <string name="dac_over_limit_bold">%1$d kWh/mes por encima</string>
+    <string name="dac_over_limit_suffix">. Bajar cerca de %1$d kWh este periodo te regresaría debajo de la referencia.</string>
+    <string name="dac_footnote">Periodos considerados: %1$s · confianza media. Esta es una orientación: la clasificación final depende de las reglas aplicables y de la información de tu recibo. Tarifas revisadas el %2$s.</string>
+
+    <string name="dac_opportunities_title">Lo que más podría ayudarte</string>
+    <string name="dac_opportunity_minisplit">· Reducir 35 minutos diarios el minisplit: −24 kWh al mes aproximadamente.</string>
+    <string name="dac_opportunity_ps5">· Configurar el reposo de la consola: −6 kWh al mes.</string>
+    <string name="dac_opportunity_unidentified">· Revisar el consumo sin identificar: hasta −30 kWh si aparece un aparato olvidado.</string>
+
+    <string name="dac_tariff_title">Rango de este periodo · %1$s</string>
+    <string name="dac_today_marker">▲ hoy</string>
+    <string name="dac_tariff_footnote">El rango excedente encarece el kWh dentro de este periodo. Es distinto del promedio anual de arriba.</string>
+</resources>

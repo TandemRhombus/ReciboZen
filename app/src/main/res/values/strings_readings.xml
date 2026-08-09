@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Método (12) -->
+    <string name="reading_method_headline">¿Cómo quieres registrar tu lectura?</string>
+    <string name="reading_method_subtitle">Los tres métodos funcionan. Elige el que te resulte más cómodo.</string>
+    <string name="reading_method_photo_title">Escanear medidor</string>
+    <string name="reading_method_photo_subtitle">Tomamos una foto y tú confirmas el resultado.</string>
+    <string name="reading_method_dial_title">Ajustar manecillas</string>
+    <string name="reading_method_dial_badge">Tu método habitual</string>
+    <string name="reading_method_dial_subtitle">Copia la posición de tu medidor sin necesidad de saber leerlo.</string>
+    <string name="reading_method_manual_title">Escribir lectura</string>
+    <string name="reading_method_manual_subtitle">Introduce directamente los números que aparecen.</string>
+    <string name="reading_method_footnote">Puedes usar ReciboZen sin conceder permiso de cámara.</string>
+
+    <!-- Foto (13) -->
+    <string name="reading_photo_title">Escanear medidor</string>
+    <string name="reading_photo_viewfinder_hint">Coloca aquí la carátula\ndel medidor</string>
+    <string name="reading_photo_viewfinder_caption">Acerca el teléfono y evita reflejos</string>
+    <string name="reading_photo_detected_label">Lectura detectada</string>
+    <string name="reading_photo_unit_suffix">kWh</string>
+    <string name="reading_photo_all_clear">Todas las cifras se distinguen bien</string>
+    <string name="reading_photo_compare_hint">Compárala con tu medidor antes de confirmar. Si algo no coincide, puedes corregirla.</string>
+    <string name="reading_photo_confirm_button">Confirmar lectura</string>
+    <string name="reading_photo_fix_button">Corregir resultado</string>
+    <string name="reading_photo_keep_title">¿Conservar la fotografía?</string>
+    <string name="reading_photo_keep_body">Puede incluir el número de medidor y datos del domicilio. Se procesa en tu teléfono.</string>
+    <string name="reading_photo_keep_button">Conservar</string>
+    <string name="reading_photo_discard_button">Eliminar al guardar</string>
+
+    <!-- Foto dudosa (14) -->
+    <string name="reading_photo_unclear_title">Revisar la foto</string>
+    <string name="reading_photo_unclear_headline">No pudimos distinguir todas las cifras</string>
+    <string name="reading_photo_unclear_body">Dos carátulas quedaron con reflejo. Puedes ajustarlas sobre la foto o registrar la lectura de otra forma; tu foto no se pierde.</string>
+    <string name="reading_photo_unclear_partial_label">Lectura parcial:</string>
+    <string name="reading_photo_unclear_partial_value">18,4??6</string>
+    <string name="reading_photo_unclear_fix_photo">Corregir sobre la foto</string>
+    <string name="reading_photo_unclear_dial">Ajustar manecillas</string>
+    <string name="reading_photo_unclear_manual">Escribir lectura</string>
+    <string name="reading_photo_unclear_retry">Intentar otra foto</string>
+
+    <!-- Escribir lectura (15) -->
+    <string name="reading_manual_title">Escribir lectura</string>
+    <string name="reading_manual_instructions">Escribe los números que ves en tu medidor, de izquierda a derecha.</string>
+    <string name="reading_manual_field_label">Lectura del medidor</string>
+    <string name="reading_manual_decimals_hint">Si tu medidor muestra decimales en rojo, no los incluyas.</string>
+    <string name="reading_manual_previous_reading">Lectura anterior: %1$s kWh</string>
+    <string name="reading_manual_continue">Continuar</string>
+    <string name="reading_manual_prefer_dial">Prefiero ajustar manecillas</string>
+    <string name="reading_manual_digit_content_description">Dígito %1$d de 5</string>
+
+    <!-- Ajustar manecillas (16) -->
+    <string name="reading_dial_headline">Copia la posición de cada manecilla</string>
+    <string name="reading_dial_subtitle">No necesitas saber interpretar el medidor. Solo coloca cada manecilla como la ves.</string>
+    <string name="reading_dial_previous">Anterior</string>
+    <string name="reading_dial_next">Siguiente</string>
+    <string name="reading_dial_review">Revisar lectura</string>
+    <string name="reading_dial_unsure_toggle">No estoy seguro de esta carátula</string>
+    <string name="reading_dial_unsure_title">Cuando la manecilla queda entre dos números</string>
+    <string name="reading_dial_unsure_body">Estas son las dos lecturas posibles. Elige la que se parezca más a tu medidor: nosotros resolvemos el resto con las carátulas vecinas.</string>
+    <string name="reading_dial_unsure_low">Aún no llega al número</string>
+    <string name="reading_dial_unsure_high">Ya pasó el número</string>
+    <string name="reading_dial_unsure_reads_as">se lee %1$d</string>
+    <string name="reading_dial_interpreted_label">Lectura interpretada</string>
+    <string name="reading_dial_interpreted_hint">Comprueba que las cinco manecillas se parezcan a las de tu medidor.</string>
+    <string name="reading_dial_save">Guardar lectura</string>
+    <string name="reading_dial_save_helper">Revisa las 5 carátulas para guardar.</string>
+
+    <!-- Confirmar (17) -->
+    <string name="reading_confirm_label">Tu lectura parece ser</string>
+    <string name="reading_confirm_unit_suffix">kWh</string>
+    <string name="reading_confirm_previous_reading">Lectura anterior</string>
+    <string name="reading_confirm_consumption_since">Consumo desde entonces</string>
+    <string name="reading_confirm_consumption_value">%1$s kWh</string>
+    <string name="reading_confirm_elapsed_time">Tiempo transcurrido</string>
+    <string name="reading_confirm_elapsed_time_value">3 días y 4 horas</string>
+    <string name="reading_confirm_daily_average">Promedio del intervalo</string>
+    <string name="reading_confirm_daily_average_value">%1$s kWh/día</string>
+    <string name="reading_confirm_review_dial">Revisar las manecillas</string>
+    <string name="reading_confirm_save_anyway">Guardarla de todas formas</string>
+    <string name="reading_confirm_button">Confirmar lectura</string>
+    <string name="reading_confirm_fix_button">Corregir</string>
+    <string name="reading_confirm_footer">Al guardar te diremos cuánto consumiste desde la última vez y si tu proyección cambió. Sin rachas ni puntos.</string>
+
+    <!-- Cómo lo calculamos (18) -->
+    <string name="how_we_calculate_title">Cómo lo calculamos</string>
+    <string name="how_we_calculate_flow_title">De tus lecturas al recibo</string>
+    <string name="how_we_calculate_step1_label">Observado.</string>
+    <string name="how_we_calculate_step1_body">18,426 − 18,099 = 327 kWh en 43 días.</string>
+    <string name="how_we_calculate_step2_label">Ritmo.</string>
+    <string name="how_we_calculate_step2_body">327 ÷ 1,032 horas × 24 = 7.2 kWh/día. Contamos horas reales, no días completos.</string>
+    <string name="how_we_calculate_step3_label">Proyectado.</string>
+    <string name="how_we_calculate_step3_body">327 + (7.2 × 18 días) ≈ 382 kWh al cierre.</string>
+    <string name="how_we_calculate_step4_label">Costo.</string>
+    <string name="how_we_calculate_step4_body">Esos 382 kWh se reparten en los escalones de la Tarifa 1C.</string>
+    <string name="how_we_calculate_assumptions_title">Qué supone y qué no</string>
+    <string name="how_we_calculate_assumptions_body">• El rango $810–$890 refleja la variación normal de tus últimos periodos.\n• Cuando no confirmas el modelo de un aparato usamos una potencia típica de su categoría.\n• Los cálculos vienen de un motor de tarifas versionado con información pública (v2026.2, 12 jul 2026).\n• No es una cifra oficial y puede diferir de tu recibo.</string>
+    <string name="how_we_calculate_glossary_kwh_body">mide cuánta energía usaste.</string>
+    <string name="how_we_calculate_glossary_kw_body">es la potencia de un aparato.</string>
+    <string name="how_we_calculate_glossary_kwp_body">es la potencia de un sistema solar.</string>
+    <string name="how_we_calculate_footer">Calculado por última vez hoy, 7:42 p. m.</string>
+</resources>
