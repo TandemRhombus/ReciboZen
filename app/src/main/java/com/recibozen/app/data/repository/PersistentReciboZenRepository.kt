@@ -29,6 +29,7 @@ import com.recibozen.app.data.local.BillHistorySummaryEntity
 import com.recibozen.app.core.importer.ParsedCfeBill
 import com.recibozen.app.core.importer.BillImportResult
 import com.recibozen.app.core.model.EntitlementPolicy
+import com.recibozen.app.core.security.PremiumEntitlementAuthority
 import com.recibozen.app.demo.data.DemoReciboZenData
 import com.recibozen.app.demo.repository.DemoReciboZenRepository
 import com.recibozen.app.demo.repository.ReciboZenSessionState
@@ -64,14 +65,27 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val stateKey = stringPreferencesKey("session_json_v1")
+    private val entitlementLeaseKey = stringPreferencesKey("server_entitlement_lease_v1")
     private val database = ReciboZenDatabase.get(appContext)
     private val dao = database.dao()
+    private val premiumEntitlementAuthority = PremiumEntitlementAuthority(appContext)
 
     init {
         mutableSession.value = ReciboZenSessionState(isHydrated = false)
         scope.launch {
-            val stored = appContext.reciboZenDataStore.data.first()[stateKey]
-            val hydrated = SessionJsonCodec.decode(stored).copy(isHydrated = true)
+            val preferences = appContext.reciboZenDataStore.data.first()
+            val stored = preferences[stateKey]
+            val trustedTier = premiumEntitlementAuthority.effectiveTier(
+                token = preferences[entitlementLeaseKey],
+                // There is no authenticated account yet, so premium must stay
+                // closed. Billing integration will supply the subject from its
+                // authenticated account session, never from mutable preferences.
+                expectedSubject = null,
+            )
+            val hydrated = SessionJsonCodec.decode(stored).copy(
+                entitlementTier = trustedTier,
+                isHydrated = true,
+            )
             seedLegacyServiceIfNeeded(hydrated)
             mutableSession.value = hydrated
 
@@ -383,7 +397,6 @@ internal object SessionJsonCodec {
         put("rmu", state.rmu)
         put("meterNumber", state.meterNumber)
         put("activeServiceId", state.activeServiceId)
-        put("entitlementTier", state.entitlementTier.name)
         put("location", state.location)
         put("tariff", state.tariff)
         put("billingCycle", state.billingCycle)
@@ -453,7 +466,9 @@ internal object SessionJsonCodec {
                 rmu = json.optString("rmu", defaults.rmu),
                 meterNumber = json.optString("meterNumber", defaults.meterNumber),
                 activeServiceId = json.optString("activeServiceId", defaults.activeServiceId),
-                entitlementTier = enumValueOr(json.optString("entitlementTier"), defaults.entitlementTier),
+                // Premium is intentionally never restored from mutable local JSON.
+                // Only a future server-verified entitlement authority may set it.
+                entitlementTier = EntitlementTier.FREE,
                 location = json.optString("location", defaults.location),
                 tariff = json.optString("tariff", defaults.tariff),
                 billingCycle = json.optString("billingCycle", defaults.billingCycle),

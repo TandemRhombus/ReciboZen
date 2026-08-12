@@ -1,0 +1,7 @@
+.git
+.env
+secrets
+test
+README.md
+compose.yaml
+cloudflared-config.yml

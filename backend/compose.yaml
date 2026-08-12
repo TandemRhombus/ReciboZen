@@ -1,0 +1,82 @@
+name: recibozen
+
+services:
+  api:
+    build:
+      context: .
+    image: recibozen-api:0.1.0
+    container_name: recibozen-api
+    restart: unless-stopped
+    init: true
+    environment:
+      PORT: "8080"
+      ENTITLEMENT_PUBLIC_KEY_FILE: /run/recibozen-secrets/entitlement-public.pem
+    ports:
+      - "127.0.0.1:8787:8080"
+    volumes:
+      - type: bind
+        source: ./secrets/entitlement-public.pem
+        target: /run/recibozen-secrets/entitlement-public.pem
+        read_only: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 100
+    mem_limit: 256m
+    cpus: 1.0
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+    networks:
+      - backend
+
+  tunnel:
+    image: cloudflare/cloudflared:2026.7.3@sha256:e39ee8da81ad5e05d77f38d2f51c60ca51bf2a8450ac3abab50c17fdb91d91bf
+    container_name: recibozen-tunnel
+    restart: unless-stopped
+    init: true
+    # Match the unprivileged Orange Pi account that owns the mode-600 tunnel
+    # credential. This keeps the secret unreadable to other local users.
+    user: "1000:1000"
+    command:
+      - tunnel
+      - --config
+      - /etc/cloudflared/config.yml
+      - --no-autoupdate
+      - run
+    depends_on:
+      api:
+        condition: service_healthy
+    volumes:
+      - type: bind
+        source: ./cloudflared-config.yml
+        target: /etc/cloudflared/config.yml
+        read_only: true
+      - type: bind
+        source: ./secrets/cloudflared-tunnel.json
+        target: /etc/cloudflared/credentials.json
+        read_only: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 100
+    mem_limit: 128m
+    cpus: 0.5
+    networks:
+      - backend
+
+networks:
+  backend:
+    name: recibozen_backend
+    driver: bridge

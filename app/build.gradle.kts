@@ -4,6 +4,16 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+fun String.asBuildConfigString(): String = "\"" +
+    replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
+val expectedReleaseCertificates = providers.gradleProperty("RECIBOZEN_RELEASE_CERT_SHA256")
+    .orElse("")
+val entitlementPublicKey = providers.gradleProperty("RECIBOZEN_ENTITLEMENT_PUBLIC_KEY_B64")
+    .orElse("")
+val apiBaseUrl = providers.gradleProperty("RECIBOZEN_API_BASE_URL")
+    .orElse("https://api-recibozen.simapp.uk")
+
 android {
     namespace = "com.recibozen.app"
     compileSdk {
@@ -18,13 +28,42 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Public verification material only. Private signing keys and Play API
+        // credentials must never be placed in Gradle properties or the APK.
+        buildConfigField(
+            "String",
+            "EXPECTED_RELEASE_CERT_SHA256",
+            expectedReleaseCertificates.get().asBuildConfigString(),
+        )
+        buildConfigField(
+            "String",
+            "ENTITLEMENT_PUBLIC_KEY_B64",
+            entitlementPublicKey.get().asBuildConfigString(),
+        )
+        buildConfigField(
+            "String",
+            "API_BASE_URL",
+            apiBaseUrl.get().asBuildConfigString(),
+        )
     }
 
     buildTypes {
+        debug {
+            buildConfigField("boolean", "PREMIUM_SECURITY_ENFORCED", "false")
+            buildConfigField("boolean", "OFFICIAL_INSTALL_REQUIRED", "false")
+        }
         release {
-            optimization {
-                enable = false
-            }
+            isDebuggable = false
+            isJniDebuggable = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+            buildConfigField("boolean", "PREMIUM_SECURITY_ENFORCED", "true")
+            buildConfigField("boolean", "OFFICIAL_INSTALL_REQUIRED", "true")
         }
     }
     compileOptions {
@@ -33,6 +72,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -60,6 +100,7 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     testImplementation(libs.junit)
     testImplementation(libs.androidx.room.testing)
+    testImplementation(libs.json.java)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)

@@ -2,11 +2,13 @@
 
 Este proyecto comenzó como la conversión visual del prototipo **ReciboZen V2** y ahora es un **MVP local-first funcional** en Kotlin + Jetpack Compose. Conserva la navegación y el diseño originales, pero ya incluye persistencia con DataStore, cálculo progresivo configurable, lecturas por manecillas/manual/foto, OCR local con ML Kit, edición de perfil/meta, aparatos editables, historial con kWh reales y exportación PDF del preestudio solar.
 
-## Estado funcional actual (9 ago 2026)
+## Estado funcional actual (11 ago 2026)
 
 - DataStore conserva preferencias y estado de sesión; Room conserva hogares, suministros, medidores, recibos, cargos, historial y datasets de referencia.
 - Historial permite elegir un PDF de CFE, procesarlo localmente, revisar los campos detectados e importar el recibo y sus 11 periodos anteriores.
 - Perfil → Mis suministros permite nombrar y seleccionar servicios. Los límites viven en `EntitlementPolicy`: Gratis 1, Plus 2 y Familiar 5.
+- El release está endurecido con R8, sin backup ni HTTP claro. Premium falla cerrado y nunca se restaura desde preferencias editables; el contrato de firma/backend está en `docs/SECURITY_HARDENING.md`.
+- El backend mínimo está en `backend/` y desplegado de forma aislada en la Orange Pi. Expone salud y la clave pública, pero rechaza la activación premium hasta integrar identidad y validación real de Google Play.
 - El arranque espera la hidratación de DataStore y abre Inicio si el onboarding ya fue completado.
 - `TariffEngine` aplica escalones progresivos configurables a los kWh observados/proyectados. La estimación se presenta como orientativa, no como cotización oficial de CFE.
 - Las horas de todos los aparatos configurables recalculan kWh, costo, participación, balance y proyección.
@@ -130,9 +132,17 @@ El estado de sesión vive en **`demo/repository/ReciboZenSessionState.kt`** por 
 - Importar un recibo CFE en PDF con texto nativo u OCR local, revisión humana, deduplicación por SHA-256 y persistencia del desglose/historial.
 - Crear, nombrar y seleccionar suministros respetando el límite del plan.
 
+## Backend provisional
+
+- Código: `backend/` (Node.js sin dependencias externas, pruebas con `node:test` y Docker Compose endurecido).
+- Operación y límites de seguridad: `docs/BACKEND_OPERATIONS.md`.
+- El build Android ya contiene la clave pública P-256 de esta instancia mediante `RECIBOZEN_ENTITLEMENT_PUBLIC_KEY_B64`; la clave privada sólo existe en el servidor.
+- El API conserva `127.0.0.1:8787` para diagnóstico y está publicado para la app en `https://api-recibozen.simapp.uk` mediante un túnel Cloudflare exclusivo; no se modificó el túnel ni la URL de SIM.
+- `POST /v1/entitlements/exchange` valida el formato y responde `503 play_verification_not_configured`: no existe un atajo temporal para conceder Plus/Familiar.
+
 ## Límites actuales
 
-- No hay login, backend ni sincronización entre dispositivos; el producto funciona sin conexión y guarda todo localmente.
+- No hay login ni sincronización entre dispositivos; el producto funciona sin conexión y guarda todo localmente. El backend actual es sólo la frontera segura inicial para premium.
 - No hay conexión ni descarga automática desde CFE; el usuario elige el PDF desde el selector del sistema.
 - OCR reconoce números impresos/digitales; un medidor analógico de carátulas puede requerir el flujo interactivo de manecillas.
 - Las tarifas embebidas son una configuración estimativa. Antes de publicar se debe conectar una fuente oficial/versionada o permitir captura completa de tarifa, temporada, región, subsidios y cargos del recibo.
@@ -141,7 +151,8 @@ El estado de sesión vive en **`demo/repository/ReciboZenSessionState.kt`** por 
 ## Integraciones necesarias antes de producción
 
 - Fuente oficial/versionada de tarifas y reglas DAC por región/temporada; las tablas de datasets ya están preparadas y el formato de entrega está en `docs/REFERENCE_DATA_FORMAT.md`.
-- Google Play Billing y validación de suscripción para habilitar realmente Plus/Familiar; la política y el paywall funcional ya están separados del SKU.
+- Google Play Billing, autenticación y validación de suscripción en el backend para habilitar realmente Plus/Familiar; la política, el paywall y la frontera fail-closed ya están separados del SKU.
+- Play Integrity y verificación de Billing deben cerrarse en backend antes de emitir los leases premium firmados. El verificador cliente y la comprobación de certificado/origen ya están implementados.
 - Cuenta, backend, sincronización, cifrado y políticas de retención/borrado.
 - Motor solar basado en irradiancia y validación profesional del techo.
 - Pruebas instrumentadas adicionales para permisos/cámaras de fabricantes y accesibilidad completa.

@@ -13,3 +13,8 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# ReciboZen backend runtime material. The entitlement private key must only
+# exist on the server; never add it to Git or to the Android application.
+/backend/secrets/
+/backend/.env

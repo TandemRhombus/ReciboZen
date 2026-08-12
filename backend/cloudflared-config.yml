@@ -1,0 +1,11 @@
+tunnel: a3d783b7-f4b0-4be7-909a-b23559c378ae
+credentials-file: /etc/cloudflared/credentials.json
+loglevel: info
+transport-loglevel: warn
+
+ingress:
+  - hostname: api-recibozen.simapp.uk
+    service: http://api:8080
+    originRequest:
+      connectTimeout: 5s
+  - service: http_status:404
