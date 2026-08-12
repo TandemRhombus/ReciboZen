@@ -82,14 +82,40 @@ fun PeriodAnalysisScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(RzSpacing.lg),
         ) {
-            item { AccumulatedChartCard(uiState) }
-            item { GoalProgressCard(uiState) }
-            item {
-                RzSecondaryButton(
-                    text = stringResource(R.string.period_how_we_calculate),
-                    onClick = onHowWeCalculate,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+            if (!uiState.hasUsageData) {
+                item {
+                    RzCard(modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.period_empty_title), style = MaterialTheme.typography.titleLarge)
+                        Text(
+                            stringResource(R.string.period_empty_body),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = RzSpacing.sm),
+                        )
+                    }
+                }
+            } else {
+                item { AccumulatedChartCard(uiState) }
+                item {
+                    if (uiState.goalKwh > 0) {
+                        GoalProgressCard(uiState)
+                    } else {
+                        RzCard(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                stringResource(R.string.period_no_goal),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+                item {
+                    RzSecondaryButton(
+                        text = stringResource(R.string.period_how_we_calculate),
+                        onClick = onHowWeCalculate,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
         }
     }
@@ -105,7 +131,7 @@ private fun AccumulatedChartCard(uiState: PeriodAnalysisUiState) {
         )
 
         RzLineChart(
-            series = periodChartSeries(),
+            series = periodChartSeries(uiState),
             modifier = Modifier.padding(top = RzSpacing.md),
             height = 170.dp,
         )
@@ -205,10 +231,23 @@ private fun ChartLegendItem(label: String, color: Color, style: ChartLineStyle) 
  * [RzLineChart] component (out of this feature's edit scope).
  */
 @Composable
-private fun periodChartSeries(): List<RzChartSeries> {
-    val observed = listOf(0.04f, 0.14f, 0.25f, 0.37f, 0.49f, 0.60f, 0.69f, 0.76f, 0.80f, 0.80f)
-    val projected = listOf(0.04f, 0.14f, 0.25f, 0.37f, 0.49f, 0.60f, 0.69f, 0.76f, 0.87f, 0.94f)
-    val goal = listOf(0f, 0.09f, 0.18f, 0.27f, 0.37f, 0.46f, 0.55f, 0.64f, 0.73f, 0.83f)
+private fun periodChartSeries(uiState: PeriodAnalysisUiState): List<RzChartSeries> {
+    val pointCount = 10
+    val scale = uiState.surplusStartKwh.coerceAtLeast(1).toFloat()
+    val todayFraction = if (uiState.billingDays > 0) {
+        (uiState.observedDays.toFloat() / uiState.billingDays).coerceIn(0.1f, 1f)
+    } else 1f
+    val todayIndex = ((pointCount - 1) * todayFraction).toInt().coerceIn(1, pointCount - 1)
+    val observed = List(pointCount) { index ->
+        val progress = (index.toFloat() / todayIndex).coerceIn(0f, 1f)
+        uiState.observedKwh / scale * progress
+    }
+    val projected = List(pointCount) { index ->
+        uiState.projectedKwh / scale * (index.toFloat() / (pointCount - 1))
+    }
+    val goal = List(pointCount) { index ->
+        uiState.goalKwh / scale * (index.toFloat() / (pointCount - 1))
+    }
     return listOf(
         RzChartSeries(values = goal, color = RzTheme.extendedColors.chartGoalLine, style = ChartLineStyle.DOTTED, strokeWidth = 2.dp),
         RzChartSeries(values = projected, color = RzTheme.extendedColors.chartObserved, style = ChartLineStyle.DASHED, strokeWidth = 2.5.dp),
@@ -225,9 +264,10 @@ private fun GoalProgressCard(uiState: PeriodAnalysisUiState) {
             color = MaterialTheme.colorScheme.onSurface,
         )
 
-        val observedFraction = (uiState.observedKwh.toFloat() / uiState.surplusStartKwh).coerceIn(0f, 1f)
-        val projectedFraction = (uiState.projectedKwh.toFloat() / uiState.surplusStartKwh).coerceIn(0f, 1f)
-        val goalFraction = (uiState.goalKwh.toFloat() / uiState.surplusStartKwh).coerceIn(0f, 1f)
+        val scale = uiState.surplusStartKwh.coerceAtLeast(1)
+        val observedFraction = (uiState.observedKwh.toFloat() / scale).coerceIn(0f, 1f)
+        val projectedFraction = (uiState.projectedKwh.toFloat() / scale).coerceIn(0f, 1f)
+        val goalFraction = (uiState.goalKwh.toFloat() / scale).coerceIn(0f, 1f)
         val screenReaderSummary = stringResource(
             R.string.period_goal_screen_reader_summary,
             uiState.observedKwh,

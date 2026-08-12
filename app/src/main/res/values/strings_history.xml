@@ -29,11 +29,13 @@
     <string name="history_current_period_title">Periodo en curso — proyección</string>
     <string name="history_current_period_badge">Proyección</string>
     <string name="history_current_period_caption">El periodo (%1$s) todavía no termina: la cifra es una proyección, no un recibo.</string>
+    <string name="history_current_period_caption_dynamic">Esta tarjeta sólo aparece cuando existe una lectura posterior al último recibo importado.</string>
 
     <string name="history_previous_bills_title">Recibos anteriores — valores reales</string>
     <string name="history_unit_mxn">Pesos</string>
     <string name="history_unit_kwh">kWh</string>
     <string name="history_legend_real">Recibo real</string>
+    <string name="history_no_bills">Todavía no hay recibos importados. Usa “Importar recibo PDF” para cargar valores reales.</string>
     <string name="history_amount_mxn">$%1$s</string>
     <string name="history_amount_kwh">%1$s kWh</string>
 
@@ -49,6 +51,8 @@
     <string name="history_reading_method_dial">manecillas</string>
     <string name="history_reading_method_manual">escrita</string>
     <string name="history_reading_method_photo">foto</string>
+    <string name="history_reading_method_pdf">recibo PDF</string>
+    <string name="history_no_readings">Todavía no hay lecturas registradas.</string>
     <string name="history_reading_meta">%1$s · %2$s · %3$s</string>
     <string name="history_footer">Los tramos sin lectura se muestran como calculados, no como observados.</string>
 </resources>

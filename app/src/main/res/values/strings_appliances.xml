@@ -7,14 +7,19 @@
     <string name="appliances_greeting">Buenas tardes, %1$s</string>
     <string name="appliances_headline">Aparatos</string>
     <string name="appliances_subtitle">Ordenados por lo que aportan a tu recibo</string>
+    <string name="appliances_period_context">Los kWh y pesos de cada aparato corresponden a una estimación de %1$d días.</string>
+    <string name="appliances_real_empty_title">Todavía no agregas aparatos</string>
+    <string name="appliances_real_empty_body">La lista comienza vacía. Agrega los equipos que realmente tienes; ReciboZen no volverá a atribuirte un minisplit, refrigerador o consola de ejemplo.</string>
 
     <string name="appliances_filter_top_spend">Mayor gasto</string>
     <string name="appliances_filter_room">Habitación</string>
     <string name="appliances_filter_standby">En reposo</string>
     <string name="appliances_filter_incomplete">Información incompleta</string>
 
-    <string name="appliances_card_subtitle">%1$s · %2$d kWh · %3$d%% del hogar</string>
-    <string name="appliances_card_subtitle_with_standby">%1$s · %2$d kWh · %3$d%% del hogar · $%4$d en reposo</string>
+    <string name="appliances_card_subtitle">%1$s · %2$d kWh en %3$d días · %4$d%% del hogar</string>
+    <string name="appliances_card_subtitle_with_standby">%1$s · %2$d kWh en %5$d días · %3$d%% del hogar · $%4$d en reposo</string>
+    <string name="appliances_cost_period">$%1$d / %2$d días</string>
+    <string name="appliances_cost_pending">Costo pendiente</string>
     <string name="appliances_hours_per_week">%1$d h/semana</string>
     <string name="appliances_hours_per_week_note">%1$d h/semana · %2$s</string>
     <string name="appliances_edit_usage">Editar uso</string>
@@ -29,6 +34,11 @@
 
     <string name="appliances_unidentified_title">Consumo todavía sin identificar</string>
     <string name="appliances_unidentified_description">Parte de tu consumo todavía no está asociada a un aparato.</string>
+    <string name="appliances_unidentified_value">$%1$d · %2$d kWh</string>
+    <string name="appliances_unidentified_pending">Por calcular</string>
+    <string name="appliances_unidentified_description_dynamic">Quedan %1$d kWh del periodo %2$s sin asociar a los aparatos registrados.</string>
+    <string name="appliances_unidentified_description_pending">Importa un recibo o registra dos lecturas para calcular esta diferencia; no mostramos cero como si fuera un dato real.</string>
+    <string name="appliances_current_reference">actual</string>
     <string name="appliances_unidentified_cta">Ayúdame a identificarlo →</string>
 
     <string name="appliances_add_cta">Agregar aparato</string>
@@ -38,13 +48,15 @@
     <string name="appliances_catalog_top_bar_title">Agregar aparato</string>
     <string name="appliances_catalog_title">¿Qué aparato quieres agregar?</string>
     <string name="appliances_catalog_description">Busca entre %1$d aparatos comunes. Usamos potencia y uso típicos como punto de partida; podrás ajustarlos.</string>
+    <string name="appliances_catalog_period_context">Las estimaciones siguientes cubren %1$d días, según el ciclo de tu suministro.</string>
     <string name="appliances_catalog_search">Buscar aparato</string>
     <string name="appliances_catalog_all">Todos</string>
     <string name="appliances_catalog_no_results">No encontramos ese aparato. Puedes registrarlo como personalizado al final.</string>
     <string name="appliances_catalog_room">Habitación o zona</string>
     <string name="appliances_catalog_hours">Horas por semana</string>
     <string name="appliances_catalog_cycle_based">Este aparato funciona por ciclos; usamos un consumo mensual típico en vez de pedirte 24 horas diarias.</string>
-    <string name="appliances_catalog_estimate">Estimación del periodo: %1$d kWh · $%2$d</string>
+    <string name="appliances_catalog_estimate">Estimación para %1$d días: %2$d kWh · $%3$d</string>
+    <string name="appliances_catalog_estimate_without_cost">Estimación para %1$d días: %2$d kWh · costo pendiente hasta tener un recibo</string>
     <string name="appliances_catalog_add">Agregar</string>
     <string name="appliances_catalog_monthly_reference">Referencia: %1$.1f kWh cada 30 días</string>
     <string name="appliances_catalog_weekly_reference">Uso inicial: %1$d h/semana</string>

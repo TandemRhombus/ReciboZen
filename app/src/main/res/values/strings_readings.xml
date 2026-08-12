@@ -55,6 +55,7 @@
     <!-- Ajustar manecillas (16) -->
     <string name="reading_dial_headline">Copia la posición de cada manecilla</string>
     <string name="reading_dial_subtitle">No necesitas saber interpretar el medidor. Solo coloca cada manecilla como la ves.</string>
+    <string name="reading_dial_subtitle_dynamic">Tu medidor tiene %1$d carátulas. Coloca cada manecilla como la ves; mostraremos exactamente esa cantidad.</string>
     <string name="reading_dial_previous">Anterior</string>
     <string name="reading_dial_next">Siguiente</string>
     <string name="reading_dial_review">Revisar lectura</string>
@@ -66,8 +67,10 @@
     <string name="reading_dial_unsure_reads_as">se lee %1$d</string>
     <string name="reading_dial_interpreted_label">Lectura interpretada</string>
     <string name="reading_dial_interpreted_hint">Comprueba que las cinco manecillas se parezcan a las de tu medidor.</string>
+    <string name="reading_dial_interpreted_hint_dynamic">Comprueba que las %1$d manecillas se parezcan a las de tu medidor.</string>
     <string name="reading_dial_save">Guardar lectura</string>
     <string name="reading_dial_save_helper">Revisa las 5 carátulas para guardar.</string>
+    <string name="reading_dial_save_helper_dynamic">Revisa las %1$d carátulas para guardar.</string>
 
     <!-- Confirmar (17) -->
     <string name="reading_confirm_label">Tu lectura parece ser</string>

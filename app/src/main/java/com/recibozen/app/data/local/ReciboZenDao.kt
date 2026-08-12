@@ -25,6 +25,12 @@ interface ReciboZenDao {
     @Query("SELECT COUNT(*) FROM electric_services")
     suspend fun serviceCount(): Int
 
+    @Query("SELECT COUNT(*) FROM bills WHERE electricServiceId = :serviceId")
+    suspend fun billCountForService(serviceId: String): Int
+
+    @Query("DELETE FROM electric_services WHERE id = :serviceId")
+    suspend fun deleteService(serviceId: String)
+
     @Query("SELECT COUNT(*) FROM electric_services WHERE isActive = 1 AND archivedAtEpochMillis IS NULL")
     suspend fun activeServiceCount(): Int
 

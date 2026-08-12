@@ -12,8 +12,8 @@
     <string name="period_legend_observed">Observado</string>
     <string name="period_legend_projected">Proyectado</string>
     <string name="period_legend_goal">Trayectoria de la meta</string>
-    <string name="period_chart_start_label">18 jun</string>
-    <string name="period_chart_end_label">18 ago</string>
+    <string name="period_chart_start_label">inicio</string>
+    <string name="period_chart_end_label">cierre</string>
     <string name="period_chart_today_label">hoy</string>
 
     <!-- Dónde vas contra tu meta card -->
@@ -26,4 +26,7 @@
 
     <!-- Footer -->
     <string name="period_how_we_calculate">Cómo lo calculamos</string>
+    <string name="period_empty_title">Aún no hay un periodo que analizar</string>
+    <string name="period_empty_body">Importa un recibo o registra lecturas reales. Esta pantalla ya no rellena gráficas con datos de demostración.</string>
+    <string name="period_no_goal">Agrega una meta en tu perfil para comparar la proyección contra ella.</string>
 </resources>

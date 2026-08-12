@@ -3,29 +3,52 @@ package com.recibozen.app.feature.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.recibozen.app.core.model.PlanActionStatus
+import com.recibozen.app.core.model.ConfidenceLevel
+import com.recibozen.app.core.model.ReadingMethod
 import com.recibozen.app.demo.data.DemoReciboZenData
 import com.recibozen.app.demo.repository.ReciboZenRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 
 class HomeViewModel(private val repository: ReciboZenRepository) : ViewModel() {
 
-    val uiState: StateFlow<HomeUiState> = repository.session
-        .map { state ->
+    val uiState: StateFlow<HomeUiState> = combine(
+        repository.session,
+        repository.importedBillHistory,
+    ) { state, importedBills ->
             val projection = repository.billProjection(state)
             val energy = repository.energySummary(state)
             val appliances = repository.appliances(state)
+            val latestBill = importedBills.lastOrNull()
+            val latestBillEndMillis = latestBill?.periodEndEpochDay?.times(86_400_000L)
+            val hasReadingAfterBill = latestBillEndMillis != null && state.readings.any { reading ->
+                reading.method != com.recibozen.app.core.model.ReadingMethod.PDF &&
+                    (reading.timestampEpochMillis ?: Long.MIN_VALUE) > latestBillEndMillis
+            }
+            val dataMode = when {
+                latestBill != null && !hasReadingAfterBill -> HomeDataMode.BILL_REFERENCE
+                projection.hasUsageEvidence -> HomeDataMode.PROJECTION
+                else -> HomeDataMode.EMPTY
+            }
             val minisplit = appliances.find { it.id == "minisplit" }
             val refrigerador = appliances.find { it.id == "refrigerador" }
             val ps5 = appliances.find { it.id == "ps5" }
             val minisplitAction = state.planActions.find { it.id == DemoReciboZenData.MINISPLIT_ACTION_ID }
+            val liveReadings = state.readings.count { it.method != ReadingMethod.PDF }
+            val goalKwh = if (state.goalMxn > 0 && energy.projectedCostMxn > 0) {
+                (energy.projectedKwh * state.goalMxn.toDouble() / energy.projectedCostMxn).toInt().coerceAtLeast(0)
+            } else 0
 
             HomeUiState(
                 userName = state.userName,
                 householdName = state.householdName,
                 userInitial = state.userName.firstOrNull()?.uppercase() ?: "?",
+                profileConfigured = state.userName.isNotBlank() && state.householdName.isNotBlank(),
+                dataMode = dataMode,
+                periodLabel = latestBill?.monthLabel.orEmpty(),
                 projectedMxn = projection.projectedMxn,
                 rangeLowMxn = projection.rangeLowMxn,
                 rangeHighMxn = projection.rangeHighMxn,
@@ -34,8 +57,25 @@ class HomeViewModel(private val repository: ReciboZenRepository) : ViewModel() {
                 daysRemaining = energy.daysRemaining,
                 observedTodayKwh = energy.observedKwh,
                 observedDays = energy.observedDays,
+                latestBillMxn = latestBill?.amountMxn ?: 0,
+                latestBillKwh = latestBill?.consumptionKwh ?: 0,
+                importedBillCount = importedBills.size,
+                realBillHistory = importedBills.takeLast(12),
+                billingDays = energy.billingDays,
+                projectedKwh = energy.projectedKwh,
+                goalKwh = goalKwh,
                 dailyRateNow = energy.dailyAverageKwh,
-                dailyRateRecommended = (state.goalMxn.toDouble() / energy.projectedCostMxn.coerceAtLeast(1) * energy.dailyAverageKwh),
+                dailyRateRecommended = if (state.goalMxn > 0 && energy.projectedCostMxn > 0) {
+                    state.goalMxn.toDouble() / energy.projectedCostMxn * energy.dailyAverageKwh
+                } else 0.0,
+                hasAppliances = appliances.isNotEmpty(),
+                applianceCount = appliances.size,
+                confidenceLevel = when {
+                    dataMode == HomeDataMode.BILL_REFERENCE && importedBills.size >= 6 -> ConfidenceLevel.HIGH
+                    dataMode == HomeDataMode.PROJECTION && liveReadings >= 2 -> ConfidenceLevel.HIGH
+                    importedBills.isNotEmpty() || liveReadings > 0 -> ConfidenceLevel.MEDIUM
+                    else -> ConfidenceLevel.LOW
+                },
                 minisplitStatus = minisplitAction?.status ?: PlanActionStatus.SUGGESTED,
                 minisplitSavingsLabel = minisplitAction?.savingsRangeLabel.orEmpty(),
                 minisplitCostMxn = minisplit?.costMxn ?: 0,
@@ -44,7 +84,9 @@ class HomeViewModel(private val repository: ReciboZenRepository) : ViewModel() {
                 refrigeradorSharePercent = refrigerador?.sharePercent ?: 0,
                 ps5CostMxn = ps5?.costMxn ?: 0,
                 ps5SharePercent = ps5?.sharePercent ?: 0,
-                recentReadingsCountLabel = "${state.readings.size} lecturas recientes",
+                recentReadingsCountLabel = "$liveReadings lecturas posteriores al recibo",
+                previousBillsLoadedCount = importedBills.size,
+                missingApplianceSchedules = appliances.count { it.hoursPerWeek == null },
             )
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HomeUiState())

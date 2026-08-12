@@ -81,8 +81,13 @@ object MeterDialMath {
     }
 
     fun angleForDigit(digit: Int, clockwise: Boolean): Float {
-        val target = if (clockwise) digit else (10 - digit) % 10
-        return ((target + 0.4f) * 36f) % 360f
+        val normalizedDigit = Math.floorMod(digit, 10)
+        val target = if (clockwise) {
+            normalizedDigit + 0.4f
+        } else {
+            (10f - normalizedDigit - 0.4f + 10f) % 10f
+        }
+        return (target * 36f) % 360f
     }
 }
 

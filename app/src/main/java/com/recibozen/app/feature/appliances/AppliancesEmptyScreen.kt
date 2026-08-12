@@ -48,24 +48,29 @@ import com.recibozen.app.navigation.rzViewModel
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 
 data class AppliancesEmptyUiState(
     val catalog: List<ApplianceCatalogItem> = ApplianceCatalog.items,
     val billingDays: Int = 61,
-    val effectiveRateMxnPerKwh: Double = 2.3,
+    val effectiveRateMxnPerKwh: Double = 0.0,
+    val hasCostReference: Boolean = false,
 )
 
 class AppliancesEmptyViewModel(private val repository: ReciboZenRepository) : ViewModel() {
-    val uiState: StateFlow<AppliancesEmptyUiState> = repository.session
-        .map { state ->
-            val energy = repository.energySummary(state)
+    val uiState: StateFlow<AppliancesEmptyUiState> = combine(
+        repository.session,
+        repository.importedBillHistory,
+    ) { state, bills ->
+            val latestBill = bills.lastOrNull()
             AppliancesEmptyUiState(
-                billingDays = if (state.billingCycle.contains("bi", ignoreCase = true)) 61 else 30,
-                effectiveRateMxnPerKwh = if (energy.projectedKwh > 0) {
-                    energy.projectedCostMxn.toDouble() / energy.projectedKwh
-                } else 2.3,
+                billingDays = if (latestBill?.periodStartEpochDay != null && latestBill.periodEndEpochDay != null) {
+                    (latestBill.periodEndEpochDay - latestBill.periodStartEpochDay).toInt().coerceAtLeast(1)
+                } else if (state.billingCycle.contains("bi", ignoreCase = true)) 61 else 30,
+                effectiveRateMxnPerKwh = latestBill?.takeIf { it.consumptionKwh > 0 }
+                    ?.let { it.amountMxn.toDouble() / it.consumptionKwh } ?: 0.0,
+                hasCostReference = latestBill?.consumptionKwh?.let { it > 0 } == true,
             )
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppliancesEmptyUiState())
@@ -166,6 +171,11 @@ fun AppliancesEmptyScreen(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Text(
+                stringResource(R.string.appliances_catalog_period_context, uiState.billingDays),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+            )
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it.take(50) },
@@ -234,6 +244,7 @@ fun AppliancesEmptyScreen(
             item = item,
             billingDays = uiState.billingDays,
             effectiveRateMxnPerKwh = uiState.effectiveRateMxnPerKwh,
+            hasCostReference = uiState.hasCostReference,
             onDismiss = { selectedItem = null },
             onConfirm = { room, hours -> onAddCatalogItem(item, room, hours) },
         )
@@ -242,6 +253,7 @@ fun AppliancesEmptyScreen(
         CustomApplianceDialog(
             billingDays = uiState.billingDays,
             effectiveRateMxnPerKwh = uiState.effectiveRateMxnPerKwh,
+            hasCostReference = uiState.hasCostReference,
             onDismiss = { showCustom = false },
             onConfirm = onAddCustom,
         )
@@ -253,6 +265,7 @@ private fun CatalogItemDialog(
     item: ApplianceCatalogItem,
     billingDays: Int,
     effectiveRateMxnPerKwh: Double,
+    hasCostReference: Boolean,
     onDismiss: () -> Unit,
     onConfirm: (String, Int?) -> Unit,
 ) {
@@ -276,7 +289,10 @@ private fun CatalogItemDialog(
                 } else {
                     Text(stringResource(R.string.appliances_catalog_cycle_based), style = MaterialTheme.typography.bodySmall)
                 }
-                Text(stringResource(R.string.appliances_catalog_estimate, estimate.kwh, estimate.costMxn))
+                Text(
+                    if (hasCostReference) stringResource(R.string.appliances_catalog_estimate, billingDays, estimate.kwh, estimate.costMxn)
+                    else stringResource(R.string.appliances_catalog_estimate_without_cost, billingDays, estimate.kwh),
+                )
                 Text(estimate.calculation, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
@@ -294,6 +310,7 @@ private fun CatalogItemDialog(
 private fun CustomApplianceDialog(
     billingDays: Int,
     effectiveRateMxnPerKwh: Double,
+    hasCostReference: Boolean,
     onDismiss: () -> Unit,
     onConfirm: (String, String, Int, Double, Int) -> Unit,
 ) {
@@ -340,7 +357,10 @@ private fun CustomApplianceDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
                 estimate?.let {
-                    Text(stringResource(R.string.appliances_catalog_estimate, it.kwh, it.costMxn))
+                    Text(
+                        if (hasCostReference) stringResource(R.string.appliances_catalog_estimate, billingDays, it.kwh, it.costMxn)
+                        else stringResource(R.string.appliances_catalog_estimate_without_cost, billingDays, it.kwh),
+                    )
                     Text(it.calculation, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }

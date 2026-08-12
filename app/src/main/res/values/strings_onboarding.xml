@@ -2,6 +2,9 @@
 <resources>
     <!-- Progress -->
     <string name="onboarding_step_label">Paso %1$d de 4</string>
+    <string name="onboarding_profile_title">Primero, cuéntanos quién usará ReciboZen</string>
+    <string name="onboarding_profile_body">Estos datos identifican tu perfil y tu hogar. No vamos a inventarlos ni tomarlos de un ejemplo.</string>
+    <string name="onboarding_profile_required">Nombre, hogar y ciudad son necesarios para continuar. Después de leer tu recibo podremos hablar de una meta con contexto real.</string>
 
     <!-- Step 0: Bienvenida -->
     <string name="onboarding_step0_headline">Entiende tu consumo antes de que llegue el recibo.</string>
@@ -17,7 +20,14 @@
     <string name="onboarding_row_goal">Meta de pago</string>
     <string name="onboarding_goal_value">$%1$d</string>
     <string name="onboarding_receipt_card_title">¿Tienes tu último recibo a la mano?</string>
-    <string name="onboarding_receipt_card_body">Con él calculamos tu tarifa y periodo automáticamente. También puedes escribir los datos.</string>
+    <string name="onboarding_receipt_card_body">Sube el PDF original de CFE para extraer tarifa, medidor, consumo, total e historial. Si no lo tienes, puedes continuar sin estimación.</string>
+    <string name="onboarding_receipt_step_title">Agrega datos reales de tu suministro</string>
+    <string name="onboarding_receipt_step_subtitle">El recibo es la forma más rápida. Nunca mostraremos una estimación si todavía no existe información suficiente.</string>
+    <string name="onboarding_receipt_loaded_title">Recibo importado correctamente</string>
+    <string name="onboarding_receipt_loaded_body">Encontramos %1$d periodos reales. Revisa el resumen o elige otro PDF si no corresponde a este hogar.</string>
+    <string name="onboarding_receipt_privacy">El PDF se procesa en el teléfono. Guardamos los datos confirmados, no el archivo original.</string>
+    <string name="onboarding_action_upload_pdf">Subir recibo PDF</string>
+    <string name="onboarding_action_change_pdf">Elegir otro PDF</string>
     <string name="onboarding_action_take_photo">Tomar foto</string>
     <string name="onboarding_action_type_manually">Escribir datos</string>
 
@@ -32,16 +42,26 @@
     <string name="onboarding_meter_footnote">Si eliges «No estoy seguro», te mostramos las dos opciones para compararlas con tu medidor.</string>
 
     <!-- Step 3: Primera estimación -->
-    <string name="onboarding_step3_eyebrow">YA PODEMOS DARTE UNA PRIMERA ESTIMACIÓN</string>
+    <string name="onboarding_step3_bill_eyebrow">ESTE ES TU ÚLTIMO RECIBO REAL</string>
+    <string name="onboarding_step3_empty_eyebrow">TU PERFIL ESTÁ LISTO</string>
+    <string name="onboarding_step3_bill_detail">Periodo %1$s · %2$d kWh</string>
+    <string name="onboarding_step3_bill_explanation">Esto no es una estimación: proviene del PDF que confirmaste. Para proyectar el periodo actual necesitaremos una lectura posterior.</string>
+    <string name="onboarding_step3_empty_explanation">Aún no tenemos un recibo ni lecturas suficientes, así que no mostraremos una cifra inventada. Puedes importar el PDF desde Inicio o Historial.</string>
     <string name="onboarding_step3_price">$%1$d</string>
     <string name="onboarding_step3_range">Podría quedar entre $%1$d y $%2$d</string>
     <string name="onboarding_step3_confidence_warning">Confianza baja por ahora: la calculamos con un solo recibo.</string>
     <string name="onboarding_step3_body">Registra una lectura o agrega tus aparatos principales y la estimación mejorará en unos días.</string>
     <string name="onboarding_step3_footnote">Todavía estamos aprendiendo sobre tu consumo. No te pediremos permisos que no necesites.</string>
+    <string name="onboarding_goal_after_bill_title">Ahora sí, ¿quieres definir una meta?</string>
+    <string name="onboarding_goal_after_bill_body">Tu último recibo real fue de $%1$d. Si quieres, usa ese contexto para elegir cuánto te gustaría pagar en el siguiente.</string>
+    <string name="onboarding_goal_after_bill_label">Meta para el próximo recibo en MXN (opcional)</string>
 
     <!-- Bottom buttons -->
     <string name="onboarding_action_skip">Saltar</string>
-    <string name="onboarding_primary_step0">Configurar mi hogar</string>
+    <string name="onboarding_action_back">Atrás</string>
+    <string name="onboarding_action_configure_later">Configurar después</string>
+    <string name="onboarding_continue_without_bill">Continuar sin recibo</string>
+    <string name="onboarding_primary_step0">Continuar</string>
     <string name="onboarding_primary_step1">Continuar</string>
     <string name="onboarding_primary_step2">Continuar</string>
     <string name="onboarding_primary_step3">Ir a Inicio</string>

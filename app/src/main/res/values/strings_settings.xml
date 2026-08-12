@@ -2,6 +2,11 @@
 <resources>
     <!-- Profile -->
     <string name="profile_title">Tu perfil</string>
+    <string name="profile_unconfigured_name">Perfil sin configurar</string>
+    <string name="profile_unconfigured_subtitle">Agrega tu nombre y los datos reales de tu hogar.</string>
+    <string name="profile_missing_tariff">sin tarifa</string>
+    <string name="profile_missing_cycle">sin ciclo</string>
+    <string name="profile_service_not_added">Sin suministro</string>
     <string name="profile_subtitle">%1$s · %2$s · %3$s</string>
     <string name="profile_row_dark_mode">Modo oscuro</string>
     <string name="profile_row_dark_mode_trailing">Ver</string>
@@ -30,6 +35,8 @@
     <string name="profile_service_tariff">Tarifa del recibo</string>
     <string name="services_title">Mis suministros</string>
     <string name="services_usage">%1$d de %2$d suministros activos</string>
+    <string name="services_empty_title">No hay casas ni suministros registrados</string>
+    <string name="services_empty_body">El primer suministro se crea cuando tú lo agregas o confirmas un recibo PDF. Ya no se genera una “Casa” de demostración.</string>
     <string name="services_active">Activo</string>
     <string name="services_add">Agregar otro suministro</string>
     <string name="services_meter_note">Cambiar el medidor físico de un mismo número de servicio no consume otro espacio del plan.</string>

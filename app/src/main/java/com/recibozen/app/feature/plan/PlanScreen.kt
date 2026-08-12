@@ -54,7 +54,7 @@ import com.recibozen.app.navigation.rzViewModel
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 
 /**
@@ -65,28 +65,36 @@ data class PlanUiState(
     val greeting: String = "",
     val householdName: String = "",
     val userInitial: String = "",
-    val projectedMxn: Int = DemoReciboZenData.BASE_PROJECTED_MXN,
-    val rangeHighMxn: Int = DemoReciboZenData.BASE_PROJECTED_MXN,
+    val hasProjection: Boolean = false,
+    val projectedMxn: Int = 0,
+    val rangeHighMxn: Int = 0,
     val isWithinGoal: Boolean = false,
     val planProgressFraction: Float = 0f,
-    val goalMxn: Int = DemoReciboZenData.GOAL_MXN,
-    val baselineMxn: Int = DemoReciboZenData.BASE_PROJECTED_MXN,
+    val goalMxn: Int = 0,
+    val baselineMxn: Int = 0,
     val suggestionActions: List<PlanAction> = emptyList(),
     val verifiedAction: PlanAction? = null,
 )
 
 class PlanViewModel(private val repository: ReciboZenRepository) : ViewModel() {
-    val uiState: StateFlow<PlanUiState> = repository.session
-        .map { toUiState(it) }
+    val uiState: StateFlow<PlanUiState> = combine(repository.session, repository.importedBillHistory) { state, imported ->
+            val latestEnd = imported.lastOrNull()?.periodEndEpochDay?.times(86_400_000L)
+            val hasLiveReading = latestEnd == null || state.readings.any { reading ->
+                reading.method != com.recibozen.app.core.model.ReadingMethod.PDF &&
+                    (reading.timestampEpochMillis ?: Long.MIN_VALUE) > latestEnd
+            }
+            toUiState(state, hasLiveReading)
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), toUiState(repository.session.value))
 
-    private fun toUiState(state: ReciboZenSessionState): PlanUiState {
+    private fun toUiState(state: ReciboZenSessionState, hasLiveReading: Boolean = false): PlanUiState {
         val projection = repository.billProjection(state)
         val energy = repository.energySummary(state)
         return PlanUiState(
             greeting = "Buenas tardes, ${state.userName}",
             householdName = state.householdName,
             userInitial = state.userName.firstOrNull()?.uppercase() ?: "?",
+            hasProjection = projection.hasUsageEvidence && hasLiveReading,
             projectedMxn = projection.projectedMxn,
             rangeHighMxn = projection.rangeHighMxn,
             isWithinGoal = projection.isWithinGoal,
@@ -110,6 +118,7 @@ fun PlanRoute(navController: NavHostController, repository: ReciboZenRepository)
     PlanScreen(
         uiState = uiState,
         onProfileClick = { navController.navigate(Routes.Profile) },
+        onHouseholdClick = { navController.navigate(Routes.Services) },
         onAddAction = viewModel::toggleAction,
         onRemoveAction = viewModel::toggleAction,
         onDacClick = { navController.navigate(Routes.Dac) },
@@ -128,6 +137,7 @@ fun PlanScreen(
     onSolarClick: () -> Unit,
     onBalanceClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onHouseholdClick: () -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -138,7 +148,7 @@ fun PlanScreen(
             greeting = uiState.greeting,
             householdName = uiState.householdName,
             userInitial = uiState.userInitial,
-            onHouseholdClick = {},
+            onHouseholdClick = onHouseholdClick,
             onProfileClick = onProfileClick,
         )
         Column(
@@ -161,6 +171,17 @@ fun PlanScreen(
                 )
             }
 
+            if (!uiState.hasProjection) {
+                RzCard(modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.plan_empty_title), style = MaterialTheme.typography.titleLarge)
+                    Text(
+                        stringResource(R.string.plan_empty_body),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = RzSpacing.sm),
+                    )
+                }
+            } else {
             PlanSummaryCard(uiState)
 
             Text(
@@ -178,6 +199,7 @@ fun PlanScreen(
             }
 
             uiState.verifiedAction?.let { VerifiedActionCard(it) }
+            }
 
             PlanLinkCard(
                 icon = RzIcons.Monitoring,

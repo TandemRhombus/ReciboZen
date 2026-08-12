@@ -1,8 +1,10 @@
 package com.recibozen.app.feature.home
 
 import com.recibozen.app.core.model.ConfidenceLevel
+import com.recibozen.app.core.model.BillPeriod
 import com.recibozen.app.core.model.PlanActionStatus
-import com.recibozen.app.demo.data.DemoReciboZenData
+
+enum class HomeDataMode { EMPTY, BILL_REFERENCE, PROJECTION }
 
 /**
  * Everything the "Inicio" tab needs to render, derived from
@@ -10,25 +12,36 @@ import com.recibozen.app.demo.data.DemoReciboZenData
  * fixtures. Immutable snapshot consumed by the stateless [HomeScreen].
  */
 data class HomeUiState(
-    val userName: String = DemoReciboZenData.USER_NAME,
-    val householdName: String = DemoReciboZenData.HOUSEHOLD_NAME,
-    val userInitial: String = DemoReciboZenData.USER_INITIAL,
+    val userName: String = "",
+    val householdName: String = "",
+    val userInitial: String = "?",
+    val profileConfigured: Boolean = false,
+    val dataMode: HomeDataMode = HomeDataMode.EMPTY,
 
-    val periodLabel: String = DemoReciboZenData.PERIOD_LABEL,
-    val projectedMxn: Int = DemoReciboZenData.BASE_PROJECTED_MXN,
-    val rangeLowMxn: Int = DemoReciboZenData.BASE_PROJECTED_MXN - 36,
-    val rangeHighMxn: Int = DemoReciboZenData.BASE_PROJECTED_MXN + 44,
+    val periodLabel: String = "",
+    val projectedMxn: Int = 0,
+    val rangeLowMxn: Int = 0,
+    val rangeHighMxn: Int = 0,
     val isWithinGoal: Boolean = false,
-    val goalMxn: Int = DemoReciboZenData.GOAL_MXN,
-    val daysRemaining: Int = DemoReciboZenData.DAYS_REMAINING,
-    val observedTodayKwh: Int = DemoReciboZenData.OBSERVED_KWH_TODAY,
-    val observedDays: Int = DemoReciboZenData.OBSERVED_DAYS,
+    val goalMxn: Int = 0,
+    val daysRemaining: Int = 0,
+    val observedTodayKwh: Int = 0,
+    val observedDays: Int = 0,
+    val latestBillMxn: Int = 0,
+    val latestBillKwh: Int = 0,
+    val importedBillCount: Int = 0,
+    val realBillHistory: List<BillPeriod> = emptyList(),
+    val billingDays: Int = 0,
+    val projectedKwh: Int = 0,
+    val goalKwh: Int = 0,
 
     val minisplitStatus: PlanActionStatus = PlanActionStatus.SUGGESTED,
     val minisplitSavingsLabel: String = "",
 
-    val dailyRateNow: Double = DemoReciboZenData.DAILY_RATE_NOW,
-    val dailyRateRecommended: Double = DemoReciboZenData.DAILY_RATE_RECOMMENDED,
+    val dailyRateNow: Double = 0.0,
+    val dailyRateRecommended: Double = 0.0,
+    val hasAppliances: Boolean = false,
+    val applianceCount: Int = 0,
 
     val minisplitCostMxn: Int = 0,
     val minisplitSharePercent: Int = 0,
@@ -36,11 +49,11 @@ data class HomeUiState(
     val refrigeradorSharePercent: Int = 0,
     val ps5CostMxn: Int = 0,
     val ps5SharePercent: Int = 0,
-    val unidentifiedCostMxn: Int = DemoReciboZenData.UNIDENTIFIED_COST_MXN,
-    val unidentifiedSharePercent: Int = DemoReciboZenData.UNIDENTIFIED_SHARE_PERCENT,
+    val unidentifiedCostMxn: Int = 0,
+    val unidentifiedSharePercent: Int = 0,
 
     val confidenceLevel: ConfidenceLevel = ConfidenceLevel.MEDIUM,
-    val previousBillsLoadedCount: Int = 9,
-    val recentReadingsCountLabel: String = DemoReciboZenData.RECENT_READINGS_COUNT_LABEL,
-    val missingApplianceSchedules: Int = 3,
+    val previousBillsLoadedCount: Int = 0,
+    val recentReadingsCountLabel: String = "0 lecturas recientes",
+    val missingApplianceSchedules: Int = 0,
 )

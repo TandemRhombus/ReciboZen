@@ -2,6 +2,25 @@
 <resources>
     <!-- Tab header -->
     <string name="home_greeting">Buenas tardes, %1$s</string>
+    <string name="home_greeting_unconfigured">Hola</string>
+    <string name="home_household_unconfigured">Configura tu hogar</string>
+    <string name="home_empty_title">Todavía no hay datos de consumo</string>
+    <string name="home_empty_body">Importa un recibo real o registra lecturas del medidor. Hasta entonces ReciboZen no mostrará montos, aparatos ni proyecciones de ejemplo.</string>
+    <string name="home_empty_import">Importar mi recibo PDF</string>
+    <string name="home_empty_profile">Completar mi perfil</string>
+    <string name="home_latest_bill_title">Tu último recibo</string>
+    <string name="home_latest_bill_badge">Dato real</string>
+    <string name="home_latest_bill_detail">%1$s · %2$d kWh</string>
+    <string name="home_latest_bill_history">%1$d periodos reales disponibles en Historial</string>
+    <string name="home_real_history_title">Historial real de consumo</string>
+    <string name="home_real_history_badge">%1$d recibos</string>
+    <string name="home_real_history_body">La gráfica usa %1$d periodos extraídos del PDF. El más reciente registró %2$d kWh y $%3$d.</string>
+    <string name="home_period_explanation_without_goal">Has observado %1$d kWh en %2$d días. Con ese ritmo, la proyección actual es de %3$d kWh al cierre.</string>
+    <string name="home_build_projection_title">Aún no es una proyección</string>
+    <string name="home_build_projection_body">El recibo describe un periodo que ya terminó. Registra una lectura nueva para empezar a medir el periodo actual y agrega tus aparatos para explicar el consumo.</string>
+    <string name="home_appliance_data_title">Aparatos del hogar</string>
+    <string name="home_appliance_data_count">Tienes %1$d aparatos configurados. Sus cálculos usan los horarios que capturaste.</string>
+    <string name="home_appliance_data_empty">Todavía no agregas aparatos; no atribuiremos consumo a equipos ficticios.</string>
 
     <!-- Recibo proyectado card -->
     <string name="home_projected_period_label">Recibo proyectado · %1$s</string>
@@ -52,10 +71,17 @@
     <!-- "Qué tan confiable es esta estimación" card -->
     <string name="home_confidence_title">Qué tan confiable es esta estimación</string>
     <string name="home_confidence_medium_label">Confianza media</string>
+    <string name="home_confidence_high_label">Confianza alta</string>
+    <string name="home_confidence_low_label">Confianza baja</string>
     <string name="home_confidence_explanation">Tenemos suficientes datos para orientarte, pero registrar dos lecturas más podría mejorar la estimación.</string>
     <string name="home_confidence_bills_status">Recibos anteriores: %1$d cargados</string>
     <string name="home_confidence_readings_hint">Con 2 lecturas adicionales mejoraría la estimación.</string>
     <string name="home_confidence_schedules_status">Horarios de aparatos: faltan %1$d</string>
+    <string name="home_confidence_no_appliances">Aparatos: todavía no agregados</string>
+    <string name="home_data_quality_title">Calidad de los datos importados</string>
+    <string name="home_data_quality_label">%1$d periodos reales</string>
+    <string name="home_data_quality_explanation">El historial del PDF ya sirve para comparar periodos. Todavía no lo llamamos proyección del periodo actual hasta tener una lectura posterior.</string>
+    <string name="home_confidence_first_live_reading_hint">Registra una lectura posterior al cierre del recibo para iniciar la proyección actual.</string>
     <string name="home_register_reading_button">Registrar una lectura</string>
 
     <!-- Footer -->

@@ -40,24 +40,13 @@ open class DemoReciboZenRepository : ReciboZenRepository {
     protected val mutableSession = MutableStateFlow(ReciboZenSessionState())
     private val _session get() = mutableSession
     override val session: StateFlow<ReciboZenSessionState> = _session.asStateFlow()
-    protected val mutableElectricServices = MutableStateFlow(
-        listOf(
-            ElectricServiceIdentity(
-                alias = mutableSession.value.serviceAlias,
-                serviceNumber = mutableSession.value.serviceNumber,
-                rmu = mutableSession.value.rmu,
-                meterNumber = mutableSession.value.meterNumber,
-                tariffCode = TariffCatalog.find(mutableSession.value.tariff)?.code ?: "1C",
-                billingCycle = mutableSession.value.billingCycle,
-            ),
-        ),
-    )
+    protected val mutableElectricServices = MutableStateFlow<List<ElectricServiceIdentity>>(emptyList())
     override val electricServices: StateFlow<List<ElectricServiceIdentity>> = mutableElectricServices.asStateFlow()
     protected val mutableImportedBillHistory = MutableStateFlow<List<BillPeriod>>(emptyList())
     override val importedBillHistory: StateFlow<List<BillPeriod>> = mutableImportedBillHistory.asStateFlow()
 
     override fun appliances(state: ReciboZenSessionState): List<Appliance> {
-        val adjusted = (DemoReciboZenData.appliances + state.customAppliances)
+        val adjusted = state.customAppliances
             .distinctBy { it.id }
             .map { appliance ->
             val hours = state.applianceHoursPerWeek[appliance.id] ?: appliance.hoursPerWeek
@@ -70,9 +59,17 @@ open class DemoReciboZenRepository : ReciboZenRepository {
                 )
             } else appliance
         }
-        val observed = energySummary(state).observedKwh.coerceAtLeast(1)
+        val energy = energySummary(state)
+        val latestBill = importedBillHistory.value.lastOrNull()
+        val effectiveRate = latestBill?.takeIf { it.consumptionKwh > 0 }
+            ?.let { it.amountMxn.toDouble() / it.consumptionKwh }
         return adjusted.map { appliance ->
-            appliance.copy(sharePercent = (appliance.kwh * 100f / observed).roundToInt().coerceIn(0, 100))
+            appliance.copy(
+                costMxn = effectiveRate?.let { (appliance.kwh * it).roundToInt() } ?: 0,
+                sharePercent = if (energy.hasUsageEvidence && energy.observedKwh > 0) {
+                    (appliance.kwh * 100f / energy.observedKwh).roundToInt().coerceIn(0, 100)
+                } else 0,
+            )
         }
     }
 
@@ -81,19 +78,25 @@ open class DemoReciboZenRepository : ReciboZenRepository {
 
     override fun billProjection(state: ReciboZenSessionState): BillProjection {
         val energy = energySummary(state)
+        if (!energy.hasUsageEvidence) {
+            return BillProjection(0, 0, 0, false, 0f, hasUsageEvidence = false)
+        }
         val cuts = state.planActions
             .filter { it.status == PlanActionStatus.TRACKING }
             .sumOf { it.estimatedCutMxn }
         val projected = (energy.projectedCostMxn - cuts).coerceAtLeast(0)
         val baseline = energy.projectedCostMxn.coerceAtLeast(1)
-        val progress = ((baseline - projected).toFloat() / (baseline - state.goalMxn).coerceAtLeast(1)).coerceIn(0f, 1f)
+        val progress = if (state.goalMxn > 0) {
+            ((baseline - projected).toFloat() / (baseline - state.goalMxn).coerceAtLeast(1)).coerceIn(0f, 1f)
+        } else 0f
         val uncertainty = (projected * 0.08).roundToInt().coerceAtLeast(25)
         return BillProjection(
             projectedMxn = projected,
             rangeLowMxn = (projected - uncertainty).coerceAtLeast(0),
             rangeHighMxn = projected + uncertainty,
-            isWithinGoal = projected <= state.goalMxn,
+            isWithinGoal = state.goalMxn > 0 && projected <= state.goalMxn,
             planProgressFraction = progress,
+            hasUsageEvidence = true,
         )
     }
 
@@ -105,37 +108,73 @@ open class DemoReciboZenRepository : ReciboZenRepository {
         } else 0L
         val measuredDays = (elapsedMillis / 86_400_000.0).coerceAtLeast(0.0)
         val measuredKwh = (newest?.kwh ?: 0) - (previous?.kwh ?: 0)
-        val hasReliablePair = measuredDays >= 0.5 && measuredKwh >= 0
-        val observedDays = if (hasReliablePair) measuredDays.roundToInt().coerceAtLeast(1) else DemoReciboZenData.OBSERVED_DAYS
-        val observedKwh = if (hasReliablePair) measuredKwh else DemoReciboZenData.OBSERVED_KWH_TODAY
-        val billingDays = if (state.billingCycle.contains("bi", ignoreCase = true)) 61 else 30
+        // The two endpoints imported from a PDF describe a bill that already
+        // closed; they must not be mistaken for a live reading pair. Once the
+        // user records a new reading, comparing it with the PDF endpoint is
+        // valid and starts the current-period projection.
+        val hasReliablePair = newest?.method != ReadingMethod.PDF &&
+            previous != null && measuredDays >= 0.5 && measuredKwh >= 0
+        val latestBill = importedBillHistory.value.lastOrNull()
+        val hasUsageEvidence = hasReliablePair || latestBill != null
+        val billingDays = when {
+            latestBill?.periodStartEpochDay != null && latestBill.periodEndEpochDay != null ->
+                (latestBill.periodEndEpochDay - latestBill.periodStartEpochDay).toInt().coerceAtLeast(1)
+            state.billingCycle.contains("bi", ignoreCase = true) -> 61
+            state.billingCycle.contains("men", ignoreCase = true) -> 30
+            else -> 0
+        }
+        val observedDays = when {
+            hasReliablePair -> measuredDays.roundToInt().coerceAtLeast(1)
+            latestBill != null -> billingDays
+            else -> 0
+        }
+        val observedKwh = when {
+            hasReliablePair -> measuredKwh
+            latestBill != null -> latestBill.consumptionKwh
+            else -> 0
+        }
         val dailyAverage = observedKwh.toDouble() / observedDays.coerceAtLeast(1)
-        val projectedKwh = (dailyAverage * billingDays).roundToInt().coerceAtLeast(observedKwh)
+        val projectedKwh = if (hasReliablePair && billingDays > 0) {
+            (dailyAverage * billingDays).roundToInt().coerceAtLeast(observedKwh)
+        } else observedKwh
+        val costToDate = when {
+            !hasUsageEvidence -> 0
+            !hasReliablePair && latestBill != null -> latestBill.amountMxn
+            else -> tariffEngine.estimate(observedKwh).totalMxn
+        }
+        val projectedCost = when {
+            !hasUsageEvidence -> 0
+            !hasReliablePair && latestBill != null -> latestBill.amountMxn
+            else -> tariffEngine.estimate(projectedKwh).totalMxn
+        }
         return EnergySummary(
             observedKwh = observedKwh,
             observedDays = observedDays,
             billingDays = billingDays,
-            daysRemaining = (billingDays - observedDays).coerceAtLeast(0),
+            daysRemaining = if (hasReliablePair) (billingDays - observedDays).coerceAtLeast(0) else 0,
             dailyAverageKwh = dailyAverage,
             projectedKwh = projectedKwh,
-            costToDateMxn = tariffEngine.estimate(observedKwh).totalMxn,
-            projectedCostMxn = tariffEngine.estimate(projectedKwh).totalMxn,
+            costToDateMxn = costToDate,
+            projectedCostMxn = projectedCost,
+            hasUsageEvidence = hasUsageEvidence,
         )
     }
 
     override fun billHistory(state: ReciboZenSessionState): List<BillPeriod> {
         val projection = billProjection(state)
         val energy = energySummary(state)
-        return DemoReciboZenData.billHistory.filterNot { it.isProjected } + BillPeriod(
+        if (!energy.hasUsageEvidence) return emptyList()
+        return listOf(BillPeriod(
             monthLabel = "Actual",
             amountMxn = projection.projectedMxn,
             isProjected = true,
             consumptionKwh = energy.projectedKwh,
-        )
+        ))
     }
 
     override fun dialReading(state: ReciboZenSessionState): DialReadingResult {
-        val digits = MeterDialMath.digits(state.dialAngles, state.dialDirections)
+        val allDigits = MeterDialMath.digits(state.dialAngles, state.dialDirections)
+        val digits = if (state.meterType.contains("4")) allDigits.takeLast(4) else allDigits
         val value = digits.joinToString("").toInt()
         val diff = value - state.lastConfirmedReadingKwh
         val rate = diff / 76.0 * 24.0
@@ -265,16 +304,26 @@ open class DemoReciboZenRepository : ReciboZenRepository {
     }
 
     override fun setMeterType(meterType: String) {
-        _session.update { it.copy(meterType = meterType) }
+        _session.update { state ->
+            if (state.meterType == meterType) state else {
+                val firstFace = if (meterType.contains("4")) 1 else 0
+                state.copy(
+                    meterType = meterType,
+                    dialSelectedIndex = firstFace,
+                    dialVisitedFaces = setOf(firstFace),
+                    dialUnsure = false,
+                )
+            }
+        }
     }
 
     override fun updateProfile(userName: String, householdName: String, location: String, goalMxn: Int) {
         _session.update {
             it.copy(
-                userName = userName.trim().ifEmpty { it.userName },
-                householdName = householdName.trim().ifEmpty { it.householdName },
-                location = location.trim().ifEmpty { it.location },
-                goalMxn = goalMxn.coerceAtLeast(1),
+                userName = userName.trim(),
+                householdName = householdName.trim(),
+                location = location.trim(),
+                goalMxn = goalMxn.coerceAtLeast(0),
             )
         }
     }

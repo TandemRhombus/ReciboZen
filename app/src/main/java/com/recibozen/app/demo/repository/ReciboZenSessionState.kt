@@ -6,43 +6,40 @@ import com.recibozen.app.core.model.HistoryUnit
 import com.recibozen.app.core.model.PlanAction
 import com.recibozen.app.core.model.Appliance
 import com.recibozen.app.core.model.EntitlementTier
-import com.recibozen.app.demo.data.DemoReciboZenData
 
 /** User-owned state. The production repository persists this object with DataStore. */
 data class ReciboZenSessionState(
     val isHydrated: Boolean = true,
     val onboardingCompleted: Boolean = false,
     val themeMode: AppThemeMode = AppThemeMode.SYSTEM,
-    val userName: String = DemoReciboZenData.USER_NAME,
-    val householdName: String = DemoReciboZenData.HOUSEHOLD_NAME,
-    val serviceAlias: String = DemoReciboZenData.HOUSEHOLD_NAME,
+    val userName: String = "",
+    val householdName: String = "",
+    val serviceAlias: String = "",
     val serviceNumber: String = "",
     val rmu: String = "",
     val meterNumber: String = "",
-    val activeServiceId: String = "legacy_service",
+    val activeServiceId: String = "",
     val entitlementTier: EntitlementTier = EntitlementTier.FREE,
-    val location: String = DemoReciboZenData.LOCATION,
-    val tariff: String = DemoReciboZenData.TARIFF,
-    val billingCycle: String = DemoReciboZenData.BILLING_CYCLE,
-    val goalMxn: Int = DemoReciboZenData.GOAL_MXN,
-    val meterType: String = DemoReciboZenData.METER_TYPE_SELECTED,
-    val applianceHoursPerWeek: Map<String, Int> = DemoReciboZenData.appliances
-        .mapNotNull { appliance -> appliance.hoursPerWeek?.let { appliance.id to it } }
-        .toMap(),
+    val location: String = "",
+    val tariff: String = "",
+    val billingCycle: String = "",
+    val goalMxn: Int = 0,
+    val meterType: String = "",
+    val applianceHoursPerWeek: Map<String, Int> = emptyMap(),
     val customAppliances: List<Appliance> = emptyList(),
     val savedSimulatorScenario: Boolean = false,
-    val planActions: List<PlanAction> = DemoReciboZenData.planActions,
+    val planActions: List<PlanAction> = emptyList(),
     val dialAngles: List<Float> = listOf(66.3f, 56.7f, 153.4f, 266.4f, 216f),
     val dialDirections: List<Boolean> = listOf(true, false, true, false, true),
     val dialSelectedIndex: Int = 0,
     val dialVisitedFaces: Set<Int> = setOf(0),
     val dialUnsure: Boolean = false,
-    val solarScenarioIndex: Int = DemoReciboZenData.DEFAULT_SOLAR_SCENARIO_INDEX,
+    val solarScenarioIndex: Int = 0,
     val historyUnit: HistoryUnit = HistoryUnit.MXN,
     val onboardingStep: Int = 0,
-    val lastConfirmedReadingKwh: Int = DemoReciboZenData.LAST_READING_KWH,
-    val readings: List<HistoryReadingEntry> = DemoReciboZenData.recentReadings,
-    val manualReadingDigits: List<Int> = listOf(1, 8, 4, 2, 6),
+    val lastConfirmedReadingKwh: Int = 0,
+    val readings: List<HistoryReadingEntry> = emptyList(),
+    val manualReadingDigits: List<Int> = listOf(0, 0, 0, 0, 0),
     val pendingReadingKwh: Int? = null,
     val pendingReadingMethod: com.recibozen.app.core.model.ReadingMethod? = null,
 )
@@ -54,6 +51,7 @@ data class BillProjection(
     val rangeHighMxn: Int,
     val isWithinGoal: Boolean,
     val planProgressFraction: Float,
+    val hasUsageEvidence: Boolean = false,
 )
 
 data class EnergySummary(
@@ -65,6 +63,7 @@ data class EnergySummary(
     val projectedKwh: Int,
     val costToDateMxn: Int,
     val projectedCostMxn: Int,
+    val hasUsageEvidence: Boolean = false,
 )
 
 /** Result of interpreting the 5 dial faces into a meter reading. */

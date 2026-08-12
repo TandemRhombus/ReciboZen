@@ -3,6 +3,8 @@
     <!-- ═══════ Plan (bottom-nav tab root) ═══════ -->
     <string name="plan_headline">Plan</string>
     <string name="plan_subtitle">Sugerencias, lo que ya estás siguiendo y lo que ya se comprobó</string>
+    <string name="plan_empty_title">Aún no podemos crear un plan</string>
+    <string name="plan_empty_body">Necesitamos un recibo real y al menos una lectura posterior, además de los aparatos que tú agregues. No mostraremos recomendaciones precargadas como si fueran tuyas.</string>
 
     <string name="plan_summary_eyebrow">Con lo que llevas en tu plan cerrarías cerca de</string>
     <string name="plan_summary_amount">$%1$d</string>
@@ -37,11 +39,11 @@
     <string name="plan_confidence_high">alta</string>
 
     <string name="plan_dac_link_title">Revisa tu promedio de consumo</string>
-    <string name="plan_dac_link_description">Tu promedio móvil está cerca del límite de referencia de tu tarifa. Reducir los próximos periodos podría ayudarte a mantenerte por debajo.</string>
+    <string name="plan_dac_link_description">Consulta el promedio calculado con tus recibos reales y compáralo con la referencia disponible para tu tarifa.</string>
     <string name="plan_dac_link_action">Ver el detalle →</string>
 
     <string name="plan_solar_link_title">Preestudio solar</string>
-    <string name="plan_solar_link_description">Con tu consumo actual, unos 6–7 paneles podrían cubrir cerca del 80% de tu energía anual.</string>
+    <string name="plan_solar_link_description">Explora escenarios solares basados en tu historial real. Los resultados se marcarán como preliminares hasta contar con datos suficientes.</string>
     <string name="plan_solar_link_action">Ver escenarios →</string>
 
     <string name="plan_balance_link_title">Balance de consumo</string>
@@ -50,12 +52,15 @@
     <!-- ═══════ Balance de consumo ═══════ -->
     <string name="balance_title">Balance de consumo</string>
     <string name="balance_explained_headline">Podemos explicar cerca del %1$d%% de tu consumo</string>
+    <string name="balance_explained_headline_pending">Aún estamos armando tu balance de consumo</string>
     <string name="balance_explained_label">Explicado %1$d kWh</string>
     <string name="balance_unidentified_label">Sin identificar %1$d kWh</string>
     <string name="balance_explained_body">El %1$d%% restante podría venir de aparatos todavía no registrados, variaciones de uso o estimaciones incompletas. Tu medidor observó %2$d kWh en el periodo.</string>
+    <string name="balance_explained_body_pending">Importa un recibo o registra dos lecturas para comparar el consumo total contra los aparatos agregados.</string>
     <string name="balance_review_remaining_action">Revisar consumo restante</string>
 
     <string name="balance_suspects_title">Podría venir de</string>
+    <string name="balance_suspects_pending">Aquí aparecerán únicamente aparatos tuyos con información todavía incompleta.</string>
 
     <string name="balance_overnight_title">Prueba de una noche</string>
     <string name="balance_overnight_body">Registra una lectura antes de dormir y otra al despertar. Comparamos lo observado con lo esperado.</string>
@@ -64,6 +69,7 @@
     <string name="balance_overnight_unexplained">Quedan cerca de %1$.1f kWh sin explicar.</string>
     <string name="balance_overnight_footnote">Puede ser un aparato que no tenemos registrado. Si la diferencia continúa, puedes consultar a un electricista.</string>
     <string name="balance_overnight_action">Iniciar la prueba</string>
+    <string name="balance_overnight_no_result">Todavía no existe una prueba nocturna guardada; no mostraremos resultados de ejemplo.</string>
 
     <!-- ═══════ Promedio de consumo (DAC) ═══════ -->
     <string name="dac_title">Promedio de consumo</string>

@@ -32,7 +32,6 @@ import com.recibozen.app.core.components.RzStackedBarRow
 import com.recibozen.app.core.components.RzStatusChip
 import com.recibozen.app.core.designsystem.ReciboZenTheme
 import com.recibozen.app.core.designsystem.RzSpacing
-import com.recibozen.app.demo.data.DemoReciboZenData
 import com.recibozen.app.demo.repository.ReciboZenRepository
 import com.recibozen.app.navigation.Routes
 import com.recibozen.app.navigation.rzViewModel
@@ -43,15 +42,17 @@ import kotlinx.coroutines.flow.stateIn
 
 /** Pushed flow screen "Balance de consumo": how much of the bill is explained vs unidentified. */
 data class BalanceUiState(
-    val explainedSharePercent: Int = DemoReciboZenData.EXPLAINED_SHARE_PERCENT,
-    val unidentifiedSharePercent: Int = 100 - DemoReciboZenData.EXPLAINED_SHARE_PERCENT,
-    val explainedKwh: Int = DemoReciboZenData.EXPLAINED_KWH,
-    val unexplainedKwh: Int = DemoReciboZenData.UNEXPLAINED_KWH,
-    val observedKwh: Int = DemoReciboZenData.OBSERVED_KWH_TODAY,
-    val suspects: List<String> = DemoReciboZenData.unidentifiedSuspects,
-    val overnightObservedKwh: Double = DemoReciboZenData.OVERNIGHT_TEST_OBSERVED_KWH,
-    val overnightExpectedKwh: Double = DemoReciboZenData.OVERNIGHT_TEST_EXPECTED_KWH,
-    val overnightUnexplainedKwh: Double = DemoReciboZenData.OVERNIGHT_TEST_UNEXPLAINED_KWH,
+    val hasUsageData: Boolean = false,
+    val explainedSharePercent: Int = 0,
+    val unidentifiedSharePercent: Int = 0,
+    val explainedKwh: Int = 0,
+    val unexplainedKwh: Int = 0,
+    val observedKwh: Int = 0,
+    val suspects: List<String> = emptyList(),
+    val hasOvernightTest: Boolean = false,
+    val overnightObservedKwh: Double = 0.0,
+    val overnightExpectedKwh: Double = 0.0,
+    val overnightUnexplainedKwh: Double = 0.0,
 )
 
 class BalanceViewModel(repository: ReciboZenRepository) : ViewModel() {
@@ -62,11 +63,15 @@ class BalanceViewModel(repository: ReciboZenRepository) : ViewModel() {
             val unexplained = (observed - explained).coerceAtLeast(0)
             val explainedShare = if (observed == 0) 0 else (explained * 100f / observed).toInt().coerceIn(0, 100)
             BalanceUiState(
+                hasUsageData = repository.energySummary(state).hasUsageEvidence,
                 explainedSharePercent = explainedShare,
-                unidentifiedSharePercent = 100 - explainedShare,
+                unidentifiedSharePercent = if (observed > 0) 100 - explainedShare else 0,
                 explainedKwh = explained,
                 unexplainedKwh = unexplained,
                 observedKwh = observed,
+                suspects = repository.appliances(state)
+                    .filter { it.confidence != com.recibozen.app.core.model.ConfidenceLevel.HIGH }
+                    .map { it.name },
             )
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), BalanceUiState())
@@ -107,12 +112,13 @@ fun BalanceScreen(
         ) {
             RzCard(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    stringResource(R.string.balance_explained_headline, uiState.explainedSharePercent),
+                    if (uiState.hasUsageData) stringResource(R.string.balance_explained_headline, uiState.explainedSharePercent)
+                    else stringResource(R.string.balance_explained_headline_pending),
                     style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 RzStackedBarRow(
-                    segments = listOf(
+                    segments = if (uiState.hasUsageData) listOf(
                         RzBarSegment(
                             weight = uiState.explainedSharePercent.toFloat(),
                             color = MaterialTheme.colorScheme.primary,
@@ -122,7 +128,7 @@ fun BalanceScreen(
                             color = MaterialTheme.colorScheme.outline,
                             striped = true,
                         ),
-                    ),
+                    ) else listOf(RzBarSegment(weight = 100f, color = MaterialTheme.colorScheme.outlineVariant)),
                     height = 14.dp,
                     modifier = Modifier.padding(top = RzSpacing.lg),
                 )
@@ -144,11 +150,11 @@ fun BalanceScreen(
                     )
                 }
                 Text(
-                    stringResource(
+                    if (uiState.hasUsageData) stringResource(
                         R.string.balance_explained_body,
                         uiState.unidentifiedSharePercent,
                         uiState.observedKwh,
-                    ),
+                    ) else stringResource(R.string.balance_explained_body_pending),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = RzSpacing.md),
@@ -179,6 +185,13 @@ fun BalanceScreen(
                         contentColor = MaterialTheme.colorScheme.onSurface,
                     )
                 }
+                if (uiState.suspects.isEmpty()) {
+                    Text(
+                        stringResource(R.string.balance_suspects_pending),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                }
             }
 
             RzCard(
@@ -197,7 +210,7 @@ fun BalanceScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = RzSpacing.sm),
                 )
-                RzCard(
+                if (uiState.hasOvernightTest) RzCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = RzSpacing.md),
@@ -221,6 +234,12 @@ fun BalanceScreen(
                         modifier = Modifier.padding(top = 2.dp),
                     )
                 }
+                else Text(
+                    stringResource(R.string.balance_overnight_no_result),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.padding(top = RzSpacing.md),
+                )
                 Text(
                     stringResource(R.string.balance_overnight_footnote),
                     style = MaterialTheme.typography.bodySmall,

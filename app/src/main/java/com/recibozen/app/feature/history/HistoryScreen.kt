@@ -51,7 +51,6 @@ import com.recibozen.app.core.model.HistoryReadingEntry
 import com.recibozen.app.core.model.HistoryUnit
 import com.recibozen.app.core.model.PastPeriodComparison
 import com.recibozen.app.core.model.ReadingMethod
-import com.recibozen.app.demo.data.DemoReciboZenData
 import com.recibozen.app.demo.repository.ReciboZenRepository
 import com.recibozen.app.navigation.Routes
 import com.recibozen.app.navigation.rzViewModel
@@ -64,15 +63,15 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 data class HistoryUiState(
-    val greetingName: String = DemoReciboZenData.USER_NAME,
-    val householdName: String = DemoReciboZenData.HOUSEHOLD_NAME,
-    val userInitial: String = DemoReciboZenData.USER_INITIAL,
-    val currentPeriod: BillPeriod = DemoReciboZenData.billHistory.last(),
-    val pastBills: List<BillPeriod> = DemoReciboZenData.billHistory.filter { !it.isProjected },
+    val greetingName: String = "",
+    val householdName: String = "",
+    val userInitial: String = "?",
+    val currentPeriod: BillPeriod? = null,
+    val pastBills: List<BillPeriod> = emptyList(),
     val historyUnit: HistoryUnit = HistoryUnit.MXN,
-    val comparison: PastPeriodComparison = DemoReciboZenData.pastPeriodComparison,
-    val readingsCountLabel: String = DemoReciboZenData.RECENT_READINGS_COUNT_LABEL,
-    val readings: List<HistoryReadingEntry> = DemoReciboZenData.recentReadings,
+    val comparison: PastPeriodComparison? = null,
+    val readingsCountLabel: String = "0 lecturas recientes",
+    val readings: List<HistoryReadingEntry> = emptyList(),
 )
 
 class HistoryViewModel(private val repository: ReciboZenRepository) : ViewModel() {
@@ -80,16 +79,14 @@ class HistoryViewModel(private val repository: ReciboZenRepository) : ViewModel(
         repository.session,
         repository.importedBillHistory,
     ) { state, importedBills ->
-            val projected = repository.billHistory(state).last { it.isProjected }
-            val pastBills = importedBills.ifEmpty {
-                repository.billHistory(state).filterNot { it.isProjected }
-            }
+            val history = repository.billHistory(state)
+            val projected = history.lastOrNull { it.isProjected }
             HistoryUiState(
                 greetingName = state.userName,
                 householdName = state.householdName,
                 userInitial = state.userName.firstOrNull()?.uppercase() ?: "?",
                 currentPeriod = projected,
-                pastBills = pastBills,
+                pastBills = importedBills,
                 historyUnit = state.historyUnit,
                 readingsCountLabel = "${state.readings.size} lecturas recientes",
                 readings = state.readings,
@@ -108,6 +105,7 @@ fun HistoryRoute(navController: NavHostController, repository: ReciboZenReposito
     HistoryScreen(
         uiState = uiState,
         onProfileClick = { navController.navigate(Routes.Profile) },
+        onHouseholdClick = { navController.navigate(Routes.Services) },
         onUnitChange = viewModel::setHistoryUnit,
         onRegisterReading = { navController.navigate(Routes.ReadingMethod) },
         onImportBill = { navController.navigate(Routes.BillImport) },
@@ -118,6 +116,7 @@ fun HistoryRoute(navController: NavHostController, repository: ReciboZenReposito
 fun HistoryScreen(
     uiState: HistoryUiState,
     onProfileClick: () -> Unit,
+    onHouseholdClick: () -> Unit,
     onUnitChange: (HistoryUnit) -> Unit,
     onRegisterReading: () -> Unit,
     onImportBill: () -> Unit,
@@ -142,10 +141,11 @@ fun HistoryScreen(
                 .padding(bottom = 96.dp),
         ) {
             RzTabHeader(
-                greeting = stringResource(R.string.history_greeting, uiState.greetingName),
-                householdName = uiState.householdName,
+                greeting = if (uiState.greetingName.isBlank()) stringResource(R.string.home_greeting_unconfigured)
+                else stringResource(R.string.history_greeting, uiState.greetingName),
+                householdName = uiState.householdName.ifBlank { stringResource(R.string.home_household_unconfigured) },
                 userInitial = uiState.userInitial,
-                onHouseholdClick = {},
+                onHouseholdClick = onHouseholdClick,
                 onProfileClick = onProfileClick,
             )
 
@@ -168,10 +168,9 @@ fun HistoryScreen(
                     modifier = Modifier.fillMaxWidth(),
                 )
 
-                CurrentPeriodProjectionCard(
-                    currentPeriod = uiState.currentPeriod,
-                    unit = uiState.historyUnit,
-                )
+                uiState.currentPeriod?.let { currentPeriod ->
+                    CurrentPeriodProjectionCard(currentPeriod = currentPeriod, unit = uiState.historyUnit)
+                }
 
                 PreviousBillsCard(
                     pastBills = uiState.pastBills,
@@ -179,7 +178,7 @@ fun HistoryScreen(
                     onUnitChange = onUnitChange,
                 )
 
-                PeriodComparisonCard(comparison = uiState.comparison)
+                uiState.comparison?.let { comparison -> PeriodComparisonCard(comparison = comparison) }
 
                 Text(
                     stringResource(R.string.history_recent_readings_title),
@@ -254,7 +253,7 @@ private fun CurrentPeriodProjectionCard(currentPeriod: BillPeriod, unit: History
         }
         StripedBar(modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.sm).height(10.dp))
         Text(
-            stringResource(R.string.history_current_period_caption, DemoReciboZenData.PERIOD_LABEL),
+            stringResource(R.string.history_current_period_caption_dynamic),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline,
             modifier = Modifier.padding(top = RzSpacing.sm),
@@ -304,6 +303,14 @@ private fun PreviousBillsCard(
             modifier = Modifier.padding(top = RzSpacing.md),
         )
 
+        if (pastBills.isEmpty()) {
+            Text(
+                stringResource(R.string.history_no_bills),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = RzSpacing.lg),
+            )
+        } else {
         val maxAmount = pastBills.maxOfOrNull { it.amountMxn } ?: 1
         val entries = pastBills.map { bill ->
             RzBarEntry(
@@ -327,6 +334,7 @@ private fun PreviousBillsCard(
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
         }
     }
 }
@@ -397,6 +405,13 @@ private fun RecentReadingsCard(readings: List<HistoryReadingEntry>) {
         modifier = Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = RzSpacing.xl, vertical = 0.dp),
     ) {
+        if (readings.isEmpty()) {
+            Text(
+                stringResource(R.string.history_no_readings),
+                modifier = Modifier.padding(vertical = RzSpacing.lg),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         readings.forEachIndexed { index, entry ->
             ReadingRow(entry)
             if (index != readings.lastIndex) {
@@ -435,6 +450,7 @@ private fun methodIcon(method: ReadingMethod): ImageVector = when (method) {
     ReadingMethod.DIAL -> RzIcons.Schedule
     ReadingMethod.MANUAL -> RzIcons.Keyboard
     ReadingMethod.PHOTO -> RzIcons.PhotoCamera
+    ReadingMethod.PDF -> RzIcons.ReceiptLong
 }
 
 @Composable
@@ -442,6 +458,7 @@ private fun methodLabel(method: ReadingMethod): String = when (method) {
     ReadingMethod.DIAL -> stringResource(R.string.history_reading_method_dial)
     ReadingMethod.MANUAL -> stringResource(R.string.history_reading_method_manual)
     ReadingMethod.PHOTO -> stringResource(R.string.history_reading_method_photo)
+    ReadingMethod.PDF -> stringResource(R.string.history_reading_method_pdf)
 }
 
 /**
@@ -466,6 +483,7 @@ private fun HistoryScreenPreview() {
         HistoryScreen(
             uiState = HistoryUiState(),
             onProfileClick = {},
+            onHouseholdClick = {},
             onUnitChange = {},
             onRegisterReading = {},
             onImportBill = {},

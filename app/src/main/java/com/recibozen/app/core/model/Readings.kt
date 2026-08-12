@@ -1,6 +1,6 @@
 package com.recibozen.app.core.model
 
-enum class ReadingMethod { DIAL, MANUAL, PHOTO }
+enum class ReadingMethod { DIAL, MANUAL, PHOTO, PDF }
 
 data class HistoryReadingEntry(
     val kwh: Int,
@@ -17,6 +17,8 @@ data class BillPeriod(
     val amountMxn: Int,
     val isProjected: Boolean = false,
     val consumptionKwh: Int = 0,
+    val periodStartEpochDay: Long? = null,
+    val periodEndEpochDay: Long? = null,
 )
 
 data class PastPeriodComparison(

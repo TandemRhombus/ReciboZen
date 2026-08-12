@@ -1,13 +1,13 @@
 package com.recibozen.app.core.model
 
 data class ElectricServiceIdentity(
-    val id: String = "legacy_service",
+    val id: String = "",
     val alias: String,
     val serviceNumber: String = "",
     val rmu: String = "",
     val meterNumber: String = "",
-    val tariffCode: String = "1C",
-    val billingCycle: String = "Bimestral",
+    val tariffCode: String = "",
+    val billingCycle: String = "",
     val isActive: Boolean = true,
 )
 

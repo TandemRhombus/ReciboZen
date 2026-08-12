@@ -52,7 +52,6 @@ import com.recibozen.app.core.designsystem.RzExtraShapes
 import com.recibozen.app.core.designsystem.RzIcons
 import com.recibozen.app.core.designsystem.RzSpacing
 import com.recibozen.app.core.designsystem.ReciboZenTheme
-import com.recibozen.app.demo.data.DemoReciboZenData
 import com.recibozen.app.demo.repository.ReciboZenRepository
 import com.recibozen.app.navigation.Routes
 import com.recibozen.app.navigation.rzViewModel
@@ -67,17 +66,18 @@ import kotlinx.coroutines.flow.stateIn
  * point into [StatesCatalogRoute] anywhere in the app, per the handoff spec.
  */
 data class ProfileUiState(
-    val userName: String = DemoReciboZenData.USER_NAME,
-    val userInitial: String = DemoReciboZenData.USER_INITIAL,
-    val householdName: String = DemoReciboZenData.HOUSEHOLD_NAME,
-    val serviceAlias: String = DemoReciboZenData.HOUSEHOLD_NAME,
+    val userName: String = "",
+    val userInitial: String = "?",
+    val householdName: String = "",
+    val serviceAlias: String = "",
     val serviceNumber: String = "",
     val rmu: String = "",
     val meterNumber: String = "",
-    val tariff: String = DemoReciboZenData.TARIFF,
-    val billingCycle: String = DemoReciboZenData.BILLING_CYCLE,
-    val location: String = DemoReciboZenData.LOCATION,
-    val goalMxn: Int = DemoReciboZenData.GOAL_MXN,
+    val tariff: String = "",
+    val billingCycle: String = "",
+    val location: String = "",
+    val goalMxn: Int = 0,
+    val activeServiceId: String = "",
 )
 
 class ProfileViewModel(private val repository: ReciboZenRepository) : ViewModel() {
@@ -95,6 +95,7 @@ class ProfileViewModel(private val repository: ReciboZenRepository) : ViewModel(
                 billingCycle = state.billingCycle,
                 location = state.location,
                 goalMxn = state.goalMxn,
+                activeServiceId = state.activeServiceId,
             )
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ProfileUiState())
@@ -102,8 +103,13 @@ class ProfileViewModel(private val repository: ReciboZenRepository) : ViewModel(
     fun update(userName: String, householdName: String, location: String, goalMxn: Int) =
         repository.updateProfile(userName, householdName, location, goalMxn)
 
-    fun updateService(alias: String, serviceNumber: String, rmu: String, meterNumber: String, tariffCode: String) =
-        repository.updateElectricService(alias, serviceNumber, rmu, meterNumber, tariffCode)
+    fun updateService(alias: String, serviceNumber: String, rmu: String, meterNumber: String, tariffCode: String) {
+        if (repository.session.value.activeServiceId.isBlank()) {
+            repository.addElectricService(alias, serviceNumber, rmu, meterNumber, tariffCode)
+        } else {
+            repository.updateElectricService(alias, serviceNumber, rmu, meterNumber, tariffCode)
+        }
+    }
 }
 
 @Composable
@@ -155,13 +161,23 @@ fun ProfileScreen(
                         Text(uiState.userInitial, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
                     }
                     Column {
-                        Text(uiState.userName, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
+                        val tariffLabel = if (uiState.tariff.isBlank()) {
+                            stringResource(R.string.profile_missing_tariff)
+                        } else uiState.tariff
+                        val cycleLabel = if (uiState.billingCycle.isBlank()) {
+                            stringResource(R.string.profile_missing_cycle)
+                        } else uiState.billingCycle.lowercase()
                         Text(
-                            text = stringResource(
+                            uiState.userName.ifBlank { stringResource(R.string.profile_unconfigured_name) },
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            text = if (uiState.householdName.isBlank()) stringResource(R.string.profile_unconfigured_subtitle) else stringResource(
                                 R.string.profile_subtitle,
                                 uiState.householdName,
-                                uiState.tariff,
-                                uiState.billingCycle.lowercase(),
+                                tariffLabel,
+                                cycleLabel,
                             ),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -191,7 +207,9 @@ fun ProfileScreen(
                 ProfileRow(
                     icon = RzIcons.Bolt,
                     label = stringResource(R.string.profile_row_service),
-                    trailing = uiState.serviceAlias,
+                    trailing = if (uiState.serviceAlias.isBlank()) {
+                        stringResource(R.string.profile_service_not_added)
+                    } else uiState.serviceAlias,
                     onClick = { showServiceDialog = true },
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -235,7 +253,7 @@ fun ProfileScreen(
         var userName by remember(uiState.userName) { mutableStateOf(uiState.userName) }
         var householdName by remember(uiState.householdName) { mutableStateOf(uiState.householdName) }
         var location by remember(uiState.location) { mutableStateOf(uiState.location) }
-        var goal by remember(uiState.goalMxn) { mutableStateOf(uiState.goalMxn.toString()) }
+        var goal by remember(uiState.goalMxn) { mutableStateOf(uiState.goalMxn.takeIf { it > 0 }?.toString().orEmpty()) }
         AlertDialog(
             onDismissRequest = { showEditDialog = false },
             title = { Text(stringResource(R.string.profile_edit_title)) },
@@ -254,9 +272,9 @@ fun ProfileScreen(
             },
             confirmButton = {
                 TextButton(
-                    enabled = userName.isNotBlank() && householdName.isNotBlank() && location.isNotBlank() && goal.toIntOrNull() != null,
+                    enabled = userName.isNotBlank() && householdName.isNotBlank() && location.isNotBlank(),
                     onClick = {
-                        onUpdateProfile(userName, householdName, location, goal.toIntOrNull() ?: uiState.goalMxn)
+                        onUpdateProfile(userName, householdName, location, goal.toIntOrNull() ?: 0)
                         showEditDialog = false
                     },
                 ) { Text(stringResource(R.string.profile_edit_save)) }
@@ -272,7 +290,7 @@ fun ProfileScreen(
         var serviceNumber by remember(uiState.serviceNumber) { mutableStateOf(uiState.serviceNumber) }
         var rmu by remember(uiState.rmu) { mutableStateOf(uiState.rmu) }
         var meterNumber by remember(uiState.meterNumber) { mutableStateOf(uiState.meterNumber) }
-        var tariffCode by remember(uiState.tariff) { mutableStateOf(TariffCatalog.find(uiState.tariff)?.code ?: "1C") }
+        var tariffCode by remember(uiState.tariff) { mutableStateOf(TariffCatalog.find(uiState.tariff)?.code.orEmpty()) }
         val serviceNumberValid = ElectricServiceValidator.isValidServiceNumber(serviceNumber)
         AlertDialog(
             onDismissRequest = { showServiceDialog = false },
@@ -341,7 +359,7 @@ fun ProfileScreen(
             },
             confirmButton = {
                 TextButton(
-                    enabled = alias.isNotBlank() && serviceNumberValid,
+                    enabled = alias.isNotBlank() && serviceNumberValid && tariffCode.isNotBlank(),
                     onClick = {
                         onUpdateService(alias, serviceNumber, rmu, meterNumber, tariffCode)
                         showServiceDialog = false

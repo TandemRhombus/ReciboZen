@@ -57,6 +57,7 @@ data class ReadingDialUiState(
     val interpretedKwh: Int = 0,
     val unsureLowDigit: Int = 0,
     val unsureHighDigit: Int = 1,
+    val faceIndices: List<Int> = listOf(0, 1, 2, 3, 4),
 ) {
     val allFacesVisited: Boolean get() = visitedFacesCount >= angles.size
 }
@@ -64,31 +65,37 @@ data class ReadingDialUiState(
 class ReadingDialViewModel(private val repository: ReciboZenRepository) : ViewModel() {
     val uiState: StateFlow<ReadingDialUiState> = repository.session
         .map { state ->
-            val selected = state.dialSelectedIndex
+            val faceIndices = if (state.meterType.contains("4")) listOf(1, 2, 3, 4) else state.dialAngles.indices.toList()
+            val selected = faceIndices.indexOf(state.dialSelectedIndex).takeIf { it >= 0 } ?: 0
+            val backingSelected = faceIndices[selected]
             // The two candidate digits bracket the *raw* (fractional) value at the
             // selected face -- deliberately not the already-carried digit from
             // MeterDialMath.digits(), per the original prototype's dudaBajaVal/dudaAltaVal.
             val rawFloor = Math.floorMod(
-                floor(MeterDialMath.rawValue(state.dialAngles[selected], state.dialDirections[selected])).toInt(),
+                floor(MeterDialMath.rawValue(state.dialAngles[backingSelected], state.dialDirections[backingSelected])).toInt(),
                 10,
             )
             ReadingDialUiState(
-                angles = state.dialAngles,
-                directions = state.dialDirections,
+                angles = faceIndices.map(state.dialAngles::get),
+                directions = faceIndices.map(state.dialDirections::get),
                 selectedIndex = selected,
-                visitedFacesCount = state.dialVisitedFaces.size,
+                visitedFacesCount = state.dialVisitedFaces.count { it in faceIndices },
                 unsure = state.dialUnsure,
                 interpretedKwh = repository.dialReading(state).valueKwh,
                 unsureLowDigit = rawFloor,
                 unsureHighDigit = (rawFloor + 1) % 10,
+                faceIndices = faceIndices,
             )
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ReadingDialUiState())
 
-    fun setSelectedIndex(index: Int) = repository.setDialSelectedIndex(index)
-    fun setAngle(index: Int, angleDegrees: Float) = repository.setDialAngle(index, angleDegrees)
+    private fun backingIndex(visibleIndex: Int): Int =
+        uiState.value.faceIndices.getOrElse(visibleIndex) { uiState.value.faceIndices.first() }
+
+    fun setSelectedIndex(index: Int) = repository.setDialSelectedIndex(backingIndex(index))
+    fun setAngle(index: Int, angleDegrees: Float) = repository.setDialAngle(backingIndex(index), angleDegrees)
     fun toggleUnsure() = repository.toggleDialUnsure()
-    fun setDigit(index: Int, digit: Int) = repository.setDialDigit(index, digit)
+    fun setDigit(index: Int, digit: Int) = repository.setDialDigit(backingIndex(index), digit)
     fun prepare() = repository.prepareReading(uiState.value.interpretedKwh, ReadingMethod.DIAL)
 }
 
@@ -152,7 +159,7 @@ fun ReadingDialScreen(
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                    stringResource(R.string.reading_dial_subtitle),
+                    stringResource(R.string.reading_dial_subtitle_dynamic, uiState.angles.size),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = RzSpacing.xs),
@@ -244,19 +251,16 @@ fun ReadingDialScreen(
                     )
                 }
                 Text(
-                    stringResource(R.string.reading_dial_interpreted_hint),
+                    stringResource(R.string.reading_dial_interpreted_hint_dynamic, uiState.angles.size),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.padding(top = RzSpacing.xs),
                 )
             }
 
-            // Design correction: gate "Guardar lectura" on all 5 faces having been
-            // visited (state.dialVisitedFaces.size >= 5), with helper copy above it
-            // while disabled -- never rely on the disabled button style alone.
             if (!uiState.allFacesVisited) {
                 Text(
-                    stringResource(R.string.reading_dial_save_helper),
+                    stringResource(R.string.reading_dial_save_helper_dynamic, uiState.angles.size),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

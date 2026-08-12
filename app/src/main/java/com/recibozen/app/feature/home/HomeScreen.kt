@@ -74,7 +74,7 @@ fun HomeRoute(navController: NavHostController, repository: ReciboZenRepository)
     HomeScreen(
         uiState = uiState,
         onProfileClick = { navController.navigate(Routes.Profile) },
-        onHouseholdClick = { },
+        onHouseholdClick = { navController.navigate(Routes.Services) },
         onToggleMinisplitAction = viewModel::onToggleMinisplitAction,
         onSeeWhyMinisplit = { navController.navigate(Routes.applianceDetail("minisplit")) },
         onViewFullAnalysis = { navController.navigate(Routes.PeriodAnalysis) },
@@ -83,6 +83,7 @@ fun HomeRoute(navController: NavHostController, repository: ReciboZenRepository)
         onViewAllAppliances = { navController.navigate(Routes.Appliances) },
         onRegisterReading = { navController.navigate(Routes.ReadingMethod) },
         onHowWeCalculate = { navController.navigate(Routes.HowWeCalculate) },
+        onImportBill = { navController.navigate(Routes.BillImport) },
     )
 }
 
@@ -99,6 +100,7 @@ fun HomeScreen(
     onViewAllAppliances: () -> Unit,
     onRegisterReading: () -> Unit,
     onHowWeCalculate: () -> Unit,
+    onImportBill: () -> Unit = {},
 ) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -126,34 +128,190 @@ fun HomeScreen(
         ) {
             item {
                 RzTabHeader(
-                    greeting = stringResource(R.string.home_greeting, uiState.userName),
-                    householdName = uiState.householdName,
+                    greeting = if (uiState.userName.isBlank()) stringResource(R.string.home_greeting_unconfigured)
+                    else stringResource(R.string.home_greeting, uiState.userName),
+                    householdName = uiState.householdName.ifBlank { stringResource(R.string.home_household_unconfigured) },
                     userInitial = uiState.userInitial,
                     onHouseholdClick = onHouseholdClick,
                     onProfileClick = onProfileClick,
                 )
             }
-            item { ProjectedBillCard(uiState) }
-            item {
-                MinisplitTipCard(
-                    uiState = uiState,
-                    onToggleMinisplitAction = onToggleMinisplitAction,
-                    onSeeWhy = onSeeWhyMinisplit,
-                )
+            when (uiState.dataMode) {
+                HomeDataMode.EMPTY -> item {
+                    MissingUsageDataCard(uiState.profileConfigured, onImportBill, onProfileClick)
+                }
+                HomeDataMode.BILL_REFERENCE -> {
+                    item { LatestRealBillCard(uiState) }
+                    if (uiState.realBillHistory.size >= 2) item { HistoricalBillsChartCard(uiState) }
+                    item { BuildProjectionCard(onRegisterReading, onViewAllAppliances) }
+                    item { ApplianceDataCard(uiState, onViewAllAppliances) }
+                    item { ConfidenceCard(uiState, onRegisterReading) }
+                    item { HowWeCalculateRow(onHowWeCalculate) }
+                }
+                HomeDataMode.PROJECTION -> {
+                    item { ProjectedBillCard(uiState) }
+                    item { PaceCard(uiState) }
+                    item { PeriodChartCard(uiState, onViewFullAnalysis) }
+                    if (uiState.realBillHistory.size >= 2) item { HistoricalBillsChartCard(uiState) }
+                    item { ApplianceDataCard(uiState, onViewAllAppliances) }
+                    item { ConfidenceCard(uiState, onRegisterReading) }
+                    item { HowWeCalculateRow(onHowWeCalculate) }
+                }
             }
-            item { PaceCard(uiState) }
-            item { PeriodChartCard(uiState, onViewFullAnalysis) }
-            item {
-                InfluenceCard(
-                    uiState = uiState,
-                    onApplianceClick = onApplianceClick,
-                    onUnidentifiedClick = onUnidentifiedClick,
-                    onViewAll = onViewAllAppliances,
-                )
-            }
-            item { ConfidenceCard(uiState, onRegisterReading) }
-            item { HowWeCalculateRow(onHowWeCalculate) }
         }
+    }
+}
+
+@Composable
+private fun MissingUsageDataCard(
+    profileConfigured: Boolean,
+    onImportBill: () -> Unit,
+    onProfileClick: () -> Unit,
+) {
+    RzCard(modifier = Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.home_empty_title), style = MaterialTheme.typography.headlineSmall)
+        Text(
+            stringResource(R.string.home_empty_body),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = RzSpacing.sm),
+        )
+        RzPrimaryButton(
+            stringResource(R.string.home_empty_import),
+            onImportBill,
+            Modifier.fillMaxWidth().padding(top = RzSpacing.lg),
+        )
+        if (!profileConfigured) {
+            RzSecondaryButton(
+                stringResource(R.string.home_empty_profile),
+                onProfileClick,
+                Modifier.fillMaxWidth().padding(top = RzSpacing.sm),
+            )
+        }
+    }
+}
+
+@Composable
+private fun LatestRealBillCard(uiState: HomeUiState) {
+    RzCard(modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.home_latest_bill_title), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            RzStatusChip(
+                text = stringResource(R.string.home_latest_bill_badge),
+                icon = RzIcons.CheckCircle,
+                containerColor = RzTheme.extendedColors.success.copy(alpha = 0.14f),
+                contentColor = RzTheme.extendedColors.success,
+            )
+        }
+        Text(
+            "$${uiState.latestBillMxn}",
+            style = MaterialTheme.typography.displayLarge,
+            modifier = Modifier.padding(top = RzSpacing.sm),
+        )
+        Text(
+            stringResource(R.string.home_latest_bill_detail, uiState.periodLabel, uiState.latestBillKwh),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            stringResource(R.string.home_latest_bill_history, uiState.importedBillCount),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.padding(top = RzSpacing.md),
+        )
+    }
+}
+
+@Composable
+private fun HistoricalBillsChartCard(uiState: HomeUiState) {
+    val bills = uiState.realBillHistory
+    val values = bills.map { it.consumptionKwh }
+    val minimum = values.minOrNull() ?: 0
+    val maximum = values.maxOrNull() ?: 1
+    val span = (maximum - minimum).coerceAtLeast(1)
+    val normalized = values.map { value -> 0.12f + ((value - minimum).toFloat() / span) * 0.76f }
+    RzCard(modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                stringResource(R.string.home_real_history_title),
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.weight(1f),
+            )
+            RzStatusChip(
+                text = stringResource(R.string.home_real_history_badge, bills.size),
+                icon = RzIcons.CheckCircle,
+                containerColor = RzTheme.extendedColors.success.copy(alpha = 0.14f),
+                contentColor = RzTheme.extendedColors.success,
+            )
+        }
+        RzLineChart(
+            series = listOf(
+                RzChartSeries(
+                    values = normalized,
+                    color = RzTheme.extendedColors.chartHistoryBar,
+                    style = ChartLineStyle.SOLID,
+                    markEnd = true,
+                ),
+            ),
+            modifier = Modifier.padding(top = RzSpacing.md),
+            height = 128.dp,
+        )
+        Row(modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.xs)) {
+            Text(bills.first().monthLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+            Box(Modifier.weight(1f))
+            Text(bills.last().monthLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+        }
+        Text(
+            stringResource(
+                R.string.home_real_history_body,
+                bills.size,
+                bills.last().consumptionKwh,
+                bills.last().amountMxn,
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = RzSpacing.sm),
+        )
+    }
+}
+
+@Composable
+private fun BuildProjectionCard(onRegisterReading: () -> Unit, onViewAllAppliances: () -> Unit) {
+    RzCard(modifier = Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.home_build_projection_title), style = MaterialTheme.typography.titleLarge)
+        Text(
+            stringResource(R.string.home_build_projection_body),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = RzSpacing.sm),
+        )
+        RzPrimaryButton(
+            stringResource(R.string.home_register_reading_button),
+            onRegisterReading,
+            Modifier.fillMaxWidth().padding(top = RzSpacing.lg),
+        )
+        RzSecondaryButton(
+            stringResource(R.string.home_view_all),
+            onViewAllAppliances,
+            Modifier.fillMaxWidth().padding(top = RzSpacing.sm),
+        )
+    }
+}
+
+@Composable
+private fun ApplianceDataCard(uiState: HomeUiState, onViewAllAppliances: () -> Unit) {
+    RzCard(modifier = Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.home_appliance_data_title), style = MaterialTheme.typography.titleLarge)
+        Text(
+            if (uiState.hasAppliances) stringResource(R.string.home_appliance_data_count, uiState.applianceCount)
+            else stringResource(R.string.home_appliance_data_empty),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = RzSpacing.sm),
+        )
+        RzSecondaryButton(
+            stringResource(R.string.home_view_all),
+            onViewAllAppliances,
+            Modifier.fillMaxWidth().padding(top = RzSpacing.lg),
+        )
     }
 }
 
@@ -200,27 +358,29 @@ private fun ProjectedBillCard(uiState: HomeUiState) {
             modifier = Modifier.padding(top = 2.dp),
         )
 
-        val statusText = if (uiState.isWithinGoal) {
-            stringResource(R.string.home_status_within_goal, "$${uiState.goalMxn}", uiState.daysRemaining)
-        } else {
-            stringResource(
-                R.string.home_status_over_goal,
-                "$${uiState.projectedMxn - uiState.goalMxn}",
-                "$${uiState.goalMxn}",
-                uiState.daysRemaining,
+        if (uiState.goalMxn > 0) {
+            val statusText = if (uiState.isWithinGoal) {
+                stringResource(R.string.home_status_within_goal, "$${uiState.goalMxn}", uiState.daysRemaining)
+            } else {
+                stringResource(
+                    R.string.home_status_over_goal,
+                    "$${uiState.projectedMxn - uiState.goalMxn}",
+                    "$${uiState.goalMxn}",
+                    uiState.daysRemaining,
+                )
+            }
+            RzInlineBanner(
+                text = statusText,
+                tone = if (uiState.isWithinGoal) RzBannerTone.SUCCESS else RzBannerTone.WARNING,
+                icon = if (uiState.isWithinGoal) RzIcons.CheckCircle else RzIcons.ErrorInfo,
+                modifier = Modifier.padding(top = RzSpacing.lg),
             )
         }
-        RzInlineBanner(
-            text = statusText,
-            tone = if (uiState.isWithinGoal) RzBannerTone.SUCCESS else RzBannerTone.WARNING,
-            icon = if (uiState.isWithinGoal) RzIcons.CheckCircle else RzIcons.ErrorInfo,
-            modifier = Modifier.padding(top = RzSpacing.lg),
-        )
 
         Row(modifier = Modifier.padding(top = RzSpacing.lg)) {
             StatColumn(
                 label = stringResource(R.string.home_stat_goal_label),
-                value = "$${uiState.goalMxn}",
+                value = uiState.goalMxn.takeIf { it > 0 }?.let { "$$it" } ?: "—",
                 modifier = Modifier.weight(1f),
             )
             VerticalDivider()
@@ -430,20 +590,25 @@ private fun PeriodChartCard(uiState: HomeUiState, onViewFullAnalysis: () -> Unit
         }
 
         RzLineChart(
-            series = homeChartSeries(),
+            series = homeChartSeries(uiState),
             modifier = Modifier.padding(top = RzSpacing.md),
             height = 120.dp,
         )
 
-        val projectedTotal = (uiState.observedTodayKwh.toDouble() / 0.703).roundToInt()
-        val overGoalKwh = (projectedTotal - 350).coerceAtLeast(0)
+        val projectedTotal = uiState.projectedKwh
+        val overGoalKwh = (projectedTotal - uiState.goalKwh).coerceAtLeast(0)
         Text(
-            stringResource(
+            if (uiState.goalKwh > 0) stringResource(
                 R.string.home_period_explanation,
                 uiState.observedTodayKwh,
                 uiState.observedDays,
                 projectedTotal,
                 overGoalKwh,
+            ) else stringResource(
+                R.string.home_period_explanation_without_goal,
+                uiState.observedTodayKwh,
+                uiState.observedDays,
+                projectedTotal,
             ),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -468,12 +633,24 @@ private fun PeriodChartCard(uiState: HomeUiState, onViewFullAnalysis: () -> Unit
  * change the shared chart component.
  */
 @Composable
-private fun homeChartSeries(): List<RzChartSeries> {
-    val observed = listOf(0.06f, 0.20f, 0.34f, 0.48f, 0.60f, 0.70f, 0.70f, 0.70f)
-    val projected = listOf(0.06f, 0.20f, 0.34f, 0.48f, 0.60f, 0.70f, 0.82f, 0.92f)
-    val goal = listOf(0f, 0.12f, 0.24f, 0.35f, 0.47f, 0.59f, 0.71f, 0.83f)
-    return listOf(
-        RzChartSeries(values = goal, color = RzTheme.extendedColors.chartGoalLine, style = ChartLineStyle.DOTTED, strokeWidth = 2.dp),
+private fun homeChartSeries(uiState: HomeUiState): List<RzChartSeries> {
+    val pointCount = 8
+    val scale = maxOf(uiState.observedTodayKwh, uiState.projectedKwh, uiState.goalKwh, 1).toFloat() * 1.08f
+    val todayFraction = if (uiState.billingDays > 0) {
+        (uiState.observedDays.toFloat() / uiState.billingDays).coerceIn(0.15f, 1f)
+    } else 1f
+    val todayIndex = ((pointCount - 1) * todayFraction).roundToInt().coerceIn(1, pointCount - 1)
+    val observed = List(pointCount) { index ->
+        uiState.observedTodayKwh / scale * (index.toFloat() / todayIndex).coerceIn(0f, 1f)
+    }
+    val projected = List(pointCount) { index ->
+        uiState.projectedKwh / scale * (index.toFloat() / (pointCount - 1))
+    }
+    val goal = List(pointCount) { index ->
+        uiState.goalKwh / scale * (index.toFloat() / (pointCount - 1))
+    }
+    return listOfNotNull(
+        if (uiState.goalKwh > 0) RzChartSeries(values = goal, color = RzTheme.extendedColors.chartGoalLine, style = ChartLineStyle.DOTTED, strokeWidth = 2.dp) else null,
         RzChartSeries(values = projected, color = RzTheme.extendedColors.chartObserved, style = ChartLineStyle.DASHED, strokeWidth = 2.dp),
         RzChartSeries(values = observed, color = RzTheme.extendedColors.chartObserved, style = ChartLineStyle.SOLID, strokeWidth = 3.dp, markEnd = true),
     )
@@ -561,17 +738,31 @@ private fun InfluenceRow(
 private fun ConfidenceCard(uiState: HomeUiState, onRegisterReading: () -> Unit) {
     RzCard(modifier = Modifier.fillMaxWidth()) {
         Text(
-            stringResource(R.string.home_confidence_title),
+            stringResource(
+                if (uiState.dataMode == HomeDataMode.BILL_REFERENCE) R.string.home_data_quality_title
+                else R.string.home_confidence_title,
+            ),
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurface,
         )
         RzConfidenceIndicator(
             level = uiState.confidenceLevel,
-            label = stringResource(R.string.home_confidence_medium_label),
+            label = if (uiState.dataMode == HomeDataMode.BILL_REFERENCE) {
+                stringResource(R.string.home_data_quality_label, uiState.previousBillsLoadedCount)
+            } else stringResource(
+                when (uiState.confidenceLevel) {
+                    com.recibozen.app.core.model.ConfidenceLevel.HIGH -> R.string.home_confidence_high_label
+                    com.recibozen.app.core.model.ConfidenceLevel.MEDIUM -> R.string.home_confidence_medium_label
+                    com.recibozen.app.core.model.ConfidenceLevel.LOW -> R.string.home_confidence_low_label
+                },
+            ),
             modifier = Modifier.padding(top = RzSpacing.md),
         )
         Text(
-            stringResource(R.string.home_confidence_explanation),
+            stringResource(
+                if (uiState.dataMode == HomeDataMode.BILL_REFERENCE) R.string.home_data_quality_explanation
+                else R.string.home_confidence_explanation,
+            ),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = RzSpacing.md),
@@ -592,7 +783,10 @@ private fun ConfidenceCard(uiState: HomeUiState, onRegisterReading: () -> Unit) 
                     text = uiState.recentReadingsCountLabel,
                 )
                 Text(
-                    stringResource(R.string.home_confidence_readings_hint),
+                    stringResource(
+                        if (uiState.dataMode == HomeDataMode.BILL_REFERENCE) R.string.home_confidence_first_live_reading_hint
+                        else R.string.home_confidence_readings_hint,
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.padding(start = 25.dp, top = 2.dp),
@@ -601,7 +795,8 @@ private fun ConfidenceCard(uiState: HomeUiState, onRegisterReading: () -> Unit) 
             ConfidenceStatusRow(
                 icon = RzIcons.RadioButtonUnchecked,
                 iconTint = MaterialTheme.colorScheme.outline,
-                text = stringResource(R.string.home_confidence_schedules_status, uiState.missingApplianceSchedules),
+                text = if (uiState.hasAppliances) stringResource(R.string.home_confidence_schedules_status, uiState.missingApplianceSchedules)
+                else stringResource(R.string.home_confidence_no_appliances),
             )
         }
         RzSecondaryButton(

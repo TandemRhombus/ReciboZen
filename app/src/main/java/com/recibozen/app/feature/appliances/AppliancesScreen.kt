@@ -55,7 +55,10 @@ data class AppliancesUiState(
     val householdName: String,
     val userInitial: String,
     val appliances: List<Appliance>,
-    val unidentifiedCostMxn: Int,
+    val unidentifiedCostMxn: Int?,
+    val unidentifiedKwh: Int?,
+    val billingDays: Int,
+    val referencePeriodLabel: String,
     val selectedFilterIndex: Int,
 )
 
@@ -65,17 +68,27 @@ class AppliancesViewModel(private val repository: ReciboZenRepository) : ViewMod
 
     val uiState: StateFlow<AppliancesUiState> = combine(
         repository.session,
+        repository.importedBillHistory,
         selectedFilterIndex,
-    ) { session, filterIndex ->
-        session.toUiState(filterIndex)
+    ) { session, importedBills, filterIndex ->
+        session.toUiState(filterIndex, importedBills.lastOrNull()?.monthLabel.orEmpty())
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = repository.session.value.toUiState(selectedFilterIndex.value),
+        initialValue = repository.session.value.toUiState(
+            selectedFilterIndex.value,
+            repository.importedBillHistory.value.lastOrNull()?.monthLabel.orEmpty(),
+        ),
     )
 
-    private fun ReciboZenSessionState.toUiState(filterIndex: Int): AppliancesUiState {
+    private fun ReciboZenSessionState.toUiState(filterIndex: Int, referencePeriodLabel: String): AppliancesUiState {
         val all = repository.appliances(this)
+        val energy = repository.energySummary(this)
+        val explainedKwh = all.sumOf { it.kwh }.coerceAtMost(energy.observedKwh)
+        val unidentifiedKwh = if (energy.hasUsageEvidence) (energy.observedKwh - explainedKwh).coerceAtLeast(0) else null
+        val unidentifiedCost = unidentifiedKwh?.let { missing ->
+            if (energy.observedKwh > 0) (energy.costToDateMxn * missing.toDouble() / energy.observedKwh).toInt() else 0
+        }
         val visible = when (filterIndex) {
             1 -> all.sortedWith(compareBy(Appliance::room, Appliance::name))
             2 -> all.filter { it.standbyCostMxn != null }.sortedByDescending { it.standbyCostMxn }
@@ -87,7 +100,11 @@ class AppliancesViewModel(private val repository: ReciboZenRepository) : ViewMod
         householdName = householdName,
         userInitial = userName.firstOrNull()?.uppercase() ?: "?",
         appliances = visible,
-        unidentifiedCostMxn = DemoReciboZenData.UNIDENTIFIED_COST_MXN,
+        unidentifiedCostMxn = unidentifiedCost,
+        unidentifiedKwh = unidentifiedKwh,
+        billingDays = energy.billingDays.takeIf { it > 0 }
+            ?: if (billingCycle.contains("bi", ignoreCase = true)) 61 else 30,
+        referencePeriodLabel = referencePeriodLabel,
         selectedFilterIndex = filterIndex,
     )
     }
@@ -105,6 +122,7 @@ fun AppliancesRoute(navController: NavHostController, repository: ReciboZenRepos
     AppliancesScreen(
         uiState = uiState,
         onProfileClick = { navController.navigate(Routes.Profile) },
+        onHouseholdClick = { navController.navigate(Routes.Services) },
         onFilterSelected = viewModel::onFilterSelected,
         onApplianceClick = { id -> navController.navigate(Routes.applianceDetail(id)) },
         onEditUsageClick = { id -> navController.navigate(Routes.applianceUsage(id)) },
@@ -124,6 +142,7 @@ fun AppliancesScreen(
     onUnidentifiedClick: () -> Unit,
     onAddApplianceClick: () -> Unit,
     onSimulateClick: () -> Unit,
+    onHouseholdClick: () -> Unit = {},
 ) {
     val filterLabels = listOf(
         stringResource(R.string.appliances_filter_top_spend),
@@ -143,7 +162,7 @@ fun AppliancesScreen(
             greeting = stringResource(R.string.appliances_greeting, uiState.greetingUserName),
             householdName = uiState.householdName,
             userInitial = uiState.userInitial,
-            onHouseholdClick = {},
+            onHouseholdClick = onHouseholdClick,
             onProfileClick = onProfileClick,
         )
 
@@ -164,6 +183,12 @@ fun AppliancesScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Text(
+                    stringResource(R.string.appliances_period_context, uiState.billingDays),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.padding(top = RzSpacing.xs),
+                )
             }
 
             Row(
@@ -179,9 +204,22 @@ fun AppliancesScreen(
                 }
             }
 
+            if (uiState.appliances.isEmpty()) {
+                RzCard(modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.appliances_real_empty_title), style = MaterialTheme.typography.titleLarge)
+                    Text(
+                        stringResource(R.string.appliances_real_empty_body),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = RzSpacing.sm),
+                    )
+                }
+            }
+
             uiState.appliances.forEach { appliance ->
                 ApplianceCard(
                     appliance = appliance,
+                    billingDays = uiState.billingDays,
                     onClick = { onApplianceClick(appliance.id) },
                     onEditUsageClick = { onEditUsageClick(appliance.id) },
                 )
@@ -200,13 +238,21 @@ fun AppliancesScreen(
                         modifier = Modifier.weight(1f),
                     )
                     Text(
-                        stringResource(R.string.appliances_cost_format, uiState.unidentifiedCostMxn),
+                        uiState.unidentifiedCostMxn?.let { cost ->
+                            stringResource(R.string.appliances_unidentified_value, cost, uiState.unidentifiedKwh ?: 0)
+                        } ?: stringResource(R.string.appliances_unidentified_pending),
                         style = MaterialTheme.typography.titleLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 Text(
-                    stringResource(R.string.appliances_unidentified_description),
+                    if (uiState.unidentifiedKwh != null) {
+                        stringResource(
+                            R.string.appliances_unidentified_description_dynamic,
+                            uiState.unidentifiedKwh,
+                            uiState.referencePeriodLabel.ifBlank { stringResource(R.string.appliances_current_reference) },
+                        )
+                    } else stringResource(R.string.appliances_unidentified_description_pending),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.padding(top = RzSpacing.xs),
@@ -238,6 +284,7 @@ fun AppliancesScreen(
 @Composable
 private fun ApplianceCard(
     appliance: Appliance,
+    billingDays: Int,
     onClick: () -> Unit,
     onEditUsageClick: () -> Unit,
 ) {
@@ -251,7 +298,8 @@ private fun ApplianceCard(
                     modifier = Modifier.weight(1f),
                 )
                 Text(
-                    stringResource(R.string.appliances_cost_format, appliance.costMxn),
+                    if (appliance.costMxn > 0) stringResource(R.string.appliances_cost_period, appliance.costMxn, billingDays)
+                    else stringResource(R.string.appliances_cost_pending),
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
@@ -264,9 +312,10 @@ private fun ApplianceCard(
                         appliance.kwh,
                         appliance.sharePercent,
                         appliance.standbyCostMxn,
+                        billingDays,
                     )
                 } else {
-                    stringResource(R.string.appliances_card_subtitle, appliance.room, appliance.kwh, appliance.sharePercent)
+                    stringResource(R.string.appliances_card_subtitle, appliance.room, appliance.kwh, billingDays, appliance.sharePercent)
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
@@ -374,6 +423,9 @@ private fun AppliancesScreenPreview() {
                 userInitial = DemoReciboZenData.USER_INITIAL,
                 appliances = DemoReciboZenData.appliances,
                 unidentifiedCostMxn = DemoReciboZenData.UNIDENTIFIED_COST_MXN,
+                unidentifiedKwh = DemoReciboZenData.UNEXPLAINED_KWH,
+                billingDays = 61,
+                referencePeriodLabel = DemoReciboZenData.PERIOD_LABEL,
                 selectedFilterIndex = 0,
             ),
             onProfileClick = {},

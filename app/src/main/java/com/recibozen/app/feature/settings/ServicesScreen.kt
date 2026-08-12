@@ -107,6 +107,17 @@ fun ServicesScreen(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (uiState.services.isEmpty()) {
+                RzCard(modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.services_empty_title), style = MaterialTheme.typography.titleLarge)
+                    Text(
+                        stringResource(R.string.services_empty_body),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = RzSpacing.sm),
+                    )
+                }
+            }
             uiState.services.forEach { service ->
                 RzCard(
                     modifier = Modifier
@@ -174,7 +185,7 @@ private fun AddServiceDialog(
     var serviceNumber by remember { mutableStateOf("") }
     var rmu by remember { mutableStateOf("") }
     var meter by remember { mutableStateOf("") }
-    var tariff by remember { mutableStateOf("1C") }
+    var tariff by remember { mutableStateOf("") }
     val numberValid = ElectricServiceValidator.isValidServiceNumber(serviceNumber)
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -203,7 +214,7 @@ private fun AddServiceDialog(
         },
         confirmButton = {
             TextButton(
-                enabled = alias.isNotBlank() && numberValid,
+                enabled = alias.isNotBlank() && numberValid && tariff.isNotBlank(),
                 onClick = { onConfirm(alias, serviceNumber, rmu, meter, tariff) },
             ) { Text(stringResource(R.string.services_add_confirm)) }
         },

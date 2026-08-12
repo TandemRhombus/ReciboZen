@@ -86,7 +86,7 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
                 entitlementTier = trustedTier,
                 isHydrated = true,
             )
-            seedLegacyServiceIfNeeded(hydrated)
+            migrateLegacyServiceIfNeeded()
             mutableSession.value = hydrated
 
             launch {
@@ -105,6 +105,19 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
                         )
                     }
                     mutableElectricServices.value = services
+                    if (services.isEmpty() && mutableSession.value.activeServiceId.isNotBlank()) {
+                        mutableSession.update {
+                            it.copy(
+                                activeServiceId = "",
+                                serviceAlias = "",
+                                serviceNumber = "",
+                                rmu = "",
+                                meterNumber = "",
+                                tariff = "",
+                                billingCycle = "",
+                            )
+                        }
+                    }
                     val selected = services.firstOrNull { it.id == mutableSession.value.activeServiceId }
                         ?: services.firstOrNull()
                     selected?.let { selectElectricService(it.id) }
@@ -125,6 +138,8 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
                                     monthLabel = periodLabel(bill.periodStartEpochDay, bill.periodEndEpochDay),
                                     amountMxn = (bill.amountMxnMinor / 100.0).roundToInt(),
                                     consumptionKwh = bill.consumptionKwh,
+                                    periodStartEpochDay = bill.periodStartEpochDay,
+                                    periodEndEpochDay = bill.periodEndEpochDay,
                                 )
                             }
                             (summaries.associate { summary ->
@@ -132,6 +147,8 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
                                     monthLabel = periodLabel(summary.periodStartEpochDay, summary.periodEndEpochDay),
                                     amountMxn = (summary.amountMxnMinor / 100.0).roundToInt(),
                                     consumptionKwh = summary.consumptionKwh,
+                                    periodStartEpochDay = summary.periodStartEpochDay,
+                                    periodEndEpochDay = summary.periodEndEpochDay,
                                 )
                             } + detailedPeriods)
                                 .toList()
@@ -155,8 +172,20 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
     override fun billHistory(state: ReciboZenSessionState): List<BillPeriod> {
         val imported = importedBillHistory.value
         if (imported.isEmpty()) return super.billHistory(state)
-        val projection = super.billHistory(state).last { it.isProjected }
-        return imported + projection
+        val latestEndMillis = imported.lastOrNull()?.periodEndEpochDay?.times(MILLIS_PER_DAY)
+        val hasReadingAfterLatestBill = latestEndMillis != null && state.readings.any { reading ->
+            reading.method != ReadingMethod.PDF && (reading.timestampEpochMillis ?: Long.MIN_VALUE) > latestEndMillis
+        }
+        val projection = if (hasReadingAfterLatestBill) super.billHistory(state).lastOrNull { it.isProjected } else null
+        return imported + listOfNotNull(projection)
+    }
+
+    override fun updateProfile(userName: String, householdName: String, location: String, goalMxn: Int) {
+        super.updateProfile(userName, householdName, location, goalMxn)
+        val state = mutableSession.value
+        if (state.householdName.isNotBlank() || state.location.isNotBlank()) {
+            scope.launch { persistHousehold(state) }
+        }
     }
 
     override fun updateElectricService(
@@ -191,6 +220,7 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
         val service = when {
             existingMatch != null -> existingMatch
             activeCurrent != null && activeCurrent.serviceNumber == null && activeCurrent.rmu == null -> activeCurrent.copy(
+                displayAlias = serviceAliasForBill(activeCurrent.displayAlias, bill.serviceNumber),
                 serviceNumber = bill.serviceNumber,
                 rmu = bill.rmu,
                 tariffCode = bill.tariffCode,
@@ -221,6 +251,7 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
         val billId = UUID.randomUUID().toString()
         return runCatching {
             database.withTransaction {
+                dao.upsertHousehold(householdEntity(mutableSession.value))
                 dao.upsertService(service)
                 val existingMeter = dao.meter(service.id, bill.meterNumber)
                 dao.upsertMeter(
@@ -295,6 +326,25 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
                 )
             }
             mutableSession.update {
+                val pdfReadings = listOf(
+                    HistoryReadingEntry(
+                        kwh = bill.currentReadingKwh,
+                        dateLabel = "Recibo · ${bill.periodEnd}",
+                        method = ReadingMethod.PDF,
+                        note = "Lectura final extraída del PDF",
+                        timestampEpochMillis = bill.periodEnd.toEpochDay() * MILLIS_PER_DAY,
+                    ),
+                    HistoryReadingEntry(
+                        kwh = bill.previousReadingKwh,
+                        dateLabel = "Recibo · ${bill.periodStart}",
+                        method = ReadingMethod.PDF,
+                        note = "Lectura inicial extraída del PDF",
+                        timestampEpochMillis = bill.periodStart.toEpochDay() * MILLIS_PER_DAY,
+                    ),
+                )
+                val mergedReadings = (it.readings + pdfReadings)
+                    .distinctBy { reading -> reading.kwh to reading.timestampEpochMillis }
+                    .sortedByDescending { reading -> reading.timestampEpochMillis ?: Long.MIN_VALUE }
                 it.copy(
                     activeServiceId = service.id,
                     serviceAlias = service.displayAlias,
@@ -303,9 +353,15 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
                     meterNumber = bill.meterNumber,
                     tariff = bill.tariffCode,
                     billingCycle = service.billingCycle,
+                    lastConfirmedReadingKwh = maxOf(it.lastConfirmedReadingKwh, bill.currentReadingKwh),
+                    readings = mergedReadings,
                 )
             }
-            BillImportResult(accepted = true, serviceId = service.id)
+            BillImportResult(
+                accepted = true,
+                serviceId = service.id,
+                message = "Se guardó el recibo y ${bill.history.size} periodos anteriores.",
+            )
         }.getOrElse { error ->
             BillImportResult(accepted = false, message = error.message ?: "No se pudo guardar el recibo.")
         }
@@ -315,6 +371,7 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
         val service = electricServices.value.firstOrNull { it.id == serviceId } ?: return
         scope.launch {
             val existing = dao.service(service.id)
+            dao.upsertHousehold(householdEntity(mutableSession.value))
             dao.upsertService(
                 ElectricServiceEntity(
                     id = service.id,
@@ -340,42 +397,37 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
         }
     }
 
-    private suspend fun seedLegacyServiceIfNeeded(state: ReciboZenSessionState) {
-        if (dao.serviceCount() > 0) return
-        val now = System.currentTimeMillis()
-        dao.upsertHousehold(
-            HouseholdEntity(
-                id = LEGACY_HOUSEHOLD_ID,
-                displayName = state.householdName,
-                city = state.location,
-                createdAtEpochMillis = now,
-            ),
-        )
-        dao.upsertService(
-            ElectricServiceEntity(
-                id = state.activeServiceId,
-                householdId = LEGACY_HOUSEHOLD_ID,
-                displayAlias = state.serviceAlias,
-                serviceNumber = state.serviceNumber.ifBlank { null },
-                rmu = state.rmu.ifBlank { null },
-                tariffCode = com.recibozen.app.core.calculation.TariffCatalog.find(state.tariff)?.code ?: "1C",
-                billingCycle = state.billingCycle,
-                createdAtEpochMillis = now,
-            ),
-        )
-        if (state.meterNumber.isNotBlank()) {
-            dao.upsertMeter(
-                MeterEntity(
-                    id = UUID.randomUUID().toString(),
-                    electricServiceId = state.activeServiceId,
-                    meterNumber = state.meterNumber,
-                ),
-            )
+    private suspend fun migrateLegacyServiceIfNeeded() {
+        val legacy = dao.service(LEGACY_SERVICE_ID) ?: return
+        val billCount = dao.billCountForService(legacy.id)
+        if (billCount == 0 && legacy.serviceNumber.isNullOrBlank() && legacy.rmu.isNullOrBlank()) {
+            dao.deleteService(legacy.id)
+            return
+        }
+        if (legacy.displayAlias == DemoReciboZenData.HOUSEHOLD_NAME && !legacy.serviceNumber.isNullOrBlank()) {
+            dao.upsertService(legacy.copy(displayAlias = serviceAliasForBill(legacy.displayAlias, legacy.serviceNumber)))
         }
     }
 
+    private suspend fun persistHousehold(state: ReciboZenSessionState) {
+        dao.upsertHousehold(householdEntity(state))
+    }
+
+    private fun householdEntity(state: ReciboZenSessionState) = HouseholdEntity(
+        id = LEGACY_HOUSEHOLD_ID,
+        displayName = state.householdName.ifBlank { "Mi hogar" },
+        city = state.location,
+        createdAtEpochMillis = System.currentTimeMillis(),
+    )
+
+    private fun serviceAliasForBill(currentAlias: String, serviceNumber: String): String =
+        currentAlias.takeUnless { it.isBlank() || it == DemoReciboZenData.HOUSEHOLD_NAME }
+            ?: "Servicio ${serviceNumber.takeLast(4)}"
+
     private companion object {
         const val LEGACY_HOUSEHOLD_ID = "legacy_household"
+        const val LEGACY_SERVICE_ID = "legacy_service"
+        const val MILLIS_PER_DAY = 86_400_000L
 
         fun periodLabel(startEpochDay: Long, endEpochDay: Long): String {
             val start = LocalDate.ofEpochDay(startEpochDay)
@@ -388,6 +440,7 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
 
 internal object SessionJsonCodec {
     fun encode(state: ReciboZenSessionState): String = JSONObject().apply {
+        put("schemaVersion", CURRENT_SCHEMA_VERSION)
         put("onboardingCompleted", state.onboardingCompleted)
         put("themeMode", state.themeMode.name)
         put("userName", state.userName)
@@ -453,31 +506,52 @@ internal object SessionJsonCodec {
         return runCatching {
             val json = JSONObject(raw)
             val defaults = ReciboZenSessionState()
-            val hours = json.optJSONObject("applianceHours").toIntMap(defaults.applianceHoursPerWeek)
+            val schemaVersion = json.optInt("schemaVersion", 1)
+            val migrateFixtureState = schemaVersion < CURRENT_SCHEMA_VERSION
+            val serviceNumber = json.optString("serviceNumber", defaults.serviceNumber)
+            val hours = if (migrateFixtureState) emptyMap() else {
+                json.optJSONObject("applianceHours").toIntMap(defaults.applianceHoursPerWeek)
+            }
             val statuses = json.optJSONObject("planStatuses")
             val readingsJson = json.optJSONArray("readings")
+            val decodedReadings = readingsJson.toReadings(defaults.readings).filterNot { reading ->
+                migrateFixtureState && reading.timestampEpochMillis == null
+            }
+            fun fixtureOrEmpty(key: String, fixture: String): String {
+                val value = json.optString(key)
+                return if (migrateFixtureState && value == fixture) "" else value
+            }
             defaults.copy(
-                onboardingCompleted = json.optBoolean("onboardingCompleted", false),
+                // Version 1 never collected a real profile and silently injected
+                // design fixtures. Run the honest onboarding once after migration.
+                onboardingCompleted = if (migrateFixtureState) false else json.optBoolean("onboardingCompleted", false),
                 themeMode = enumValueOr(json.optString("themeMode"), defaults.themeMode),
-                userName = json.optString("userName", defaults.userName),
-                householdName = json.optString("householdName", defaults.householdName),
-                serviceAlias = json.optString("serviceAlias", defaults.serviceAlias),
-                serviceNumber = json.optString("serviceNumber", defaults.serviceNumber),
+                userName = fixtureOrEmpty("userName", DemoReciboZenData.USER_NAME),
+                householdName = fixtureOrEmpty("householdName", DemoReciboZenData.HOUSEHOLD_NAME),
+                serviceAlias = fixtureOrEmpty("serviceAlias", DemoReciboZenData.HOUSEHOLD_NAME)
+                    .ifBlank { serviceNumber.takeIf(String::isNotBlank)?.let { "Servicio ${it.takeLast(4)}" }.orEmpty() },
+                serviceNumber = serviceNumber,
                 rmu = json.optString("rmu", defaults.rmu),
                 meterNumber = json.optString("meterNumber", defaults.meterNumber),
                 activeServiceId = json.optString("activeServiceId", defaults.activeServiceId),
                 // Premium is intentionally never restored from mutable local JSON.
                 // Only a future server-verified entitlement authority may set it.
                 entitlementTier = EntitlementTier.FREE,
-                location = json.optString("location", defaults.location),
-                tariff = json.optString("tariff", defaults.tariff),
-                billingCycle = json.optString("billingCycle", defaults.billingCycle),
-                goalMxn = json.optInt("goalMxn", defaults.goalMxn).coerceAtLeast(1),
-                meterType = json.optString("meterType", defaults.meterType),
+                location = fixtureOrEmpty("location", DemoReciboZenData.LOCATION),
+                tariff = json.optString("tariff", defaults.tariff).let {
+                    if (migrateFixtureState && serviceNumber.isBlank() && it == DemoReciboZenData.TARIFF) "" else it
+                },
+                billingCycle = json.optString("billingCycle", defaults.billingCycle).let {
+                    if (migrateFixtureState && serviceNumber.isBlank() && it == DemoReciboZenData.BILLING_CYCLE) "" else it
+                },
+                goalMxn = json.optInt("goalMxn", defaults.goalMxn).let {
+                    if (migrateFixtureState && it == DemoReciboZenData.GOAL_MXN) 0 else it.coerceAtLeast(0)
+                },
+                meterType = fixtureOrEmpty("meterType", DemoReciboZenData.METER_TYPE_SELECTED),
                 applianceHoursPerWeek = hours,
                 customAppliances = json.optJSONArray("customAppliances").toAppliances(),
                 savedSimulatorScenario = json.optBoolean("savedSimulatorScenario", false),
-                planActions = DemoReciboZenData.planActions.map { action ->
+                planActions = defaults.planActions.map { action ->
                     action.copy(status = enumValueOr(statuses?.optString(action.id), action.status))
                 },
                 dialAngles = json.optJSONArray("dialAngles").toFloatList(defaults.dialAngles),
@@ -487,9 +561,9 @@ internal object SessionJsonCodec {
                 solarScenarioIndex = json.optInt("solarScenarioIndex", defaults.solarScenarioIndex)
                     .coerceIn(DemoReciboZenData.solarScenarios.indices),
                 historyUnit = enumValueOr(json.optString("historyUnit"), defaults.historyUnit),
-                onboardingStep = json.optInt("onboardingStep", defaults.onboardingStep).coerceIn(0, 3),
-                lastConfirmedReadingKwh = json.optInt("lastConfirmedReadingKwh", defaults.lastConfirmedReadingKwh),
-                readings = readingsJson.toReadings(defaults.readings),
+                onboardingStep = if (migrateFixtureState) 0 else json.optInt("onboardingStep", defaults.onboardingStep).coerceIn(0, 3),
+                lastConfirmedReadingKwh = decodedReadings.firstOrNull()?.kwh ?: 0,
+                readings = decodedReadings,
                 manualReadingDigits = json.optJSONArray("manualReadingDigits").toIntList(defaults.manualReadingDigits),
                 pendingReadingKwh = json.optNullableInt("pendingReadingKwh"),
                 pendingReadingMethod = json.optNullableString("pendingReadingMethod")
@@ -497,6 +571,8 @@ internal object SessionJsonCodec {
             )
         }.getOrElse { ReciboZenSessionState() }
     }
+
+    private const val CURRENT_SCHEMA_VERSION = 2
 
     private inline fun <reified T : Enum<T>> enumValueOr(raw: String?, fallback: T): T =
         enumValues<T>().firstOrNull { it.name == raw?.uppercase(Locale.ROOT) } ?: fallback
