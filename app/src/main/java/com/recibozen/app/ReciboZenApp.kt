@@ -1,6 +1,7 @@
 package com.recibozen.app
 
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.foundation.layout.Box
@@ -42,6 +43,7 @@ fun ReciboZenApp(repository: ReciboZenRepository? = null) {
 
         Scaffold(
             modifier = Modifier.fillMaxSize(),
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
             bottomBar = {
                 if (isBottomTabRoute(currentRoute)) {
                     RzBottomNavBar(navController)

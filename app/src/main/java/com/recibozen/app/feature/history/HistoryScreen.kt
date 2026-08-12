@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,6 +25,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -35,12 +40,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import com.recibozen.app.R
-import com.recibozen.app.core.components.RzBarChart
 import com.recibozen.app.core.components.RzBarEntry
+import com.recibozen.app.core.components.RzScrollableBarChart
 import com.recibozen.app.core.components.RzCard
 import com.recibozen.app.core.components.RzSegmentedTabs
 import com.recibozen.app.core.components.RzSecondaryButton
 import com.recibozen.app.core.components.RzTabHeader
+import com.recibozen.app.core.components.rzTimeGreeting
 import com.recibozen.app.core.designsystem.ReciboZenTheme
 import com.recibozen.app.core.designsystem.RzExtraShapes
 import com.recibozen.app.core.designsystem.RzIcons
@@ -122,6 +128,8 @@ fun HistoryScreen(
     onImportBill: () -> Unit,
 ) {
     Scaffold(
+        modifier = Modifier.fillMaxSize().statusBarsPadding(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = onRegisterReading,
@@ -136,13 +144,10 @@ fun HistoryScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-                .verticalScroll(rememberScrollState())
-                .padding(bottom = 96.dp),
+                .padding(innerPadding),
         ) {
             RzTabHeader(
-                greeting = if (uiState.greetingName.isBlank()) stringResource(R.string.home_greeting_unconfigured)
-                else stringResource(R.string.history_greeting, uiState.greetingName),
+                greeting = rzTimeGreeting(uiState.greetingName),
                 householdName = uiState.householdName.ifBlank { stringResource(R.string.home_household_unconfigured) },
                 userInitial = uiState.userInitial,
                 onHouseholdClick = onHouseholdClick,
@@ -151,9 +156,11 @@ fun HistoryScreen(
 
             Column(
                 modifier = Modifier
+                    .weight(1f)
                     .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
                     .padding(horizontal = RzSpacing.screenHorizontal)
-                    .padding(bottom = RzSpacing.xxl),
+                    .padding(bottom = 96.dp),
                 verticalArrangement = Arrangement.spacedBy(RzSpacing.md),
             ) {
                 Text(
@@ -204,8 +211,6 @@ fun HistoryScreen(
                     color = MaterialTheme.colorScheme.outline,
                 )
 
-                // Room for the FAB not to overlap the last row.
-                Spacer(modifier = Modifier.height(72.dp))
             }
         }
     }
@@ -287,6 +292,7 @@ private fun PreviousBillsCard(
     unit: HistoryUnit,
     onUnitChange: (HistoryUnit) -> Unit,
 ) {
+    var selectedIndex by remember(pastBills.size) { mutableIntStateOf((pastBills.lastIndex).coerceAtLeast(0)) }
     RzCard(modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -321,7 +327,32 @@ private fun PreviousBillsCard(
                 color = RzTheme.extendedColors.chartHistoryBar,
             )
         }
-        RzBarChart(entries = entries, modifier = Modifier.padding(top = RzSpacing.lg))
+        RzScrollableBarChart(
+            entries = entries,
+            selectedIndex = selectedIndex.coerceIn(0, entries.lastIndex),
+            onSelected = { selectedIndex = it },
+            modifier = Modifier.padding(top = RzSpacing.lg),
+        )
+
+        pastBills.getOrNull(selectedIndex)?.let { selected ->
+            Text(
+                stringResource(
+                    R.string.chart_selected_bill,
+                    selected.monthLabel,
+                    selected.consumptionKwh,
+                    selected.amountMxn,
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = RzSpacing.sm),
+            )
+        }
+        Text(
+            stringResource(R.string.chart_swipe_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.padding(top = RzSpacing.xs),
+        )
 
         Row(
             verticalAlignment = Alignment.CenterVertically,

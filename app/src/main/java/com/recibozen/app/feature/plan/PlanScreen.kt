@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -38,6 +39,7 @@ import com.recibozen.app.core.components.RzPrimaryButton
 import com.recibozen.app.core.components.RzSecondaryButton
 import com.recibozen.app.core.components.RzStatusChip
 import com.recibozen.app.core.components.RzTabHeader
+import com.recibozen.app.core.components.rzTimeGreeting
 import com.recibozen.app.core.designsystem.ReciboZenTheme
 import com.recibozen.app.core.designsystem.RzIcons
 import com.recibozen.app.core.designsystem.RzSpacing
@@ -62,7 +64,7 @@ import kotlinx.coroutines.flow.stateIn
  * actions (suggestions, tracked, verified) and 3 link-out cards.
  */
 data class PlanUiState(
-    val greeting: String = "",
+    val userName: String = "",
     val householdName: String = "",
     val userInitial: String = "",
     val hasProjection: Boolean = false,
@@ -91,7 +93,7 @@ class PlanViewModel(private val repository: ReciboZenRepository) : ViewModel() {
         val projection = repository.billProjection(state)
         val energy = repository.energySummary(state)
         return PlanUiState(
-            greeting = "Buenas tardes, ${state.userName}",
+            userName = state.userName,
             householdName = state.householdName,
             userInitial = state.userName.firstOrNull()?.uppercase() ?: "?",
             hasProjection = projection.hasUsageEvidence && hasLiveReading,
@@ -142,18 +144,20 @@ fun PlanScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState()),
+            .statusBarsPadding(),
     ) {
         RzTabHeader(
-            greeting = uiState.greeting,
-            householdName = uiState.householdName,
+            greeting = rzTimeGreeting(uiState.userName),
+            householdName = uiState.householdName.ifBlank { stringResource(R.string.home_household_unconfigured) },
             userInitial = uiState.userInitial,
             onHouseholdClick = onHouseholdClick,
             onProfileClick = onProfileClick,
         )
         Column(
             modifier = Modifier
+                .weight(1f)
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = RzSpacing.screenHorizontal)
                 .padding(bottom = RzSpacing.xxl),
             verticalArrangement = Arrangement.spacedBy(RzSpacing.lg),
@@ -518,7 +522,7 @@ private fun PlanScreenPreview() {
     ReciboZenTheme {
         PlanScreen(
             uiState = PlanUiState(
-                greeting = "Buenas tardes, Emi",
+                userName = "Emi",
                 householdName = "Casa",
                 userInitial = "E",
                 projectedMxn = 846,

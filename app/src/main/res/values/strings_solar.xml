@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="solar_chart_selected">%1$s · consumo %2$d%% · producción %3$d%% respecto al mes más alto</string>
+    <string name="solar_chart_tap_hint">Toca un par de barras para identificar el mes y comparar sus niveles.</string>
     <!-- ═══════ Preestudio solar ═══════ -->
     <string name="solar_title">Preestudio solar</string>
     <string name="solar_eyebrow">PREESTUDIO ORIENTATIVO</string>

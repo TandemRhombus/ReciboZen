@@ -1,6 +1,7 @@
 package com.recibozen.app
 
 import com.recibozen.app.core.components.MeterDialMath
+import com.recibozen.app.core.components.greetingResourceForHour
 import com.recibozen.app.core.model.Appliance
 import com.recibozen.app.core.model.BillPeriod
 import com.recibozen.app.core.model.ConfidenceLevel
@@ -16,6 +17,17 @@ class DynamicConsumptionTest {
         fun setBills(bills: List<BillPeriod>) {
             mutableImportedBillHistory.value = bills
         }
+    }
+
+    @Test
+    fun greetingUsesThePhoneHourBoundaries() {
+        assertEquals(R.string.greeting_evening, greetingResourceForHour(4))
+        assertEquals(R.string.greeting_morning, greetingResourceForHour(5))
+        assertEquals(R.string.greeting_morning, greetingResourceForHour(11))
+        assertEquals(R.string.greeting_afternoon, greetingResourceForHour(12))
+        assertEquals(R.string.greeting_afternoon, greetingResourceForHour(18))
+        assertEquals(R.string.greeting_evening, greetingResourceForHour(19))
+        assertEquals(R.string.greeting_evening, greetingResourceForHour(23))
     }
 
     @Test

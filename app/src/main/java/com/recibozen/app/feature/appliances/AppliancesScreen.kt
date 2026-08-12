@@ -5,8 +5,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.verticalScroll
@@ -31,6 +33,7 @@ import com.recibozen.app.core.components.RzPrimaryButton
 import com.recibozen.app.core.components.RzSecondaryButton
 import com.recibozen.app.core.components.RzStatusChip
 import com.recibozen.app.core.components.RzTabHeader
+import com.recibozen.app.core.components.rzTimeGreeting
 import com.recibozen.app.core.designsystem.RzIcons
 import com.recibozen.app.core.designsystem.RzSpacing
 import com.recibozen.app.core.designsystem.RzTheme
@@ -153,14 +156,12 @@ fun AppliancesScreen(
 
     Column(
         modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
-            .padding(bottom = RzSpacing.xxl),
-        verticalArrangement = Arrangement.spacedBy(RzSpacing.lg),
+            .fillMaxSize()
+            .statusBarsPadding(),
     ) {
         RzTabHeader(
-            greeting = stringResource(R.string.appliances_greeting, uiState.greetingUserName),
-            householdName = uiState.householdName,
+            greeting = rzTimeGreeting(uiState.greetingUserName),
+            householdName = uiState.householdName.ifBlank { stringResource(R.string.home_household_unconfigured) },
             userInitial = uiState.userInitial,
             onHouseholdClick = onHouseholdClick,
             onProfileClick = onProfileClick,
@@ -168,8 +169,11 @@ fun AppliancesScreen(
 
         Column(
             modifier = Modifier
+                .weight(1f)
                 .fillMaxWidth()
-                .padding(horizontal = RzSpacing.screenHorizontal),
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = RzSpacing.screenHorizontal)
+                .padding(bottom = RzSpacing.xxl),
             verticalArrangement = Arrangement.spacedBy(RzSpacing.lg),
         ) {
             Column {

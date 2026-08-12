@@ -18,6 +18,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -121,6 +124,9 @@ fun SolarScreen(
     modifier: Modifier = Modifier,
 ) {
     val scenario = uiState.selectedScenario
+    var selectedMonthIndex by remember(uiState.monthlyEnergy.size) {
+        mutableIntStateOf(uiState.monthlyEnergy.indices.maxByOrNull { uiState.monthlyEnergy[it].consumptionFraction } ?: 0)
+    }
     Scaffold(
         modifier = modifier,
         topBar = { RzFlowTopBar(title = stringResource(R.string.solar_title), onBack = onBack) },
@@ -215,7 +221,22 @@ fun SolarScreen(
                     colorA = RzTheme.extendedColors.chartHistoryBar,
                     colorB = RzTheme.extendedColors.chartSolarProduction,
                     modifier = Modifier.padding(top = RzSpacing.lg),
+                    selectedIndex = selectedMonthIndex,
+                    onSelected = { selectedMonthIndex = it },
                 )
+                uiState.monthlyEnergy.getOrNull(selectedMonthIndex)?.let { selected ->
+                    Text(
+                        stringResource(
+                            R.string.solar_chart_selected,
+                            selected.monthLabel,
+                            (selected.consumptionFraction * 100).toInt(),
+                            (selected.productionFraction * 100).toInt(),
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = RzSpacing.sm),
+                    )
+                }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -230,6 +251,12 @@ fun SolarScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.padding(top = RzSpacing.sm),
+                )
+                Text(
+                    stringResource(R.string.solar_chart_tap_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.padding(top = RzSpacing.xs),
                 )
             }
 

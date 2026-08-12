@@ -6,7 +6,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
@@ -127,11 +129,11 @@ fun ApplianceDetailScreen(
 ) {
     val appliance = uiState.appliance
 
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
         RzFlowTopBar(title = appliance?.name.orEmpty(), onBack = onBack)
 
         if (appliance == null) {
-            Column(modifier = Modifier.fillMaxWidth().padding(RzSpacing.screenHorizontal)) {
+            Column(modifier = Modifier.weight(1f).fillMaxWidth().padding(RzSpacing.screenHorizontal)) {
                 RzCard(modifier = Modifier.fillMaxWidth()) {
                     Text(
                         stringResource(R.string.appliances_detail_fallback_title),
@@ -151,6 +153,7 @@ fun ApplianceDetailScreen(
 
         Column(
             modifier = Modifier
+                .weight(1f)
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = RzSpacing.screenHorizontal)

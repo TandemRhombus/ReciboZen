@@ -47,11 +47,17 @@ import kotlinx.coroutines.flow.stateIn
  * mandated Route/ViewModel/UiState/Screen split so it's consistent with
  * every other screen in the flow and ready for future state.
  */
-data class ReadingMethodUiState(val placeholder: Boolean = true)
+data class ReadingMethodUiState(
+    val meterType: String = "",
+) {
+    val isDialMeter: Boolean get() = meterType.contains("manecillas", ignoreCase = true)
+    val showDialMethod: Boolean get() = meterType.isBlank() || isDialMeter
+    val showManualMethod: Boolean get() = meterType.isBlank() || !isDialMeter
+}
 
 class ReadingMethodViewModel(repository: ReciboZenRepository) : ViewModel() {
     val uiState: StateFlow<ReadingMethodUiState> = repository.session
-        .map { ReadingMethodUiState() }
+        .map { ReadingMethodUiState(meterType = it.meterType) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ReadingMethodUiState())
 }
 
@@ -108,21 +114,25 @@ fun ReadingMethodScreen(
                 highlighted = false,
                 onClick = onSelectPhoto,
             )
-            MethodOptionCard(
-                icon = RzIcons.Schedule,
-                title = stringResource(R.string.reading_method_dial_title),
-                subtitle = stringResource(R.string.reading_method_dial_subtitle),
-                badgeText = stringResource(R.string.reading_method_dial_badge),
-                highlighted = true,
-                onClick = onSelectDial,
-            )
-            MethodOptionCard(
-                icon = RzIcons.Keyboard,
-                title = stringResource(R.string.reading_method_manual_title),
-                subtitle = stringResource(R.string.reading_method_manual_subtitle),
-                highlighted = false,
-                onClick = onSelectManual,
-            )
+            if (uiState.showDialMethod) {
+                MethodOptionCard(
+                    icon = RzIcons.Schedule,
+                    title = stringResource(R.string.reading_method_dial_title),
+                    subtitle = stringResource(R.string.reading_method_dial_subtitle),
+                    badgeText = stringResource(R.string.reading_method_dial_badge),
+                    highlighted = uiState.isDialMeter,
+                    onClick = onSelectDial,
+                )
+            }
+            if (uiState.showManualMethod) {
+                MethodOptionCard(
+                    icon = RzIcons.Keyboard,
+                    title = stringResource(R.string.reading_method_manual_title),
+                    subtitle = stringResource(R.string.reading_method_manual_subtitle),
+                    highlighted = uiState.meterType.contains("digital", ignoreCase = true),
+                    onClick = onSelectManual,
+                )
+            }
 
             RzDashedCard(modifier = Modifier.fillMaxWidth()) {
                 Text(

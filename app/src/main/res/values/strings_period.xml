@@ -15,6 +15,9 @@
     <string name="period_chart_start_label">inicio</string>
     <string name="period_chart_end_label">cierre</string>
     <string name="period_chart_today_label">hoy</string>
+    <string name="period_selected_observed">Día %1$d · %2$d kWh observados</string>
+    <string name="period_selected_projected">Día %1$d · %2$d kWh proyectados</string>
+    <string name="period_chart_tap_hint">Toca la gráfica para revisar cualquier punto del periodo.</string>
 
     <!-- Dónde vas contra tu meta card -->
     <string name="period_goal_progress_title">Dónde vas contra tu meta</string>

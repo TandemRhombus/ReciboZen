@@ -115,7 +115,7 @@ fun RzMeterDialCluster(
     RzCard(modifier = modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                stringResource(R.string.dial_face_label, selectedIndex + 1),
+                stringResource(R.string.dial_face_label, selectedIndex + 1, angles.size),
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface,
             )

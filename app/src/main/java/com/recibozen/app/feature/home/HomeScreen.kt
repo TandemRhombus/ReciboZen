@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
@@ -22,6 +24,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -38,6 +43,7 @@ import androidx.navigation.NavHostController
 import com.recibozen.app.R
 import com.recibozen.app.core.components.ChartLineStyle
 import com.recibozen.app.core.components.RzBannerTone
+import com.recibozen.app.core.components.RzBarEntry
 import com.recibozen.app.core.components.RzCard
 import com.recibozen.app.core.components.RzChartSeries
 import com.recibozen.app.core.components.RzConfidenceIndicator
@@ -46,9 +52,11 @@ import com.recibozen.app.core.components.RzLineChart
 import com.recibozen.app.core.components.RzLinearProgress
 import com.recibozen.app.core.components.RzPrimaryButton
 import com.recibozen.app.core.components.RzSecondaryButton
+import com.recibozen.app.core.components.RzScrollableBarChart
 import com.recibozen.app.core.components.RzStatusChip
 import com.recibozen.app.core.components.RzTabHeader
 import com.recibozen.app.core.components.RzTextButton
+import com.recibozen.app.core.components.rzTimeGreeting
 import com.recibozen.app.core.designsystem.ReciboZenTheme
 import com.recibozen.app.core.designsystem.RzIcons
 import com.recibozen.app.core.designsystem.RzPalette
@@ -58,6 +66,7 @@ import com.recibozen.app.core.model.PlanActionStatus
 import com.recibozen.app.demo.repository.ReciboZenRepository
 import com.recibozen.app.navigation.Routes
 import com.recibozen.app.navigation.rzViewModel
+import com.recibozen.app.navigation.navigateToBottomTab
 import kotlin.math.roundToInt
 import java.util.Locale
 
@@ -80,7 +89,7 @@ fun HomeRoute(navController: NavHostController, repository: ReciboZenRepository)
         onViewFullAnalysis = { navController.navigate(Routes.PeriodAnalysis) },
         onApplianceClick = { id -> navController.navigate(Routes.applianceDetail(id)) },
         onUnidentifiedClick = { navController.navigate(Routes.Balance) },
-        onViewAllAppliances = { navController.navigate(Routes.Appliances) },
+        onViewAllAppliances = { navController.navigateToBottomTab(Routes.Appliances) },
         onRegisterReading = { navController.navigate(Routes.ReadingMethod) },
         onHowWeCalculate = { navController.navigate(Routes.HowWeCalculate) },
         onImportBill = { navController.navigate(Routes.BillImport) },
@@ -103,7 +112,8 @@ fun HomeScreen(
     onImportBill: () -> Unit = {},
 ) {
     Scaffold(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().statusBarsPadding(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = MaterialTheme.colorScheme.background,
         floatingActionButton = {
             ExtendedFloatingActionButton(
@@ -116,26 +126,24 @@ fun HomeScreen(
             )
         },
     ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                start = RzSpacing.screenHorizontal,
-                end = RzSpacing.screenHorizontal,
-                top = RzSpacing.sm,
-                bottom = innerPadding.calculateBottomPadding() + 88.dp,
-            ),
-            verticalArrangement = Arrangement.spacedBy(RzSpacing.lg),
-        ) {
-            item {
-                RzTabHeader(
-                    greeting = if (uiState.userName.isBlank()) stringResource(R.string.home_greeting_unconfigured)
-                    else stringResource(R.string.home_greeting, uiState.userName),
-                    householdName = uiState.householdName.ifBlank { stringResource(R.string.home_household_unconfigured) },
-                    userInitial = uiState.userInitial,
-                    onHouseholdClick = onHouseholdClick,
-                    onProfileClick = onProfileClick,
-                )
-            }
+        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+            RzTabHeader(
+                greeting = rzTimeGreeting(uiState.userName),
+                householdName = uiState.householdName.ifBlank { stringResource(R.string.home_household_unconfigured) },
+                userInitial = uiState.userInitial,
+                onHouseholdClick = onHouseholdClick,
+                onProfileClick = onProfileClick,
+            )
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(
+                    start = RzSpacing.screenHorizontal,
+                    end = RzSpacing.screenHorizontal,
+                    top = RzSpacing.sm,
+                    bottom = 88.dp,
+                ),
+                verticalArrangement = Arrangement.spacedBy(RzSpacing.lg),
+            ) {
             when (uiState.dataMode) {
                 HomeDataMode.EMPTY -> item {
                     MissingUsageDataCard(uiState.profileConfigured, onImportBill, onProfileClick)
@@ -157,6 +165,7 @@ fun HomeScreen(
                     item { ConfidenceCard(uiState, onRegisterReading) }
                     item { HowWeCalculateRow(onHowWeCalculate) }
                 }
+            }
             }
         }
     }
@@ -224,11 +233,16 @@ private fun LatestRealBillCard(uiState: HomeUiState) {
 @Composable
 private fun HistoricalBillsChartCard(uiState: HomeUiState) {
     val bills = uiState.realBillHistory
-    val values = bills.map { it.consumptionKwh }
-    val minimum = values.minOrNull() ?: 0
-    val maximum = values.maxOrNull() ?: 1
-    val span = (maximum - minimum).coerceAtLeast(1)
-    val normalized = values.map { value -> 0.12f + ((value - minimum).toFloat() / span) * 0.76f }
+    var selectedIndex by remember(bills.size) { mutableIntStateOf(bills.lastIndex.coerceAtLeast(0)) }
+    val maximum = bills.maxOfOrNull { it.consumptionKwh }?.coerceAtLeast(1) ?: 1
+    val entries = bills.map { bill ->
+        RzBarEntry(
+            categoryLabel = bill.monthLabel,
+            valueLabel = "${bill.consumptionKwh}",
+            heightFraction = bill.consumptionKwh.toFloat() / maximum,
+            color = RzTheme.extendedColors.chartHistoryBar,
+        )
+    }
     RzCard(modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -243,33 +257,24 @@ private fun HistoricalBillsChartCard(uiState: HomeUiState) {
                 contentColor = RzTheme.extendedColors.success,
             )
         }
-        RzLineChart(
-            series = listOf(
-                RzChartSeries(
-                    values = normalized,
-                    color = RzTheme.extendedColors.chartHistoryBar,
-                    style = ChartLineStyle.SOLID,
-                    markEnd = true,
-                ),
-            ),
+        RzScrollableBarChart(
+            entries = entries,
+            selectedIndex = selectedIndex.coerceIn(0, entries.lastIndex),
+            onSelected = { selectedIndex = it },
             modifier = Modifier.padding(top = RzSpacing.md),
-            height = 128.dp,
         )
-        Row(modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.xs)) {
-            Text(bills.first().monthLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-            Box(Modifier.weight(1f))
-            Text(bills.last().monthLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-        }
+        val selected = bills[selectedIndex.coerceIn(0, bills.lastIndex)]
         Text(
-            stringResource(
-                R.string.home_real_history_body,
-                bills.size,
-                bills.last().consumptionKwh,
-                bills.last().amountMxn,
-            ),
-            style = MaterialTheme.typography.bodySmall,
+            stringResource(R.string.chart_selected_bill, selected.monthLabel, selected.consumptionKwh, selected.amountMxn),
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = RzSpacing.sm),
+        )
+        Text(
+            stringResource(R.string.chart_swipe_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.padding(top = RzSpacing.xs),
         )
     }
 }
@@ -566,6 +571,25 @@ private fun formatRate(value: Double): String = String.format(Locale.forLanguage
 
 @Composable
 private fun PeriodChartCard(uiState: HomeUiState, onViewFullAnalysis: () -> Unit) {
+    val pointCount = 8
+    val todayIndex = if (uiState.billingDays > 0) {
+        ((pointCount - 1) * uiState.observedDays.toFloat() / uiState.billingDays)
+            .roundToInt().coerceIn(0, pointCount - 1)
+    } else 0
+    var selectedIndex by remember(uiState.observedDays, uiState.billingDays) { mutableIntStateOf(todayIndex) }
+    val selectedDay = if (uiState.billingDays > 0) {
+        (uiState.billingDays * selectedIndex.toFloat() / (pointCount - 1)).roundToInt().coerceAtLeast(0)
+    } else 0
+    val selectedObserved = selectedDay <= uiState.observedDays
+    val selectedKwh = if (selectedObserved) {
+        if (uiState.observedDays > 0) {
+            (uiState.observedTodayKwh * selectedDay.toFloat() / uiState.observedDays).roundToInt()
+        } else 0
+    } else {
+        if (uiState.billingDays > 0) {
+            (uiState.projectedKwh * selectedDay.toFloat() / uiState.billingDays).roundToInt()
+        } else uiState.projectedKwh
+    }
     RzCard(modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -593,6 +617,32 @@ private fun PeriodChartCard(uiState: HomeUiState, onViewFullAnalysis: () -> Unit
             series = homeChartSeries(uiState),
             modifier = Modifier.padding(top = RzSpacing.md),
             height = 120.dp,
+            selectedIndex = selectedIndex,
+            onPointSelected = { selectedIndex = it },
+        )
+
+        Row(modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.xs)) {
+            Text(stringResource(R.string.home_chart_start), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+            Box(Modifier.weight(1f))
+            Text(stringResource(R.string.home_chart_today), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Box(Modifier.weight(1f))
+            Text(stringResource(R.string.home_chart_end), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+        }
+        Text(
+            stringResource(
+                if (selectedObserved) R.string.home_chart_selected_observed else R.string.home_chart_selected_projected,
+                selectedDay,
+                selectedKwh,
+            ),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = RzSpacing.sm),
+        )
+        Text(
+            stringResource(R.string.home_chart_tap_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.padding(top = RzSpacing.xs),
         )
 
         val projectedTotal = uiState.projectedKwh
@@ -629,8 +679,8 @@ private fun PeriodChartCard(uiState: HomeUiState, onViewFullAnalysis: () -> Unit
  * point count, so all three series intentionally share the same point count
  * (8) to stay x-aligned: the projected/goal series repeat the observed
  * values for the first 6 points (invisible overlap) before diverging in the
- * final 2, approximating the mock's "today" break point without needing to
- * change the shared chart component.
+ * final 2. The visible observed series ends exactly at the mock's "today"
+ * break point; the remaining values only keep every series x-aligned.
  */
 @Composable
 private fun homeChartSeries(uiState: HomeUiState): List<RzChartSeries> {
@@ -652,7 +702,14 @@ private fun homeChartSeries(uiState: HomeUiState): List<RzChartSeries> {
     return listOfNotNull(
         if (uiState.goalKwh > 0) RzChartSeries(values = goal, color = RzTheme.extendedColors.chartGoalLine, style = ChartLineStyle.DOTTED, strokeWidth = 2.dp) else null,
         RzChartSeries(values = projected, color = RzTheme.extendedColors.chartObserved, style = ChartLineStyle.DASHED, strokeWidth = 2.dp),
-        RzChartSeries(values = observed, color = RzTheme.extendedColors.chartObserved, style = ChartLineStyle.SOLID, strokeWidth = 3.dp, markEnd = true),
+        RzChartSeries(
+            values = observed,
+            color = RzTheme.extendedColors.chartObserved,
+            style = ChartLineStyle.SOLID,
+            strokeWidth = 3.dp,
+            markEnd = true,
+            visibleUntilIndex = todayIndex,
+        ),
     )
 }
 

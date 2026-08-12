@@ -17,7 +17,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -123,6 +126,20 @@ fun PeriodAnalysisScreen(
 
 @Composable
 private fun AccumulatedChartCard(uiState: PeriodAnalysisUiState) {
+    val pointCount = 10
+    val todayIndex = if (uiState.billingDays > 0) {
+        ((pointCount - 1) * uiState.observedDays.toFloat() / uiState.billingDays).toInt().coerceIn(0, pointCount - 1)
+    } else 0
+    var selectedIndex by remember(uiState.observedDays, uiState.billingDays) { mutableIntStateOf(todayIndex) }
+    val selectedDay = if (uiState.billingDays > 0) {
+        (uiState.billingDays * selectedIndex.toFloat() / (pointCount - 1)).toInt()
+    } else 0
+    val isObserved = selectedDay <= uiState.observedDays
+    val selectedKwh = if (isObserved && uiState.observedDays > 0) {
+        (uiState.observedKwh * selectedDay.toFloat() / uiState.observedDays).toInt()
+    } else if (uiState.billingDays > 0) {
+        (uiState.projectedKwh * selectedDay.toFloat() / uiState.billingDays).toInt()
+    } else uiState.projectedKwh
     RzCard(modifier = Modifier.fillMaxWidth()) {
         Text(
             stringResource(R.string.period_chart_title),
@@ -134,6 +151,8 @@ private fun AccumulatedChartCard(uiState: PeriodAnalysisUiState) {
             series = periodChartSeries(uiState),
             modifier = Modifier.padding(top = RzSpacing.md),
             height = 170.dp,
+            selectedIndex = selectedIndex,
+            onPointSelected = { selectedIndex = it },
         )
 
         Row(modifier = Modifier.fillMaxWidth().padding(top = 2.dp)) {
@@ -155,6 +174,23 @@ private fun AccumulatedChartCard(uiState: PeriodAnalysisUiState) {
                 color = MaterialTheme.colorScheme.outline,
             )
         }
+
+        Text(
+            stringResource(
+                if (isObserved) R.string.period_selected_observed else R.string.period_selected_projected,
+                selectedDay,
+                selectedKwh,
+            ),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = RzSpacing.sm),
+        )
+        Text(
+            stringResource(R.string.period_chart_tap_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.padding(top = RzSpacing.xs),
+        )
 
         Column(
             modifier = Modifier
@@ -226,9 +262,8 @@ private fun ChartLegendItem(label: String, color: Color, style: ChartLineStyle) 
  * Same x-alignment trick as the Home mini chart (see
  * `com.recibozen.app.feature.home.homeChartSeries`): all three series share
  * the same point count so they stay aligned on the shared x-axis, with the
- * dashed/dotted series overlapping the solid one before diverging near the
- * end to approximate "today" without needing to touch the shared
- * [RzLineChart] component (out of this feature's edit scope).
+ * dashed/dotted series overlapping the solid one before diverging. The solid
+ * observed line is clipped at the real "today" index by [RzLineChart].
  */
 @Composable
 private fun periodChartSeries(uiState: PeriodAnalysisUiState): List<RzChartSeries> {
@@ -251,7 +286,14 @@ private fun periodChartSeries(uiState: PeriodAnalysisUiState): List<RzChartSerie
     return listOf(
         RzChartSeries(values = goal, color = RzTheme.extendedColors.chartGoalLine, style = ChartLineStyle.DOTTED, strokeWidth = 2.dp),
         RzChartSeries(values = projected, color = RzTheme.extendedColors.chartObserved, style = ChartLineStyle.DASHED, strokeWidth = 2.5.dp),
-        RzChartSeries(values = observed, color = RzTheme.extendedColors.chartObserved, style = ChartLineStyle.SOLID, strokeWidth = 3.dp, markEnd = true),
+        RzChartSeries(
+            values = observed,
+            color = RzTheme.extendedColors.chartObserved,
+            style = ChartLineStyle.SOLID,
+            strokeWidth = 3.dp,
+            markEnd = true,
+            visibleUntilIndex = todayIndex,
+        ),
     )
 }
 

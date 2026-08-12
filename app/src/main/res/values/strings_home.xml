@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="home_chart_start">inicio</string>
+    <string name="home_chart_today">hoy</string>
+    <string name="home_chart_end">fin del periodo</string>
+    <string name="home_chart_selected_observed">Día %1$d · %2$d kWh observados</string>
+    <string name="home_chart_selected_projected">Día %1$d · %2$d kWh proyectados</string>
+    <string name="home_chart_tap_hint">Toca la gráfica para inspeccionar cada punto del periodo.</string>
     <!-- Tab header -->
     <string name="home_greeting">Buenas tardes, %1$s</string>
     <string name="home_greeting_unconfigured">Hola</string>

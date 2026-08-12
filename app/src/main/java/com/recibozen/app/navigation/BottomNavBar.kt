@@ -9,7 +9,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavDestination.Companion.hierarchy
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.recibozen.app.R
@@ -36,17 +35,26 @@ fun RzBottomNavBar(navController: NavHostController) {
                 selected = selected,
                 onClick = {
                     if (!selected) {
-                        navController.navigate(tab.route) {
-                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
+                        navController.navigateToBottomTab(tab.route)
                     }
                 },
                 icon = { Icon(tab.icon, contentDescription = null) },
                 label = { Text(stringResource(tab.labelRes)) },
             )
         }
+    }
+}
+
+/**
+ * All links that land on a bottom tab use the same operation. Popping to Home
+ * avoids leaving a second tab root on top of the first one (the cause of the
+ * Home button becoming inert after "Ver todos").
+ */
+fun NavHostController.navigateToBottomTab(route: String) {
+    navigate(route) {
+        popUpTo(Routes.Home) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
     }
 }
 
