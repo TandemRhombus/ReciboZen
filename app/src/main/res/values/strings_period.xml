@@ -1,6 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="period_top_bar_title">Análisis del periodo</string>
+    <string name="period_current_title">Periodo actual</string>
+    <string name="period_day_chip">Día %1$d de %2$d</string>
+    <string name="period_time_summary">Han transcurrido %1$d de %2$d días del periodo.</string>
+    <string name="period_time_remaining">Faltan %1$d días para el cierre estimado.</string>
+    <string name="period_observed_label">Medido hasta hoy</string>
+    <string name="period_projected_label">Proyección al cierre</string>
+    <string name="period_kwh_value">%1$d kWh</string>
+    <string name="period_projection_within_goal">Manteniendo este ritmo cerrarías %1$d kWh por debajo de tu meta estimada de %2$d kWh.</string>
+    <string name="period_projection_over_goal">Manteniendo este ritmo cerrarías %1$d kWh por encima de tu meta estimada de %2$d kWh.</string>
+    <string name="period_comparison_title">Comparación clara</string>
+    <string name="period_comparison_body">Todas las barras usan la misma escala para que las longitudes sí sean comparables.</string>
+    <string name="period_goal_label">Meta energética estimada</string>
+    <string name="period_previous_label">Recibo anterior · %1$s</string>
+    <string name="period_previous_lower">La proyección actual es %1$d kWh menor que el último recibo real.</string>
+    <string name="period_previous_higher">La proyección actual es %1$d kWh mayor que el último recibo real.</string>
+    <string name="period_comparison_content_description">%1$s: %2$d de una escala común de %3$d kilowatts-hora.</string>
+    <string name="period_evidence_title">Datos que sostienen la proyección</string>
+    <string name="period_evidence_reading">Última lectura: %1$s kWh · %2$s</string>
+    <string name="period_evidence_cost">Costo estimado del consumo medido hasta hoy: $%1$d.</string>
 
     <!-- Consumo acumulado chart card -->
     <string name="period_chart_title">Consumo acumulado del periodo</string>

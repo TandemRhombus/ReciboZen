@@ -6,6 +6,8 @@ import com.recibozen.app.core.model.PlanActionStatus
 import com.recibozen.app.core.model.ConfidenceLevel
 import com.recibozen.app.core.model.ReadingMethod
 import com.recibozen.app.core.calculation.DacRiskCalculator
+import com.recibozen.app.core.calculation.BillingPeriodTimeline
+import com.recibozen.app.core.calculation.ConsumptionPaceCalculator
 import com.recibozen.app.demo.data.DemoReciboZenData
 import com.recibozen.app.demo.repository.ReciboZenRepository
 import kotlinx.coroutines.flow.SharingStarted
@@ -40,9 +42,13 @@ class HomeViewModel(private val repository: ReciboZenRepository) : ViewModel() {
             val ps5 = appliances.find { it.id == "ps5" }
             val minisplitAction = state.planActions.find { it.id == DemoReciboZenData.MINISPLIT_ACTION_ID }
             val liveReadings = state.readings.count { it.method != ReadingMethod.PDF }
-            val goalKwh = if (state.goalMxn > 0 && energy.projectedCostMxn > 0) {
-                (energy.projectedKwh * state.goalMxn.toDouble() / energy.projectedCostMxn).toInt().coerceAtLeast(0)
-            } else 0
+            val currentPeriod = BillingPeriodTimeline.after(latestBill, energy.billingDays)
+            val paceGoal = ConsumptionPaceCalculator.goal(
+                goalMxn = state.goalMxn,
+                observedKwh = energy.observedKwh,
+                daysRemaining = energy.daysRemaining,
+                estimateCostMxn = repository::estimateCostMxn,
+            )
 
             HomeUiState(
                 userName = state.userName,
@@ -51,6 +57,8 @@ class HomeViewModel(private val repository: ReciboZenRepository) : ViewModel() {
                 profileConfigured = state.userName.isNotBlank() && state.householdName.isNotBlank(),
                 dataMode = dataMode,
                 periodLabel = latestBill?.monthLabel.orEmpty(),
+                currentPeriodLabel = currentPeriod?.shortLabel.orEmpty(),
+                currentPeriodDateRange = currentPeriod?.dateRangeLabel.orEmpty(),
                 projectedMxn = projection.projectedMxn,
                 rangeLowMxn = projection.rangeLowMxn,
                 rangeHighMxn = projection.rangeHighMxn,
@@ -59,17 +67,24 @@ class HomeViewModel(private val repository: ReciboZenRepository) : ViewModel() {
                 daysRemaining = energy.daysRemaining,
                 observedTodayKwh = energy.observedKwh,
                 observedDays = energy.observedDays,
+                latestReadingDateLabel = state.readings
+                    .filter { it.method != ReadingMethod.PDF }
+                    .maxByOrNull { it.timestampEpochMillis ?: Long.MIN_VALUE }
+                    ?.dateLabel.orEmpty(),
                 latestBillMxn = latestBill?.amountMxn ?: 0,
                 latestBillKwh = latestBill?.consumptionKwh ?: 0,
                 importedBillCount = importedBills.size,
                 realBillHistory = importedBills.takeLast(12),
                 billingDays = energy.billingDays,
                 projectedKwh = energy.projectedKwh,
-                goalKwh = goalKwh,
+                goalKwh = paceGoal.goalKwh,
                 dailyRateNow = energy.dailyAverageKwh,
-                dailyRateRecommended = if (state.goalMxn > 0 && energy.projectedCostMxn > 0) {
-                    state.goalMxn.toDouble() / energy.projectedCostMxn * energy.dailyAverageKwh
-                } else 0.0,
+                dailyRateRecommended = paceGoal.recommendedDailyKwh,
+                remainingGoalKwh = paceGoal.remainingKwh,
+                paceRelation = ConsumptionPaceCalculator.relation(
+                    energy.dailyAverageKwh,
+                    paceGoal.recommendedDailyKwh,
+                ),
                 hasAppliances = appliances.isNotEmpty(),
                 applianceCount = appliances.size,
                 confidenceLevel = when {

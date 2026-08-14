@@ -3,11 +3,13 @@ package com.recibozen.app.feature.period
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.recibozen.app.demo.repository.ReciboZenRepository
+import com.recibozen.app.core.calculation.BillingPeriodTimeline
+import com.recibozen.app.core.calculation.ConsumptionPaceCalculator
+import com.recibozen.app.core.model.ReadingMethod
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import kotlin.math.roundToInt
 
 class PeriodAnalysisViewModel(repository: ReciboZenRepository) : ViewModel() {
 
@@ -15,25 +17,35 @@ class PeriodAnalysisViewModel(repository: ReciboZenRepository) : ViewModel() {
         repository.session,
         repository.importedBillHistory,
         repository.tariffCalibration,
-    ) { state, _, _ ->
+    ) { state, importedBills, _ ->
             val energy = repository.energySummary(state)
-            val goalKwh = if (state.goalMxn > 0 && energy.projectedCostMxn > 0) {
-                (energy.projectedKwh * state.goalMxn.toDouble() / energy.projectedCostMxn)
-                    .roundToInt()
-                    .coerceAtLeast(0)
-            } else 0
-            val scale = maxOf(energy.observedKwh, energy.projectedKwh, goalKwh, 1)
+            val latestBill = importedBills.lastOrNull()
+            val currentPeriod = BillingPeriodTimeline.after(latestBill, energy.billingDays)
+            val paceGoal = ConsumptionPaceCalculator.goal(
+                goalMxn = state.goalMxn,
+                observedKwh = energy.observedKwh,
+                daysRemaining = energy.daysRemaining,
+                estimateCostMxn = repository::estimateCostMxn,
+            )
+            val latestLiveReading = state.readings
+                .filter { it.method != ReadingMethod.PDF }
+                .maxByOrNull { it.timestampEpochMillis ?: Long.MIN_VALUE }
+                ?: state.readings.maxByOrNull { it.timestampEpochMillis ?: Long.MIN_VALUE }
             PeriodAnalysisUiState(
                 hasUsageData = energy.hasUsageEvidence,
-                lastReadingKwh = state.readings.firstOrNull()?.kwh ?: 0,
-                lastReadingDateLabel = state.readings.firstOrNull()?.dateLabel.orEmpty(),
+                lastReadingKwh = latestLiveReading?.kwh ?: 0,
+                lastReadingDateLabel = latestLiveReading?.dateLabel.orEmpty(),
                 observedKwh = energy.observedKwh,
                 observedDays = energy.observedDays,
                 billingDays = energy.billingDays,
+                daysRemaining = energy.daysRemaining,
                 costToDateMxn = energy.costToDateMxn,
-                goalKwh = goalKwh,
+                goalKwh = paceGoal.goalKwh,
                 projectedKwh = energy.projectedKwh,
-                surplusStartKwh = (scale * 1.12).roundToInt().coerceAtLeast(scale + 1),
+                currentPeriodLabel = currentPeriod?.shortLabel.orEmpty(),
+                currentPeriodDateRange = currentPeriod?.dateRangeLabel.orEmpty(),
+                previousPeriodLabel = latestBill?.monthLabel.orEmpty(),
+                previousBillKwh = latestBill?.consumptionKwh ?: 0,
             )
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PeriodAnalysisUiState())

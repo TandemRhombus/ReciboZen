@@ -1,57 +1,46 @@
 package com.recibozen.app.feature.period
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.recibozen.app.R
-import com.recibozen.app.core.components.ChartLineStyle
+import com.recibozen.app.core.components.RzBannerTone
 import com.recibozen.app.core.components.RzCard
-import com.recibozen.app.core.components.RzChartSeries
 import com.recibozen.app.core.components.RzFlowTopBar
-import com.recibozen.app.core.components.RzLineChart
-import com.recibozen.app.core.components.RzMarkedProgress
+import com.recibozen.app.core.components.RzInlineBanner
+import com.recibozen.app.core.components.RzLinearProgress
 import com.recibozen.app.core.components.RzSecondaryButton
+import com.recibozen.app.core.components.RzStatusChip
 import com.recibozen.app.core.designsystem.ReciboZenTheme
-import com.recibozen.app.core.designsystem.RzExtraShapes
+import com.recibozen.app.core.designsystem.RzIcons
 import com.recibozen.app.core.designsystem.RzSpacing
 import com.recibozen.app.core.designsystem.RzTheme
 import com.recibozen.app.demo.repository.ReciboZenRepository
 import com.recibozen.app.navigation.Routes
 import com.recibozen.app.navigation.rzViewModel
 import java.util.Locale
+import kotlin.math.roundToInt
 
-/**
- * "Análisis del periodo" — pushed flow screen reached from the Inicio tab's
- * "Ver análisis completo" button.
- */
+/** Detailed, non-technical view of the current open billing period. */
 @Composable
 fun PeriodAnalysisRoute(navController: NavHostController, repository: ReciboZenRepository) {
     val viewModel = rzViewModel { PeriodAnalysisViewModel(repository) }
@@ -80,38 +69,17 @@ fun PeriodAnalysisScreen(
             contentPadding = PaddingValues(
                 start = RzSpacing.screenHorizontal,
                 end = RzSpacing.screenHorizontal,
-                top = RzSpacing.sm,
+                top = innerPadding.calculateTopPadding() + RzSpacing.sm,
                 bottom = innerPadding.calculateBottomPadding() + RzSpacing.xxl,
             ),
             verticalArrangement = Arrangement.spacedBy(RzSpacing.lg),
         ) {
             if (!uiState.hasUsageData) {
-                item {
-                    RzCard(modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.period_empty_title), style = MaterialTheme.typography.titleLarge)
-                        Text(
-                            stringResource(R.string.period_empty_body),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = RzSpacing.sm),
-                        )
-                    }
-                }
+                item { EmptyPeriodCard() }
             } else {
-                item { AccumulatedChartCard(uiState) }
-                item {
-                    if (uiState.goalKwh > 0) {
-                        GoalProgressCard(uiState)
-                    } else {
-                        RzCard(modifier = Modifier.fillMaxWidth()) {
-                            Text(
-                                stringResource(R.string.period_no_goal),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
+                item { CurrentPeriodOverviewCard(uiState) }
+                item { PeriodComparisonCard(uiState) }
+                item { ReadingEvidenceCard(uiState) }
                 item {
                     RzSecondaryButton(
                         text = stringResource(R.string.period_how_we_calculate),
@@ -125,268 +93,216 @@ fun PeriodAnalysisScreen(
 }
 
 @Composable
-private fun AccumulatedChartCard(uiState: PeriodAnalysisUiState) {
-    val pointCount = 10
-    val todayIndex = if (uiState.billingDays > 0) {
-        ((pointCount - 1) * uiState.observedDays.toFloat() / uiState.billingDays).toInt().coerceIn(0, pointCount - 1)
-    } else 0
-    var selectedIndex by remember(uiState.observedDays, uiState.billingDays) { mutableIntStateOf(todayIndex) }
-    val selectedDay = if (uiState.billingDays > 0) {
-        (uiState.billingDays * selectedIndex.toFloat() / (pointCount - 1)).toInt()
-    } else 0
-    val isObserved = selectedDay <= uiState.observedDays
-    val selectedKwh = if (isObserved && uiState.observedDays > 0) {
-        (uiState.observedKwh * selectedDay.toFloat() / uiState.observedDays).toInt()
-    } else if (uiState.billingDays > 0) {
-        (uiState.projectedKwh * selectedDay.toFloat() / uiState.billingDays).toInt()
-    } else uiState.projectedKwh
+private fun EmptyPeriodCard() {
     RzCard(modifier = Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.period_empty_title), style = MaterialTheme.typography.titleLarge)
         Text(
-            stringResource(R.string.period_chart_title),
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-
-        RzLineChart(
-            series = periodChartSeries(uiState),
-            modifier = Modifier.padding(top = RzSpacing.md),
-            height = 170.dp,
-            selectedIndex = selectedIndex,
-            onPointSelected = { selectedIndex = it },
-        )
-
-        Row(modifier = Modifier.fillMaxWidth().padding(top = 2.dp)) {
-            Text(
-                stringResource(R.string.period_chart_start_label),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline,
-            )
-            Box(modifier = Modifier.weight(1f))
-            Text(
-                stringResource(R.string.period_chart_today_label),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Box(modifier = Modifier.weight(1f))
-            Text(
-                stringResource(R.string.period_chart_end_label),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline,
-            )
-        }
-
-        Text(
-            stringResource(
-                if (isObserved) R.string.period_selected_observed else R.string.period_selected_projected,
-                selectedDay,
-                selectedKwh,
-            ),
+            stringResource(R.string.period_empty_body),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = RzSpacing.sm),
         )
-        Text(
-            stringResource(R.string.period_chart_tap_hint),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.outline,
-            modifier = Modifier.padding(top = RzSpacing.xs),
-        )
-
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = RzSpacing.md)
-                .background(MaterialTheme.colorScheme.background, RzExtraShapes.control)
-                .padding(horizontal = RzSpacing.lg, vertical = RzSpacing.md),
-        ) {
-            Text(
-                stringResource(R.string.period_info_box_title, uiState.lastReadingDateLabel),
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                stringResource(R.string.period_info_observed_reading, formatThousands(uiState.lastReadingKwh)),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-            Text(
-                stringResource(R.string.period_info_accumulated, uiState.observedKwh),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                stringResource(R.string.period_info_cost_to_date, uiState.costToDateMxn),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(RzSpacing.md),
-            modifier = Modifier.padding(top = RzSpacing.md),
-        ) {
-            ChartLegendItem(
-                label = stringResource(R.string.period_legend_observed),
-                color = RzTheme.extendedColors.chartObserved,
-                style = ChartLineStyle.SOLID,
-            )
-            ChartLegendItem(
-                label = stringResource(R.string.period_legend_projected),
-                color = RzTheme.extendedColors.chartObserved,
-                style = ChartLineStyle.DASHED,
-            )
-            ChartLegendItem(
-                label = stringResource(R.string.period_legend_goal),
-                color = RzTheme.extendedColors.chartGoalLine,
-                style = ChartLineStyle.DOTTED,
-            )
-        }
     }
 }
 
 @Composable
-private fun ChartLegendItem(label: String, color: Color, style: ChartLineStyle) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-        Box(
-            modifier = Modifier
-                .width(16.dp)
-                .height(3.dp)
-                .background(if (style == ChartLineStyle.SOLID) color else color.copy(alpha = 0.55f)),
-        )
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-/**
- * Same x-alignment trick as the Home mini chart (see
- * `com.recibozen.app.feature.home.homeChartSeries`): all three series share
- * the same point count so they stay aligned on the shared x-axis, with the
- * dashed/dotted series overlapping the solid one before diverging. The solid
- * observed line is clipped at the real "today" index by [RzLineChart].
- */
-@Composable
-private fun periodChartSeries(uiState: PeriodAnalysisUiState): List<RzChartSeries> {
-    val pointCount = 10
-    val scale = uiState.surplusStartKwh.coerceAtLeast(1).toFloat()
-    val todayFraction = if (uiState.billingDays > 0) {
-        (uiState.observedDays.toFloat() / uiState.billingDays).coerceIn(0.1f, 1f)
-    } else 1f
-    val todayIndex = ((pointCount - 1) * todayFraction).toInt().coerceIn(1, pointCount - 1)
-    val observed = List(pointCount) { index ->
-        val progress = (index.toFloat() / todayIndex).coerceIn(0f, 1f)
-        uiState.observedKwh / scale * progress
-    }
-    val projected = List(pointCount) { index ->
-        uiState.projectedKwh / scale * (index.toFloat() / (pointCount - 1))
-    }
-    val goal = List(pointCount) { index ->
-        uiState.goalKwh / scale * (index.toFloat() / (pointCount - 1))
-    }
-    return listOf(
-        RzChartSeries(values = goal, color = RzTheme.extendedColors.chartGoalLine, style = ChartLineStyle.DOTTED, strokeWidth = 2.dp),
-        RzChartSeries(values = projected, color = RzTheme.extendedColors.chartObserved, style = ChartLineStyle.DASHED, strokeWidth = 2.5.dp),
-        RzChartSeries(
-            values = observed,
-            color = RzTheme.extendedColors.chartObserved,
-            style = ChartLineStyle.SOLID,
-            strokeWidth = 3.dp,
-            markEnd = true,
-            visibleUntilIndex = todayIndex,
-        ),
-    )
-}
-
-@Composable
-private fun GoalProgressCard(uiState: PeriodAnalysisUiState) {
+private fun CurrentPeriodOverviewCard(uiState: PeriodAnalysisUiState) {
+    val timeProgress = if (uiState.billingDays > 0) {
+        (uiState.observedDays.toFloat() / uiState.billingDays).coerceIn(0f, 1f)
+    } else 0f
     RzCard(modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(stringResource(R.string.period_current_title), style = MaterialTheme.typography.titleLarge)
+                Text(
+                    uiState.currentPeriodDateRange.ifBlank { uiState.currentPeriodLabel },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+            RzStatusChip(
+                text = stringResource(R.string.period_day_chip, uiState.observedDays, uiState.billingDays),
+                icon = RzIcons.Schedule,
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.primary,
+            )
+        }
+
+        RzLinearProgress(
+            progress = timeProgress,
+            progressColor = MaterialTheme.colorScheme.primary,
+            contentDescription = stringResource(R.string.period_time_summary, uiState.observedDays, uiState.billingDays),
+            modifier = Modifier.padding(top = RzSpacing.lg),
+        )
         Text(
-            stringResource(R.string.period_goal_progress_title),
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurface,
+            stringResource(R.string.period_time_remaining, uiState.daysRemaining),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 6.dp),
         )
 
-        val scale = uiState.surplusStartKwh.coerceAtLeast(1)
-        val observedFraction = (uiState.observedKwh.toFloat() / scale).coerceIn(0f, 1f)
-        val projectedFraction = (uiState.projectedKwh.toFloat() / scale).coerceIn(0f, 1f)
-        val goalFraction = (uiState.goalKwh.toFloat() / scale).coerceIn(0f, 1f)
-        val screenReaderSummary = stringResource(
-            R.string.period_goal_screen_reader_summary,
-            uiState.observedKwh,
-            uiState.goalKwh,
-            uiState.projectedKwh,
-            uiState.surplusStartKwh,
-        )
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = RzSpacing.lg)
-                .semantics { contentDescription = screenReaderSummary },
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.lg),
+            horizontalArrangement = Arrangement.spacedBy(RzSpacing.lg),
         ) {
-            // Bottom layer: lighter fill up to the projection, transparent track so
-            // it doesn't paint over the observed layer drawn on top of it.
-            RzMarkedProgress(
-                progress = projectedFraction,
-                markerAt = goalFraction,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                progressColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
-                markerColor = Color.Transparent,
+            PeriodStat(
+                label = stringResource(R.string.period_observed_label),
+                value = stringResource(R.string.period_kwh_value, uiState.observedKwh),
+                modifier = Modifier.weight(1f),
             )
-            // Top layer: solid fill up to today's observed consumption + the real
-            // goal marker line.
-            RzMarkedProgress(
-                progress = observedFraction,
-                markerAt = goalFraction,
-                trackColor = Color.Transparent,
-                progressColor = MaterialTheme.colorScheme.primary,
-                markerColor = MaterialTheme.colorScheme.onSurface,
+            PeriodStat(
+                label = stringResource(R.string.period_projected_label),
+                value = stringResource(R.string.period_kwh_value, uiState.projectedKwh),
+                modifier = Modifier.weight(1f),
             )
         }
-
-        Row(modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.sm)) {
-            Text(
-                stringResource(R.string.period_goal_label_today, uiState.observedKwh),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline,
-            )
-            Box(modifier = Modifier.weight(1f))
-            Text(
-                stringResource(R.string.period_goal_label_goal, uiState.goalKwh),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline,
-            )
-            Box(modifier = Modifier.weight(1f))
-            Text(
-                stringResource(R.string.period_goal_label_projection, uiState.projectedKwh),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline,
-            )
-            Box(modifier = Modifier.weight(1f))
-            Text(
-                stringResource(R.string.period_goal_label_surplus, uiState.surplusStartKwh),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline,
+        if (uiState.goalKwh > 0) {
+            val difference = uiState.projectedKwh - uiState.goalKwh
+            RzInlineBanner(
+                text = if (difference <= 0) {
+                    stringResource(R.string.period_projection_within_goal, -difference, uiState.goalKwh)
+                } else stringResource(R.string.period_projection_over_goal, difference, uiState.goalKwh),
+                tone = if (difference <= 0) RzBannerTone.SUCCESS else RzBannerTone.WARNING,
+                icon = if (difference <= 0) RzIcons.CheckCircle else RzIcons.ErrorInfo,
+                modifier = Modifier.padding(top = RzSpacing.lg),
             )
         }
+    }
+}
 
+@Composable
+private fun PeriodStat(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(top = 2.dp))
+    }
+}
+
+@Composable
+private fun PeriodComparisonCard(uiState: PeriodAnalysisUiState) {
+    val scale = maxOf(uiState.observedKwh, uiState.projectedKwh, uiState.goalKwh, uiState.previousBillKwh, 1)
+    RzCard(modifier = Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.period_comparison_title), style = MaterialTheme.typography.titleMedium)
         Text(
-            screenReaderSummary,
+            stringResource(R.string.period_comparison_body),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        Column(
+            verticalArrangement = Arrangement.spacedBy(RzSpacing.lg),
+            modifier = Modifier.padding(top = RzSpacing.lg),
+        ) {
+            ComparisonBar(
+                label = stringResource(R.string.period_observed_label),
+                value = uiState.observedKwh,
+                scale = scale,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            ComparisonBar(
+                label = stringResource(R.string.period_projected_label),
+                value = uiState.projectedKwh,
+                scale = scale,
+                color = if (uiState.goalKwh > 0 && uiState.projectedKwh > uiState.goalKwh) {
+                    RzTheme.extendedColors.warning
+                } else RzTheme.extendedColors.success,
+            )
+            if (uiState.goalKwh > 0) {
+                ComparisonBar(
+                    label = stringResource(R.string.period_goal_label),
+                    value = uiState.goalKwh,
+                    scale = scale,
+                    color = RzTheme.extendedColors.chartGoalLine,
+                )
+            }
+            if (uiState.previousBillKwh > 0) {
+                ComparisonBar(
+                    label = stringResource(R.string.period_previous_label, uiState.previousPeriodLabel),
+                    value = uiState.previousBillKwh,
+                    scale = scale,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+            }
+        }
+        if (uiState.previousBillKwh > 0) {
+            val difference = uiState.projectedKwh - uiState.previousBillKwh
+            Text(
+                if (difference <= 0) stringResource(R.string.period_previous_lower, -difference)
+                else stringResource(R.string.period_previous_higher, difference),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = RzSpacing.lg),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ComparisonBar(label: String, value: Int, scale: Int, color: Color) {
+    Column {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(label, style = MaterialTheme.typography.labelLarge)
+            Text(stringResource(R.string.period_kwh_value, value), style = MaterialTheme.typography.labelLarge)
+        }
+        RzLinearProgress(
+            progress = value.toFloat() / scale.coerceAtLeast(1),
+            progressColor = color,
+            contentDescription = stringResource(R.string.period_comparison_content_description, label, value, scale),
+            modifier = Modifier.padding(top = 6.dp),
+        )
+    }
+}
+
+@Composable
+private fun ReadingEvidenceCard(uiState: PeriodAnalysisUiState) {
+    RzCard(modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(RzSpacing.sm)) {
+            Icon(RzIcons.Monitoring, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Text(stringResource(R.string.period_evidence_title), style = MaterialTheme.typography.titleMedium)
+        }
+        Text(
+            stringResource(
+                R.string.period_evidence_reading,
+                formatThousands(uiState.lastReadingKwh),
+                uiState.lastReadingDateLabel,
+            ),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = RzSpacing.md),
+        )
+        Text(
+            stringResource(R.string.period_evidence_cost, uiState.costToDateMxn),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
         )
     }
 }
 
 private fun formatThousands(value: Int): String = String.format(Locale.US, "%,d", value)
 
-@Preview(showBackground = true, heightDp = 1400)
+@Preview(showBackground = true, heightDp = 1500)
 @Composable
 private fun PeriodAnalysisScreenPreview() {
     ReciboZenTheme {
         PeriodAnalysisScreen(
-            uiState = PeriodAnalysisUiState(),
+            uiState = PeriodAnalysisUiState(
+                hasUsageData = true,
+                lastReadingKwh = 9_974,
+                lastReadingDateLabel = "13 ago, 4:03 p.m.",
+                observedKwh = 171,
+                observedDays = 30,
+                billingDays = 62,
+                daysRemaining = 32,
+                costToDateMxn = 192,
+                goalKwh = 443,
+                projectedKwh = 353,
+                currentPeriodLabel = "Jul–Sep 26",
+                currentPeriodDateRange = "14 jul–14 sep 2026",
+                previousPeriodLabel = "May–Jul 26",
+                previousBillKwh = 646,
+            ),
             onBack = {},
             onHowWeCalculate = {},
         )

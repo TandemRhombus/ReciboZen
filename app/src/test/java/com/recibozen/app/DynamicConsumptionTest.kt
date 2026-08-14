@@ -125,4 +125,37 @@ class DynamicConsumptionTest {
         assertEquals(4_396, energy.costToDateMxn)
         assertEquals(4_396, energy.projectedCostMxn)
     }
+
+    @Test
+    fun multipleIntermediateReadingsStayAccumulatedFromTheRealBillClosingReading() {
+        val repository = Repository()
+        val periodStart = 20_584L
+        val periodEnd = 20_646L
+        repository.setBills(
+            listOf(
+                BillPeriod(
+                    monthLabel = "May–Jul 26",
+                    amountMxn = 2_274,
+                    consumptionKwh = 646,
+                    periodStartEpochDay = periodStart,
+                    periodEndEpochDay = periodEnd,
+                ),
+            ),
+        )
+        val state = ReciboZenSessionState(
+            readings = listOf(
+                HistoryReadingEntry(9_974, "30 días", ReadingMethod.DIAL, "+74", (periodEnd + 30) * 86_400_000),
+                HistoryReadingEntry(9_900, "17 días", ReadingMethod.MANUAL, "+97", (periodEnd + 17) * 86_400_000),
+                HistoryReadingEntry(9_803, "Cierre", ReadingMethod.PDF, "PDF", periodEnd * 86_400_000),
+                HistoryReadingEntry(9_157, "Inicio", ReadingMethod.PDF, "PDF", periodStart * 86_400_000),
+            ),
+        )
+
+        val energy = repository.energySummary(state)
+
+        assertEquals(171, energy.observedKwh)
+        assertEquals(30, energy.observedDays)
+        assertEquals(353, energy.projectedKwh)
+        assertEquals(32, energy.daysRemaining)
+    }
 }

@@ -4,6 +4,7 @@ import com.recibozen.app.core.model.ConfidenceLevel
 import com.recibozen.app.core.model.BillPeriod
 import com.recibozen.app.core.model.PlanActionStatus
 import com.recibozen.app.core.calculation.DacRiskSnapshot
+import com.recibozen.app.core.calculation.ConsumptionPaceRelation
 
 enum class HomeDataMode { EMPTY, BILL_REFERENCE, PROJECTION }
 
@@ -20,6 +21,8 @@ data class HomeUiState(
     val dataMode: HomeDataMode = HomeDataMode.EMPTY,
 
     val periodLabel: String = "",
+    val currentPeriodLabel: String = "",
+    val currentPeriodDateRange: String = "",
     val projectedMxn: Int = 0,
     val rangeLowMxn: Int = 0,
     val rangeHighMxn: Int = 0,
@@ -28,6 +31,7 @@ data class HomeUiState(
     val daysRemaining: Int = 0,
     val observedTodayKwh: Int = 0,
     val observedDays: Int = 0,
+    val latestReadingDateLabel: String = "",
     val latestBillMxn: Int = 0,
     val latestBillKwh: Int = 0,
     val importedBillCount: Int = 0,
@@ -41,6 +45,8 @@ data class HomeUiState(
 
     val dailyRateNow: Double = 0.0,
     val dailyRateRecommended: Double = 0.0,
+    val remainingGoalKwh: Int = 0,
+    val paceRelation: ConsumptionPaceRelation = ConsumptionPaceRelation.ON_RECOMMENDED,
     val hasAppliances: Boolean = false,
     val applianceCount: Int = 0,
 

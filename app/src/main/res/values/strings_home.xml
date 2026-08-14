@@ -33,16 +33,18 @@
 
     <!-- Recibo proyectado card -->
     <string name="home_projected_period_label">Recibo proyectado · %1$s</string>
+    <string name="home_current_period_fallback">periodo actual</string>
     <string name="home_projection_chip">Proyección</string>
     <string name="home_currency_suffix">MXN</string>
     <string name="home_range_text">Podría quedar entre %1$s y %2$s</string>
-    <string name="home_status_over_goal">Vas a %1$s por encima de tu meta de %2$s. Faltan %3$d días.</string>
-    <string name="home_status_within_goal">Con tu plan cerrarías dentro de tu meta de %1$s. Faltan %2$d días.</string>
+    <string name="home_status_over_goal">Si mantienes este ritmo, cerrarías %1$s por encima de tu meta de %2$s. Faltan %3$d días.</string>
+    <string name="home_status_within_goal">Si mantienes este ritmo, cerrarías dentro de tu meta de %1$s. Faltan %2$d días.</string>
     <string name="home_stat_goal_label">Tu meta</string>
     <string name="home_stat_days_label">Faltan</string>
     <string name="home_stat_days_value">%1$d días</string>
     <string name="home_stat_observed_label">Observado hoy</string>
     <string name="home_stat_observed_value">%1$d kWh</string>
+    <string name="home_previous_bill_context">Último recibo real: %1$s · %2$d kWh · $%3$d</string>
 
     <!-- "Lo que más puede ayudarte hoy" tip card -->
     <string name="home_tip_eyebrow">LO QUE MÁS PUEDE AYUDARTE HOY</string>
@@ -58,14 +60,33 @@
     <string name="home_pace_title">Tu ritmo de consumo</string>
     <string name="home_pace_now_label">Ahora</string>
     <string name="home_pace_recommended_label">Recomendado</string>
-    <string name="home_pace_explanation_prefix">Estás usando alrededor de </string>
-    <string name="home_pace_explanation_bold">%1$s kWh diarios más</string>
-    <string name="home_pace_explanation_suffix"> de lo recomendado para llegar a tu meta. Te quedan cerca de %1$d kWh para los próximos %2$d días.</string>
+    <string name="home_pace_explanation_intro">Tu consumo está </string>
+    <string name="home_pace_explanation_more">%1$s kWh diarios por encima de lo recomendado</string>
+    <string name="home_pace_explanation_less">%1$s kWh diarios por debajo de lo recomendado</string>
+    <string name="home_pace_explanation_on_track">en el ritmo recomendado</string>
+    <string name="home_pace_explanation_remaining"> para llegar a tu meta. Te quedan cerca de %1$d kWh para los próximos %2$d días.</string>
     <string name="home_pace_no_goal">—</string>
     <string name="home_pace_no_goal_hint">Define una meta de pago en tu perfil para ver cuánto te conviene consumir por día.</string>
 
     <!-- "Cómo va el periodo" card -->
-    <string name="home_period_title">Cómo va el periodo</string>
+    <string name="home_period_title">Tu periodo actual</string>
+    <string name="home_period_day_chip">Día %1$d de %2$d</string>
+    <string name="home_period_time_elapsed">Tiempo transcurrido</string>
+    <string name="home_period_time_percent">%1$d%%</string>
+    <string name="home_period_time_content_description">Han transcurrido %1$d de %2$d días del periodo.</string>
+    <string name="home_period_tab_today">Hoy</string>
+    <string name="home_period_tab_close">Al cierre</string>
+    <string name="home_period_tab_previous">Anterior</string>
+    <string name="home_period_kwh_value">%1$d kWh</string>
+    <string name="home_period_today_detail">Medidos durante %1$d días hasta %2$s.</string>
+    <string name="home_period_projection_detail">Estimación para el periodo %1$s si mantienes el ritmo actual.</string>
+    <string name="home_period_previous_detail">Dato real del recibo %1$s; no forma parte de la proyección actual.</string>
+    <string name="home_period_common_scale">Escala común hasta %1$d kWh</string>
+    <string name="home_period_metric_content_description">%1$d de una escala de %2$d kilowatts-hora.</string>
+    <string name="home_period_goal_within">La proyección está %1$d kWh por debajo de tu meta estimada de %2$d kWh.</string>
+    <string name="home_period_goal_over">La proyección está %1$d kWh por encima de tu meta estimada de %2$d kWh.</string>
+    <string name="home_period_previous_lower">Proyectas %1$d kWh menos que en tu último recibo.</string>
+    <string name="home_period_previous_higher">Proyectas %1$d kWh más que en tu último recibo.</string>
     <string name="home_period_legend_observed">observado</string>
     <string name="home_period_legend_projected">proyección</string>
     <string name="home_period_legend_goal">meta (%1$d kWh)</string>

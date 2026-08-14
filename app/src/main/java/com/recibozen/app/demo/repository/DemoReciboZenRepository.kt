@@ -115,20 +115,40 @@ open class DemoReciboZenRepository : ReciboZenRepository {
     }
 
     override fun energySummary(state: ReciboZenSessionState): EnergySummary {
-        val newest = state.readings.getOrNull(0)
-        val previous = state.readings.getOrNull(1)
-        val elapsedMillis = if (newest?.timestampEpochMillis != null && previous?.timestampEpochMillis != null) {
-            newest.timestampEpochMillis - previous.timestampEpochMillis
+        val latestBill = importedBillHistory.value.lastOrNull()
+        val latestBillEndMillis = latestBill?.periodEndEpochDay?.times(MILLIS_PER_DAY)
+        val timedReadings = state.readings.filter { it.timestampEpochMillis != null }
+        val newest = if (latestBillEndMillis != null) {
+            timedReadings
+                .filter { it.method != ReadingMethod.PDF && it.timestampEpochMillis!! > latestBillEndMillis }
+                .maxByOrNull { it.timestampEpochMillis!! }
+        } else {
+            timedReadings.filter { it.method != ReadingMethod.PDF }.maxByOrNull { it.timestampEpochMillis!! }
+        }
+        // Always measure the current period from its real opening reading. If
+        // several intermediate readings exist, using only the last two would
+        // incorrectly turn "consumed this period" into "consumed since the
+        // previous check" and make the projection jump backwards.
+        val baseline = if (latestBillEndMillis != null) {
+            timedReadings
+                .filter { it.timestampEpochMillis!! <= latestBillEndMillis }
+                .maxByOrNull { it.timestampEpochMillis!! }
+        } else {
+            timedReadings
+                .filter { it.method != ReadingMethod.PDF && it !== newest }
+                .minByOrNull { it.timestampEpochMillis!! }
+        }
+        val elapsedMillis = if (newest?.timestampEpochMillis != null && baseline?.timestampEpochMillis != null) {
+            newest.timestampEpochMillis - baseline.timestampEpochMillis
         } else 0L
         val measuredDays = (elapsedMillis / 86_400_000.0).coerceAtLeast(0.0)
-        val measuredKwh = (newest?.kwh ?: 0) - (previous?.kwh ?: 0)
+        val measuredKwh = (newest?.kwh ?: 0) - (baseline?.kwh ?: 0)
         // The two endpoints imported from a PDF describe a bill that already
         // closed; they must not be mistaken for a live reading pair. Once the
         // user records a new reading, comparing it with the PDF endpoint is
         // valid and starts the current-period projection.
         val hasReliablePair = newest?.method != ReadingMethod.PDF &&
-            previous != null && measuredDays >= 0.5 && measuredKwh >= 0
-        val latestBill = importedBillHistory.value.lastOrNull()
+            baseline != null && measuredDays >= 0.5 && measuredKwh >= 0
         val hasUsageEvidence = hasReliablePair || latestBill != null
         val billingDays = when {
             latestBill?.periodStartEpochDay != null && latestBill.periodEndEpochDay != null ->
@@ -173,6 +193,10 @@ open class DemoReciboZenRepository : ReciboZenRepository {
             projectedCostMxn = projectedCost,
             hasUsageEvidence = hasUsageEvidence,
         )
+    }
+
+    private companion object {
+        const val MILLIS_PER_DAY = 86_400_000L
     }
 
     override fun billHistory(state: ReciboZenSessionState): List<BillPeriod> {

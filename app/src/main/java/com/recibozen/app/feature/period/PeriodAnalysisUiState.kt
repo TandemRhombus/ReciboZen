@@ -8,8 +8,12 @@ data class PeriodAnalysisUiState(
     val observedKwh: Int = 0,
     val observedDays: Int = 0,
     val billingDays: Int = 0,
+    val daysRemaining: Int = 0,
     val costToDateMxn: Int = 0,
     val goalKwh: Int = 0,
     val projectedKwh: Int = 0,
-    val surplusStartKwh: Int = 0,
+    val currentPeriodLabel: String = "",
+    val currentPeriodDateRange: String = "",
+    val previousPeriodLabel: String = "",
+    val previousBillKwh: Int = 0,
 )
