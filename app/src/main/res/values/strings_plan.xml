@@ -38,8 +38,8 @@
     <string name="plan_confidence_medium">media</string>
     <string name="plan_confidence_high">alta</string>
 
-    <string name="plan_dac_link_title">Revisa tu promedio de consumo</string>
-    <string name="plan_dac_link_description">Consulta el promedio calculado con tus recibos reales y compáralo con la referencia disponible para tu tarifa.</string>
+    <string name="plan_dac_link_title">Prevención DAC</string>
+    <string name="plan_dac_link_description">Consulta tu promedio móvil de 12 meses, cuánto margen te queda y el máximo recomendado para el próximo recibo.</string>
     <string name="plan_dac_link_action">Ver el detalle →</string>
 
     <string name="plan_solar_link_title">Preestudio solar</string>
@@ -56,6 +56,8 @@
     <string name="balance_explained_label">Explicado %1$d kWh</string>
     <string name="balance_unidentified_label">Sin identificar %1$d kWh</string>
     <string name="balance_explained_body">El %1$d%% restante podría venir de aparatos todavía no registrados, variaciones de uso o estimaciones incompletas. Tu medidor observó %2$d kWh en el periodo.</string>
+    <string name="balance_partial_window_note">Estas cifras corresponden a los %1$d días medidos hasta hoy, no al recibo completo de %2$d días. El consumo de tus aparatos se ajustó proporcionalmente a esos días.</string>
+    <string name="balance_appliances_over_explain">Tus aparatos declaran más consumo del que midió el medidor en estos días. Revisa las horas de uso: probablemente estén sobreestimadas.</string>
     <string name="balance_explained_body_pending">Importa un recibo o registra dos lecturas para comparar el consumo total contra los aparatos agregados.</string>
     <string name="balance_review_remaining_action">Revisar consumo restante</string>
 
@@ -72,22 +74,52 @@
     <string name="balance_overnight_no_result">Todavía no existe una prueba nocturna guardada; no mostraremos resultados de ejemplo.</string>
 
     <!-- ═══════ Promedio de consumo (DAC) ═══════ -->
-    <string name="dac_title">Promedio de consumo</string>
-    <string name="dac_headline">Tu promedio está cerca del límite de referencia</string>
+    <string name="dac_title">Prevención DAC</string>
+    <string name="dac_no_data_title">Todavía no tenemos datos suficientes</string>
+    <string name="dac_no_data_body">Importa un recibo real o registra lecturas del medidor para calcular tu promedio móvil y compararlo con la referencia de tu tarifa.</string>
+    <string name="dac_headline_over">Tu promedio está por encima del límite de referencia</string>
+    <string name="dac_headline_unknown">Tu tendencia DAC todavía necesita más historial</string>
+    <string name="dac_headline_normal">Tu promedio tiene un margen saludable</string>
+    <string name="dac_headline_watch">Tu promedio comienza a acercarse al límite DAC</string>
+    <string name="dac_headline_risk">Tu promedio está cerca del límite DAC</string>
+    <string name="dac_headline_near">Tu promedio está cerca del límite de referencia</string>
+    <string name="dac_headline_under">Tu promedio está por debajo del límite de referencia</string>
     <string name="dac_rolling_average_label">Promedio móvil</string>
     <string name="dac_reference_limit_label">Límite de referencia</string>
     <string name="dac_kwh_per_month">%1$d kWh/mes</string>
     <string name="dac_over_limit_prefix">Estás unos </string>
     <string name="dac_over_limit_bold">%1$d kWh/mes por encima</string>
     <string name="dac_over_limit_suffix">. Bajar cerca de %1$d kWh este periodo te regresaría debajo de la referencia.</string>
-    <string name="dac_footnote">Periodos considerados: %1$s · confianza media. Esta es una orientación: la clasificación final depende de las reglas aplicables y de la información de tu recibo. Tarifas revisadas el %2$s.</string>
+    <string name="dac_under_limit">Vas %1$d kWh/mes por debajo de la referencia de tu tarifa.</string>
+    <string name="dac_margin_below">Tu margen estimado es de %1$d kWh por mes antes del límite.</string>
+    <string name="dac_margin_above">La tendencia estimada está %1$d kWh por mes por encima del límite.</string>
+    <string name="dac_annual_equivalent">En tarifa %2$s, el límite equivale a %1$d kWh en 12 meses. No es un año calendario fijo: CFE usa una ventana móvil.</string>
+    <string name="dac_history_complete">Historial cubierto: aproximadamente %1$d de 12 meses. Ya podemos evaluar la tendencia anual.</string>
+    <string name="dac_history_incomplete">Historial cubierto: aproximadamente %1$d de 12 meses. Por ahora es una tendencia, no una predicción de reclasificación.</string>
+    <string name="dac_footnote">Periodos considerados: %1$s · confianza media. Esta es una orientación: la clasificación final depende de las reglas aplicables y de la información de tu recibo.</string>
 
     <string name="dac_opportunities_title">Lo que más podría ayudarte</string>
+    <string name="dac_opportunity_dynamic">• %1$s: alrededor de %2$d kWh/mes configurados. Revisa sus horas antes de recortar.</string>
+    <string name="dac_next_bill_title">Tu próximo recibo</string>
+    <string name="dac_next_bill_need_history">Importa recibos que cubran cerca de 12 meses para calcular cuánto puedes consumir en el siguiente periodo sin rebasar el promedio móvil.</string>
+    <string name="dac_next_bill_need_reading">Registra una lectura posterior al último recibo para comparar tu ritmo actual con el máximo recomendado.</string>
+    <string name="dac_next_bill_risk">A este ritmo proyectamos %1$d kWh. Si el recibo cierra así, tu promedio podría superar el límite. Para mantenerte debajo, procura cerrar en %2$d kWh o menos.</string>
+    <string name="dac_next_bill_ok">Tu proyección es de %1$d kWh y el máximo recomendado es %2$d kWh para este siguiente periodo.</string>
+    <string name="dac_next_bill_limit">Con el historial disponible, procura que el siguiente recibo cierre en %1$d kWh o menos.</string>
+    <string name="dac_prediction_disclaimer">Es una prevención calculada con tus recibos. CFE determina la clasificación final con el historial facturado y la tarifa asignada a tu localidad.</string>
+    <string name="dac_already_title">Tu recibo ya indica tarifa DAC</string>
+    <string name="dac_already_body">Para calcular una meta de salida necesitamos conocer la tarifa doméstica y el límite de tu localidad anteriores a DAC. Mientras tanto, importa el historial completo y evita presentar una cifra genérica como límite real.</string>
+    <string name="dac_missing_tariff_title">Configura tu tarifa doméstica</string>
+    <string name="dac_missing_tariff_body">El límite DAC depende de la tarifa asignada a tu localidad. Selecciona 1, 1A, 1B, 1C, 1D, 1E o 1F desde tu suministro, o importa un recibo.</string>
     <string name="dac_opportunity_minisplit">· Reducir 35 minutos diarios el minisplit: −24 kWh al mes aproximadamente.</string>
     <string name="dac_opportunity_ps5">· Configurar el reposo de la consola: −6 kWh al mes.</string>
     <string name="dac_opportunity_unidentified">· Revisar el consumo sin identificar: hasta −30 kWh si aparece un aparato olvidado.</string>
 
     <string name="dac_tariff_title">Rango de este periodo · %1$s</string>
+    <string name="dac_tariff_unavailable">Importa un recibo con su desglose legible para mostrar estos tramos con las cuotas reales. No usaremos una tarifa genérica como si fuera la tuya.</string>
+    <string name="dac_tier_basic">Básico · %1$d kWh</string>
+    <string name="dac_tier_intermediate">Intermedio · %1$d kWh</string>
+    <string name="dac_tier_excess">Excedente · desde %1$d kWh</string>
     <string name="dac_today_marker">▲ hoy</string>
     <string name="dac_tariff_footnote">El rango excedente encarece el kWh dentro de este periodo. Es distinto del promedio anual de arriba.</string>
 </resources>

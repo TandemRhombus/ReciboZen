@@ -43,7 +43,7 @@ import com.recibozen.app.demo.repository.ReciboZenRepository
 import com.recibozen.app.navigation.rzViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 
 /**
@@ -65,15 +65,22 @@ data class AppearanceUiState(
 )
 
 class AppearanceViewModel(private val repository: ReciboZenRepository) : ViewModel() {
-    val uiState: StateFlow<AppearanceUiState> = repository.session
-        .map { session ->
+    val uiState: StateFlow<AppearanceUiState> = combine(
+        repository.session,
+        repository.importedBillHistory,
+        repository.tariffCalibration,
+    ) { session, importedBills, _ ->
             val projection = repository.billProjection(session)
+            val energy = repository.energySummary(session)
             AppearanceUiState(
                 themeMode = session.themeMode,
+                periodLabel = importedBills.lastOrNull()?.monthLabel.orEmpty(),
                 projectedMxn = projection.projectedMxn,
                 projectedRangeLowMxn = projection.rangeLowMxn,
                 projectedRangeHighMxn = projection.rangeHighMxn,
-                overGoalMxn = projection.projectedMxn - DemoReciboZenData.GOAL_MXN,
+                goalMxn = session.goalMxn,
+                overGoalMxn = (projection.projectedMxn - session.goalMxn).coerceAtLeast(0),
+                daysRemaining = energy.daysRemaining,
             )
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppearanceUiState())

@@ -41,7 +41,7 @@ import com.recibozen.app.demo.repository.ReciboZenRepository
 import com.recibozen.app.navigation.rzViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 
 /** The 4 selectable hour-range chips, each mapped to a single representative value/week. */
@@ -74,7 +74,7 @@ class ApplianceUsageViewModel(
     private val applianceId: String,
 ) : ViewModel() {
 
-    val uiState: StateFlow<ApplianceUsageUiState> = repository.session.map { session ->
+    val uiState: StateFlow<ApplianceUsageUiState> = combine(repository.session, repository.tariffCalibration) { session, _ ->
         toUiState(repository.appliance(applianceId, session))
     }.stateIn(
         scope = viewModelScope,

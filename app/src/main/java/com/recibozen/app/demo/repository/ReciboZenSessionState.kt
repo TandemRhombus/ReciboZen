@@ -28,6 +28,9 @@ data class ReciboZenSessionState(
     val applianceHoursPerWeek: Map<String, Int> = emptyMap(),
     val customAppliances: List<Appliance> = emptyList(),
     val savedSimulatorScenario: Boolean = false,
+    val simulatorScenarioName: String = "",
+    val simulatorScenarioWatts: Int = 0,
+    val simulatorScenarioHoursPerWeek: Double = 0.0,
     val planActions: List<PlanAction> = emptyList(),
     val dialAngles: List<Float> = listOf(66.3f, 56.7f, 153.4f, 266.4f, 216f),
     val dialDirections: List<Boolean> = listOf(true, false, true, false, true),
@@ -64,7 +67,37 @@ data class EnergySummary(
     val costToDateMxn: Int,
     val projectedCostMxn: Int,
     val hasUsageEvidence: Boolean = false,
-)
+) {
+    /**
+     * How much of the billing period [observedKwh] actually covers.
+     *
+     * Appliance consumption is expressed per full period, so comparing it
+     * against a mid-period reading (say 3 days in) would make the appliances
+     * look like they explain everything and leave "sin identificar" at 0.
+     * Scale appliance kWh by this before comparing against [observedKwh].
+     * It is 1.0 when the evidence is a closed bill, where both already share
+     * the same window.
+     */
+    val observedWindowFraction: Double
+        get() = when {
+            billingDays <= 0 || observedDays <= 0 -> 1.0
+            else -> (observedDays.toDouble() / billingDays).coerceIn(0.0, 1.0)
+        }
+}
+
+/**
+ * Tariff rates in force for the estimate, derived from the user's own bill.
+ * [coverage] says how much of it is real vs. generic fallback, so screens can
+ * be honest about it instead of presenting every number as equally solid.
+ */
+data class TariffCalibrationState(
+    val snapshot: com.recibozen.app.core.calculation.TariffRateSnapshot,
+    val coverage: com.recibozen.app.core.calculation.TariffCalibration.Coverage,
+    val periodLabel: String,
+) {
+    val isCalibrated: Boolean
+        get() = coverage != com.recibozen.app.core.calculation.TariffCalibration.Coverage.NONE
+}
 
 /** Result of interpreting the 5 dial faces into a meter reading. */
 data class DialReadingResult(

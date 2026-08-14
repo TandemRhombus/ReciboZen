@@ -14,7 +14,8 @@ class PeriodAnalysisViewModel(repository: ReciboZenRepository) : ViewModel() {
     val uiState: StateFlow<PeriodAnalysisUiState> = combine(
         repository.session,
         repository.importedBillHistory,
-    ) { state, _ ->
+        repository.tariffCalibration,
+    ) { state, _, _ ->
             val energy = repository.energySummary(state)
             val goalKwh = if (state.goalMxn > 0 && energy.projectedCostMxn > 0) {
                 (energy.projectedKwh * state.goalMxn.toDouble() / energy.projectedCostMxn)

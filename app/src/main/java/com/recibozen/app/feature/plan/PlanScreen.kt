@@ -53,7 +53,6 @@ import com.recibozen.app.demo.repository.ReciboZenRepository
 import com.recibozen.app.demo.repository.ReciboZenSessionState
 import com.recibozen.app.navigation.Routes
 import com.recibozen.app.navigation.rzViewModel
-import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -74,12 +73,17 @@ data class PlanUiState(
     val planProgressFraction: Float = 0f,
     val goalMxn: Int = 0,
     val baselineMxn: Int = 0,
+    val kwhAboveGoal: Int = 0,
     val suggestionActions: List<PlanAction> = emptyList(),
     val verifiedAction: PlanAction? = null,
 )
 
 class PlanViewModel(private val repository: ReciboZenRepository) : ViewModel() {
-    val uiState: StateFlow<PlanUiState> = combine(repository.session, repository.importedBillHistory) { state, imported ->
+    val uiState: StateFlow<PlanUiState> = combine(
+        repository.session,
+        repository.importedBillHistory,
+        repository.tariffCalibration,
+    ) { state, imported, _ ->
             val latestEnd = imported.lastOrNull()?.periodEndEpochDay?.times(86_400_000L)
             val hasLiveReading = latestEnd == null || state.readings.any { reading ->
                 reading.method != com.recibozen.app.core.model.ReadingMethod.PDF &&
@@ -103,9 +107,28 @@ class PlanViewModel(private val repository: ReciboZenRepository) : ViewModel() {
             planProgressFraction = projection.planProgressFraction,
             goalMxn = state.goalMxn,
             baselineMxn = energy.projectedCostMxn,
+            kwhAboveGoal = kwhReductionToGoal(state, energy.projectedKwh, energy.projectedCostMxn, projection.projectedMxn),
             suggestionActions = state.planActions.filter { it.status != PlanActionStatus.VERIFIED },
             verifiedAction = state.planActions.find { it.status == PlanActionStatus.VERIFIED },
         )
+    }
+
+    private fun kwhReductionToGoal(
+        state: ReciboZenSessionState,
+        projectedKwh: Int,
+        projectedTariffCostMxn: Int,
+        projectedAfterPlanMxn: Int,
+    ): Int {
+        if (state.goalMxn <= 0 || projectedKwh <= 0 || projectedAfterPlanMxn <= state.goalMxn) return 0
+        val requiredCostCut = projectedAfterPlanMxn - state.goalMxn
+        val targetTariffCost = (projectedTariffCostMxn - requiredCostCut).coerceAtLeast(0)
+        var low = 0
+        var high = projectedKwh
+        while (low < high) {
+            val middle = (low + high + 1) / 2
+            if (repository.estimateCostMxn(middle) <= targetTariffCost) low = middle else high = middle - 1
+        }
+        return (projectedKwh - low).coerceAtLeast(0)
     }
 
     fun toggleAction(id: String) {
@@ -236,9 +259,7 @@ private fun PlanSummaryCard(uiState: PlanUiState) {
     val proyColor = if (uiState.isWithinGoal) RzTheme.extendedColors.success else MaterialTheme.colorScheme.onSurface
     val resumen = when {
         !uiState.isWithinGoal -> {
-            // Matches the design's conversion factor: ~$2.4 MXN per kWh.
-            val kwh = (diffMxn / 2.4).roundToInt()
-            stringResource(R.string.plan_summary_above_goal, diffMxn, kwh)
+            stringResource(R.string.plan_summary_above_goal, diffMxn, uiState.kwhAboveGoal)
         }
         uiState.rangeHighMxn > uiState.goalMxn ->
             stringResource(R.string.plan_summary_within_goal_uncertain, uiState.rangeHighMxn)

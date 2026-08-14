@@ -47,6 +47,7 @@ import com.recibozen.app.demo.repository.ReciboZenSessionState
 import com.recibozen.app.navigation.Routes
 import com.recibozen.app.navigation.rzViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -73,7 +74,8 @@ class AppliancesViewModel(private val repository: ReciboZenRepository) : ViewMod
         repository.session,
         repository.importedBillHistory,
         selectedFilterIndex,
-    ) { session, importedBills, filterIndex ->
+        repository.tariffCalibration,
+    ) { session, importedBills, filterIndex, _ ->
         session.toUiState(filterIndex, importedBills.lastOrNull()?.monthLabel.orEmpty())
     }.stateIn(
         scope = viewModelScope,
@@ -87,7 +89,10 @@ class AppliancesViewModel(private val repository: ReciboZenRepository) : ViewMod
     private fun ReciboZenSessionState.toUiState(filterIndex: Int, referencePeriodLabel: String): AppliancesUiState {
         val all = repository.appliances(this)
         val energy = repository.energySummary(this)
-        val explainedKwh = all.sumOf { it.kwh }.coerceAtMost(energy.observedKwh)
+        // Same prorating as Balance: appliance kWh covers a full period, the
+        // observed reading may cover only part of it.
+        val expectedInWindow = (all.sumOf { it.kwh } * energy.observedWindowFraction).roundToInt()
+        val explainedKwh = expectedInWindow.coerceAtMost(energy.observedKwh)
         val unidentifiedKwh = if (energy.hasUsageEvidence) (energy.observedKwh - explainedKwh).coerceAtLeast(0) else null
         val unidentifiedCost = unidentifiedKwh?.let { missing ->
             if (energy.observedKwh > 0) (energy.costToDateMxn * missing.toDouble() / energy.observedKwh).toInt() else 0

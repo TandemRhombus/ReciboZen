@@ -5,12 +5,14 @@ Este proyecto comenzó como la conversión visual del prototipo **ReciboZen V2**
 ## Estado funcional actual (11 ago 2026)
 
 - DataStore conserva preferencias y estado de sesión; Room conserva hogares, suministros, medidores, recibos, cargos, historial y datasets de referencia.
-- Historial permite elegir un PDF de CFE, procesarlo localmente, revisar los campos detectados e importar el recibo y sus 11 periodos anteriores.
+- Historial permite elegir un PDF de CFE **o fotografiar el recibo impreso** (`CfePhotoDocumentExtractor`, ML Kit on-device), procesarlo localmente, **corregir cualquier campo mal leído** e importar el recibo y sus periodos anteriores. Ambas rutas comparten el mismo parser y la misma pantalla de revisión editable.
 - Perfil → Mis suministros permite nombrar y seleccionar servicios. Los límites viven en `EntitlementPolicy`: Gratis 1, Plus 2 y Familiar 5.
 - El release está endurecido con R8, sin backup ni HTTP claro. Premium falla cerrado y nunca se restaura desde preferencias editables; el contrato de firma/backend está en `docs/SECURITY_HARDENING.md`.
 - El backend mínimo está en `backend/` y desplegado de forma aislada en la Orange Pi. Expone salud y la clave pública, pero rechaza la activación premium hasta integrar identidad y validación real de Google Play.
 - El arranque espera la hidratación de DataStore y abre Inicio si el onboarding ya fue completado.
 - `TariffEngine` aplica escalones progresivos configurables a los kWh observados/proyectados. La estimación se presenta como orientativa, no como cotización oficial de CFE.
+- **Las tarifas se auto-calibran con el recibo del usuario.** `TariffCalibration` reconstruye un `TariffRateSnapshot` a partir del `unitRateMxn` de cada tramo impreso en el último recibo importado, y `energySummary`/`billProjection` calculan con ese motor calibrado. Sin recibo se usan los escalones genéricos. Se decidió calibrar-desde-recibo en vez de empaquetar una tabla de tarifas porque CFE ajusta precios mensualmente y los umbrales por tramo dependen de la localidad: cualquier tabla nace vencida. `repository.tariffCalibration` expone `Coverage` (FULL/PARTIAL/NONE) para poder ser honestos sobre de dónde salió el número.
+- Onboarding pide siempre meta de pago y tarifa (antes solo aparecían tras importar un PDF, dejando `goalMxn = 0` y el ritmo recomendado en cero para quien entraba sin recibo). El campo Ciudad puede autocompletarse con `CityLocator` (Geocoder on-device, permiso opcional, siempre editable). La **tarifa nunca se infiere de la ubicación**: SHCP la asigna por localidad según temperatura, así que adivinarla facturaría mal en silencio.
 - Las horas de todos los aparatos configurables recalculan kWh, costo, participación, balance y proyección.
 - Los filtros de Aparatos ordenan/filtran realmente y las sugerencias/simulador pueden agregar aparatos persistentes.
 - Manual, manecillas y foto preparan el valor/método correcto antes de confirmar; las nuevas lecturas se fechan, aparecen en Historial y persisten.
@@ -130,6 +132,7 @@ El estado de sesión vive en **`demo/repository/ReciboZenSessionState.kt`** por 
 - Agregar aparatos sugeridos o el aparato del simulador.
 - Generar/compartir el PDF del preestudio solar.
 - Importar un recibo CFE en PDF con texto nativo u OCR local, revisión humana, deduplicación por SHA-256 y persistencia del desglose/historial.
+- Consultar desde Inicio y Plan la prevención DAC: usa una ventana móvil de 365 días, normaliza periodos irregulares por días reales y aplica el límite específico de la tarifa doméstica (1, 1A, 1B, 1C, 1D, 1E o 1F). Con historial suficiente muestra el margen restante y cuánto podría consumirse como máximo en el siguiente recibo; con datos incompletos lo presenta como estimación, nunca como una clasificación definitiva de CFE.
 - Crear, nombrar y seleccionar suministros respetando el límite del plan.
 
 ## Backend provisional

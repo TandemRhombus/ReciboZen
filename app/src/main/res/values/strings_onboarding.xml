@@ -54,7 +54,15 @@
     <string name="onboarding_step3_footnote">Todavía estamos aprendiendo sobre tu consumo. No te pediremos permisos que no necesites.</string>
     <string name="onboarding_goal_after_bill_title">Ahora sí, ¿quieres definir una meta?</string>
     <string name="onboarding_goal_after_bill_body">Tu último recibo real fue de $%1$d. Si quieres, usa ese contexto para elegir cuánto te gustaría pagar en el siguiente.</string>
+    <string name="onboarding_goal_no_bill_title">¿Quieres definir una meta de pago?</string>
+    <string name="onboarding_goal_no_bill_body">Todavía no tenemos un recibo real, pero puedes fijar una meta orientativa. Sin ella no podemos calcular tu ritmo de consumo recomendado ni avisarte si vas arriba.</string>
     <string name="onboarding_goal_after_bill_label">Meta para el próximo recibo en MXN (opcional)</string>
+    <string name="onboarding_city_use_location">Usar mi ubicación</string>
+    <string name="onboarding_city_detecting">Detectando…</string>
+    <string name="onboarding_city_permission_denied">Sin permiso de ubicación. Escribe tu ciudad y listo, la app funciona igual.</string>
+    <string name="onboarding_city_unavailable">No pudimos detectar tu ciudad. Escríbela manualmente.</string>
+    <string name="onboarding_tariff_title">¿Cuál es tu tarifa?</string>
+    <string name="onboarding_tariff_body">La usamos para el límite de referencia de tu promedio (DAC) y para estimar tu recibo. Está en la parte superior de tu recibo de CFE.</string>
 
     <!-- Bottom buttons -->
     <string name="onboarding_action_skip">Saltar</string>
@@ -65,4 +73,5 @@
     <string name="onboarding_primary_step1">Continuar</string>
     <string name="onboarding_primary_step2">Continuar</string>
     <string name="onboarding_primary_step3">Ir a Inicio</string>
+    <string name="onboarding_goal_tariff_required">La meta y la tarifa son necesarias para calcular ritmo, costo y prevención DAC. Puedes regresar y configurar después desde el primer paso.</string>
 </resources>

@@ -35,7 +35,17 @@ import kotlinx.coroutines.flow.update
  */
 open class DemoReciboZenRepository : ReciboZenRepository {
 
-    private val tariffEngine = TariffEngine()
+    private val defaultTariffEngine = TariffEngine()
+
+    protected val mutableTariffCalibration = MutableStateFlow<TariffCalibrationState?>(null)
+    override val tariffCalibration: StateFlow<TariffCalibrationState?> = mutableTariffCalibration.asStateFlow()
+
+    /**
+     * The engine every estimate goes through: the user's own bill rates when a
+     * bill has been imported, the generic progressive blocks otherwise.
+     */
+    protected fun activeTariffEngine(): TariffEngine =
+        mutableTariffCalibration.value?.snapshot?.engine() ?: defaultTariffEngine
 
     protected val mutableSession = MutableStateFlow(ReciboZenSessionState())
     private val _session get() = mutableSession
@@ -63,11 +73,15 @@ open class DemoReciboZenRepository : ReciboZenRepository {
         val latestBill = importedBillHistory.value.lastOrNull()
         val effectiveRate = latestBill?.takeIf { it.consumptionKwh > 0 }
             ?.let { it.amountMxn.toDouble() / it.consumptionKwh }
+        // Appliance kWh is per full billing period, so the share has to be
+        // measured against the projected period too. Comparing it against a
+        // mid-period reading would inflate every appliance to 100%.
+        val shareBasisKwh = energy.projectedKwh.takeIf { it > 0 } ?: energy.observedKwh
         return adjusted.map { appliance ->
             appliance.copy(
                 costMxn = effectiveRate?.let { (appliance.kwh * it).roundToInt() } ?: 0,
-                sharePercent = if (energy.hasUsageEvidence && energy.observedKwh > 0) {
-                    (appliance.kwh * 100f / energy.observedKwh).roundToInt().coerceIn(0, 100)
+                sharePercent = if (energy.hasUsageEvidence && shareBasisKwh > 0) {
+                    (appliance.kwh * 100f / shareBasisKwh).roundToInt().coerceIn(0, 100)
                 } else 0,
             )
         }
@@ -137,15 +151,16 @@ open class DemoReciboZenRepository : ReciboZenRepository {
         val projectedKwh = if (hasReliablePair && billingDays > 0) {
             (dailyAverage * billingDays).roundToInt().coerceAtLeast(observedKwh)
         } else observedKwh
+        val engine = activeTariffEngine()
         val costToDate = when {
             !hasUsageEvidence -> 0
             !hasReliablePair && latestBill != null -> latestBill.amountMxn
-            else -> tariffEngine.estimate(observedKwh).totalMxn
+            else -> engine.estimate(observedKwh).totalMxn
         }
         val projectedCost = when {
             !hasUsageEvidence -> 0
             !hasReliablePair && latestBill != null -> latestBill.amountMxn
-            else -> tariffEngine.estimate(projectedKwh).totalMxn
+            else -> engine.estimate(projectedKwh).totalMxn
         }
         return EnergySummary(
             observedKwh = observedKwh,
@@ -218,8 +233,34 @@ open class DemoReciboZenRepository : ReciboZenRepository {
         }
     }
 
-    override fun saveSimulatorScenario() {
-        _session.update { it.copy(savedSimulatorScenario = true) }
+    override fun estimateCostMxn(kwh: Int): Int =
+        activeTariffEngine().estimate(kwh.coerceAtLeast(0)).totalMxn
+
+    override fun activeTariffBlocks() =
+        mutableTariffCalibration.value?.snapshot?.blocks ?: TariffEngine.DEFAULT_1C_BIMONTHLY_BLOCKS
+
+    override fun removeAppliance(applianceId: String) {
+        _session.update { state ->
+            state.copy(
+                customAppliances = state.customAppliances.filterNot { it.id == applianceId },
+                // Drop the override too, so re-adding the same appliance later
+                // starts from its own defaults instead of a stale edit.
+                applianceHoursPerWeek = state.applianceHoursPerWeek - applianceId,
+                planActions = state.planActions.filterNot { it.id.startsWith(applianceId) },
+            )
+        }
+    }
+
+    override fun saveSimulatorScenario(name: String, watts: Int, hoursPerWeek: Double) {
+        if (name.isBlank() || watts <= 0 || hoursPerWeek !in 0.01..168.0) return
+        _session.update {
+            it.copy(
+                savedSimulatorScenario = true,
+                simulatorScenarioName = name.trim(),
+                simulatorScenarioWatts = watts,
+                simulatorScenarioHoursPerWeek = hoursPerWeek,
+            )
+        }
     }
 
     override fun togglePlanAction(id: String) {
@@ -325,6 +366,16 @@ open class DemoReciboZenRepository : ReciboZenRepository {
                 location = location.trim(),
                 goalMxn = goalMxn.coerceAtLeast(0),
             )
+        }
+    }
+
+    open override fun setTariff(tariff: String) {
+        val normalized = TariffCatalog.find(tariff)?.code ?: return
+        _session.update { it.copy(tariff = normalized) }
+        mutableElectricServices.update { services ->
+            services.map { service ->
+                if (service.id == _session.value.activeServiceId) service.copy(tariffCode = normalized) else service
+            }
         }
     }
 

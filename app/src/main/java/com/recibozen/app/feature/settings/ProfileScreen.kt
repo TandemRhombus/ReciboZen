@@ -250,10 +250,13 @@ fun ProfileScreen(
     }
 
     if (showEditDialog) {
-        var userName by remember(uiState.userName) { mutableStateOf(uiState.userName) }
-        var householdName by remember(uiState.householdName) { mutableStateOf(uiState.householdName) }
-        var location by remember(uiState.location) { mutableStateOf(uiState.location) }
-        var goal by remember(uiState.goalMxn) { mutableStateOf(uiState.goalMxn.takeIf { it > 0 }?.toString().orEmpty()) }
+        // Keyed on the dialog being open, not on the values: keying on the
+        // value itself makes any unrelated uiState emission reset whatever the
+        // user is currently typing.
+        var userName by remember(showEditDialog) { mutableStateOf(uiState.userName) }
+        var householdName by remember(showEditDialog) { mutableStateOf(uiState.householdName) }
+        var location by remember(showEditDialog) { mutableStateOf(uiState.location) }
+        var goal by remember(showEditDialog) { mutableStateOf(uiState.goalMxn.takeIf { it > 0 }?.toString().orEmpty()) }
         AlertDialog(
             onDismissRequest = { showEditDialog = false },
             title = { Text(stringResource(R.string.profile_edit_title)) },
@@ -286,11 +289,11 @@ fun ProfileScreen(
     }
 
     if (showServiceDialog) {
-        var alias by remember(uiState.serviceAlias) { mutableStateOf(uiState.serviceAlias) }
-        var serviceNumber by remember(uiState.serviceNumber) { mutableStateOf(uiState.serviceNumber) }
-        var rmu by remember(uiState.rmu) { mutableStateOf(uiState.rmu) }
-        var meterNumber by remember(uiState.meterNumber) { mutableStateOf(uiState.meterNumber) }
-        var tariffCode by remember(uiState.tariff) { mutableStateOf(TariffCatalog.find(uiState.tariff)?.code.orEmpty()) }
+        var alias by remember(showServiceDialog) { mutableStateOf(uiState.serviceAlias) }
+        var serviceNumber by remember(showServiceDialog) { mutableStateOf(uiState.serviceNumber) }
+        var rmu by remember(showServiceDialog) { mutableStateOf(uiState.rmu) }
+        var meterNumber by remember(showServiceDialog) { mutableStateOf(uiState.meterNumber) }
+        var tariffCode by remember(showServiceDialog) { mutableStateOf(TariffCatalog.find(uiState.tariff)?.code.orEmpty()) }
         val serviceNumberValid = ElectricServiceValidator.isValidServiceNumber(serviceNumber)
         AlertDialog(
             onDismissRequest = { showServiceDialog = false },

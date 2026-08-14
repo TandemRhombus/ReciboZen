@@ -1,10 +1,14 @@
 package com.recibozen.app.feature.onboarding
 
+import android.Manifest
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,12 +33,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
@@ -44,9 +51,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import com.recibozen.app.R
+import com.recibozen.app.core.calculation.TariffCatalog
 import com.recibozen.app.core.components.RzBannerTone
 import com.recibozen.app.core.components.RzCard
 import com.recibozen.app.core.components.RzDashedCard
+import com.recibozen.app.core.components.RzFilterChip
 import com.recibozen.app.core.components.RzInlineBanner
 import com.recibozen.app.core.components.RzPrimaryButton
 import com.recibozen.app.core.components.RzSecondaryButton
@@ -54,6 +63,7 @@ import com.recibozen.app.core.designsystem.RzExtraShapes
 import com.recibozen.app.core.designsystem.RzIcons
 import com.recibozen.app.core.designsystem.RzSpacing
 import com.recibozen.app.core.designsystem.RzTheme
+import com.recibozen.app.core.location.CityLocator
 import com.recibozen.app.demo.repository.ReciboZenRepository
 import com.recibozen.app.navigation.Routes
 import com.recibozen.app.navigation.rzViewModel
@@ -61,6 +71,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 data class OnboardingUiState(
     val step: Int = 0,
@@ -69,6 +80,7 @@ data class OnboardingUiState(
     val location: String = "",
     val goalMxn: Int = 0,
     val meterType: String = "",
+    val tariff: String = "",
     val hasImportedBill: Boolean = false,
     val latestBillAmountMxn: Int = 0,
     val latestBillConsumptionKwh: Int = 0,
@@ -89,6 +101,7 @@ class OnboardingViewModel(private val repository: ReciboZenRepository) : ViewMod
             location = session.location,
             goalMxn = session.goalMxn,
             meterType = session.meterType,
+            tariff = session.tariff,
             hasImportedBill = latestBill != null,
             latestBillAmountMxn = latestBill?.amountMxn ?: 0,
             latestBillConsumptionKwh = latestBill?.consumptionKwh ?: 0,
@@ -107,6 +120,7 @@ class OnboardingViewModel(private val repository: ReciboZenRepository) : ViewMod
         val state = repository.session.value
         repository.updateProfile(state.userName, state.householdName, state.location, goalMxn)
     }
+    fun updateTariff(tariff: String) = repository.setTariff(tariff)
 }
 
 @Composable
@@ -131,6 +145,7 @@ fun OnboardingRoute(navController: NavHostController, repository: ReciboZenRepos
         onMeterTypeSelected = viewModel::setMeterType,
         onProfileChanged = viewModel::updateProfile,
         onGoalChanged = viewModel::updateGoal,
+        onTariffChanged = viewModel::updateTariff,
     )
 }
 
@@ -144,6 +159,7 @@ fun OnboardingScreen(
     onMeterTypeSelected: (String) -> Unit = {},
     onProfileChanged: (String, String, String, Int) -> Unit = { _, _, _, _ -> },
     onGoalChanged: (Int) -> Unit = {},
+    onTariffChanged: (String) -> Unit = {},
 ) {
     val profileComplete = uiState.userName.isNotBlank() &&
         uiState.householdName.isNotBlank() && uiState.location.isNotBlank()
@@ -175,7 +191,7 @@ fun OnboardingScreen(
                     0 -> ProfileStep(uiState, onProfileChanged)
                     1 -> ReceiptStep(uiState, onImportBill)
                     2 -> MeterStep(uiState.meterType, onMeterTypeSelected)
-                    else -> ResultStep(uiState, onGoalChanged)
+                    else -> ResultStep(uiState, onGoalChanged, onTariffChanged)
                 }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -201,6 +217,7 @@ fun OnboardingScreen(
                     enabled = when (uiState.step) {
                         0 -> profileComplete
                         2 -> uiState.meterType.isNotBlank()
+                        3 -> uiState.goalMxn > 0 && TariffCatalog.find(uiState.tariff) != null
                         else -> true
                     },
                     modifier = Modifier.weight(1.6f).height(52.dp),
@@ -286,6 +303,12 @@ private fun ProfileStep(
             label = { Text(stringResource(R.string.profile_edit_location)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
+        )
+        CityAutofillAction(
+            onCityDetected = { detected ->
+                location = detected
+                publish()
+            },
         )
         Text(
             stringResource(R.string.onboarding_profile_required),
@@ -413,8 +436,74 @@ private fun MeterStep(selectedMeterType: String, onMeterTypeSelected: (String) -
     }
 }
 
+/**
+ * "Usar mi ubicación" for the city field. Location is optional and one-shot:
+ * it only prefills a field the user can overwrite, so a denial or a device
+ * without a recent fix just leaves the form as it was.
+ */
 @Composable
-private fun ResultStep(uiState: OnboardingUiState, onGoalChanged: (Int) -> Unit) {
+private fun CityAutofillAction(onCityDetected: (String) -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val locator = remember(context) { CityLocator(context) }
+    var status by remember { mutableStateOf<CityAutofillStatus>(CityAutofillStatus.Idle) }
+
+    fun detect() {
+        status = CityAutofillStatus.Detecting
+        scope.launch {
+            val city = locator.detectCity()
+            status = if (city != null) {
+                onCityDetected(city)
+                CityAutofillStatus.Idle
+            } else {
+                CityAutofillStatus.Unavailable
+            }
+        }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) detect() else status = CityAutofillStatus.Denied
+    }
+
+    Column {
+        RzSecondaryButton(
+            text = stringResource(
+                if (status == CityAutofillStatus.Detecting) R.string.onboarding_city_detecting
+                else R.string.onboarding_city_use_location,
+            ),
+            onClick = {
+                if (locator.hasPermission()) detect()
+                else permissionLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+            },
+            enabled = status != CityAutofillStatus.Detecting,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        val message = when (status) {
+            CityAutofillStatus.Denied -> R.string.onboarding_city_permission_denied
+            CityAutofillStatus.Unavailable -> R.string.onboarding_city_unavailable
+            else -> null
+        }
+        message?.let {
+            Text(
+                stringResource(it),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = RzSpacing.xs),
+            )
+        }
+    }
+}
+
+private enum class CityAutofillStatus { Idle, Detecting, Denied, Unavailable }
+
+@Composable
+private fun ResultStep(
+    uiState: OnboardingUiState,
+    onGoalChanged: (Int) -> Unit,
+    onTariffChanged: (String) -> Unit,
+) {
     var goal by rememberSaveable(uiState.goalMxn) {
         mutableStateOf(uiState.goalMxn.takeIf { it > 0 }?.toString().orEmpty())
     }
@@ -460,30 +549,66 @@ private fun ResultStep(uiState: OnboardingUiState, onGoalChanged: (Int) -> Unit)
                 modifier = Modifier.padding(top = RzSpacing.md),
             )
         }
-        if (uiState.hasImportedBill) {
-            RzCard(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    stringResource(R.string.onboarding_goal_after_bill_title),
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Text(
-                    stringResource(R.string.onboarding_goal_after_bill_body, uiState.latestBillAmountMxn),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = RzSpacing.xs),
-                )
-                OutlinedTextField(
-                    value = goal,
-                    onValueChange = {
-                        goal = it.filter(Char::isDigit).take(7)
-                        onGoalChanged(goal.toIntOrNull() ?: 0)
-                    },
-                    label = { Text(stringResource(R.string.onboarding_goal_after_bill_label)) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.md),
-                )
+        RzCard(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                stringResource(
+                    if (uiState.hasImportedBill) R.string.onboarding_goal_after_bill_title
+                    else R.string.onboarding_goal_no_bill_title,
+                ),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                if (uiState.hasImportedBill) {
+                    stringResource(R.string.onboarding_goal_after_bill_body, uiState.latestBillAmountMxn)
+                } else {
+                    stringResource(R.string.onboarding_goal_no_bill_body)
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = RzSpacing.xs),
+            )
+            OutlinedTextField(
+                value = goal,
+                onValueChange = {
+                    goal = it.filter(Char::isDigit).take(7)
+                    onGoalChanged(goal.toIntOrNull() ?: 0)
+                },
+                label = { Text(stringResource(R.string.onboarding_goal_after_bill_label)) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.md),
+            )
+        }
+        RzCard(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                stringResource(R.string.onboarding_tariff_title),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                stringResource(R.string.onboarding_tariff_body),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = RzSpacing.xs),
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(RzSpacing.xs),
+                verticalArrangement = Arrangement.spacedBy(RzSpacing.xs),
+                modifier = Modifier.padding(top = RzSpacing.md),
+            ) {
+                TariffCatalog.supported.forEach { definition ->
+                    RzFilterChip(
+                        text = definition.code,
+                        selected = definition.code == uiState.tariff,
+                        onClick = { onTariffChanged(definition.code) },
+                    )
+                }
             }
+            Text(
+                stringResource(R.string.onboarding_goal_tariff_required),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = RzSpacing.sm),
+            )
         }
     }
 }

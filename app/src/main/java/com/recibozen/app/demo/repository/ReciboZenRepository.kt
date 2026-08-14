@@ -9,6 +9,7 @@ import com.recibozen.app.core.model.ElectricServiceIdentity
 import com.recibozen.app.core.model.ServiceCreationResult
 import com.recibozen.app.core.importer.ParsedCfeBill
 import com.recibozen.app.core.importer.BillImportResult
+import com.recibozen.app.core.calculation.TariffBlock
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -21,17 +22,34 @@ interface ReciboZenRepository {
     val electricServices: StateFlow<List<ElectricServiceIdentity>>
     val importedBillHistory: StateFlow<List<BillPeriod>>
 
+    /**
+     * Tariff rates derived from the user's own imported bill, or null while no
+     * bill has been imported (the estimate then falls back to generic blocks).
+     * Screens read this to say whether a number came from real rates.
+     */
+    val tariffCalibration: StateFlow<TariffCalibrationState?>
+
     fun appliances(state: ReciboZenSessionState = session.value): List<Appliance>
     fun appliance(id: String, state: ReciboZenSessionState = session.value): Appliance?
     fun billProjection(state: ReciboZenSessionState = session.value): BillProjection
     fun energySummary(state: ReciboZenSessionState = session.value): EnergySummary
     fun billHistory(state: ReciboZenSessionState = session.value): List<BillPeriod>
+
+    /**
+     * Cost of [kwh] under the tariff currently in force. Exposed so screens can
+     * ask marginal questions ("what would adding this appliance cost?") without
+     * reimplementing the progressive blocks — adding 100 kWh is not a flat rate,
+     * it depends on which tier you are already in.
+     */
+    fun estimateCostMxn(kwh: Int): Int
+    fun activeTariffBlocks(): List<TariffBlock>
     fun dialReading(state: ReciboZenSessionState = session.value): DialReadingResult
 
     fun setThemeMode(mode: AppThemeMode)
     fun setApplianceHoursPerWeek(applianceId: String, hours: Int)
     fun addAppliance(appliance: Appliance)
-    fun saveSimulatorScenario()
+    fun removeAppliance(applianceId: String)
+    fun saveSimulatorScenario(name: String, watts: Int, hoursPerWeek: Double)
     fun togglePlanAction(id: String)
     fun setDialAngle(index: Int, angleDegrees: Float)
     fun setDialSelectedIndex(index: Int)
@@ -45,6 +63,7 @@ interface ReciboZenRepository {
     fun completeOnboarding()
     fun setMeterType(meterType: String)
     fun updateProfile(userName: String, householdName: String, location: String, goalMxn: Int)
+    fun setTariff(tariff: String)
     fun updateElectricService(alias: String, serviceNumber: String, rmu: String, meterNumber: String, tariffCode: String)
     fun addElectricService(alias: String, serviceNumber: String, rmu: String, meterNumber: String, tariffCode: String): ServiceCreationResult
     fun selectElectricService(serviceId: String)

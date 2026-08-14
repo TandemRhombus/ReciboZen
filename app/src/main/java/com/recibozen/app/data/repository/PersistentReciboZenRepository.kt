@@ -31,8 +31,10 @@ import com.recibozen.app.core.importer.BillImportResult
 import com.recibozen.app.core.model.EntitlementPolicy
 import com.recibozen.app.core.security.PremiumEntitlementAuthority
 import com.recibozen.app.demo.data.DemoReciboZenData
+import com.recibozen.app.core.calculation.TariffCalibration
 import com.recibozen.app.demo.repository.DemoReciboZenRepository
 import com.recibozen.app.demo.repository.ReciboZenSessionState
+import com.recibozen.app.demo.repository.TariffCalibrationState
 import java.util.Locale
 import java.util.UUID
 import java.time.LocalDate
@@ -159,6 +161,20 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
                     .collect { mutableImportedBillHistory.value = it }
             }
 
+            // Rates the estimate actually bills with, recovered from the newest
+            // imported bill so the projection uses the user's real $/kWh.
+            launch {
+                mutableSession
+                    .map { it.activeServiceId }
+                    .distinctUntilChanged()
+                    .flatMapLatest { serviceId -> dao.observeBills(serviceId) }
+                    .collect { bills ->
+                        mutableTariffCalibration.value = bills
+                            .maxByOrNull { it.periodEndEpochDay }
+                            ?.let(::calibrationFrom)
+                    }
+            }
+
             // Start after hydration so merely opening the app never overwrites
             // a durable state with defaults.
             mutableSession.drop(1).collect { state ->
@@ -180,12 +196,48 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
         return imported + listOfNotNull(projection)
     }
 
+    /**
+     * Rebuilds the tariff snapshot persisted alongside [bill]. Returns null when
+     * the bill carries no usable tier rates, which leaves the estimate on the
+     * generic blocks rather than on half-real numbers.
+     */
+    private fun calibrationFrom(bill: BillEntity): TariffCalibrationState? {
+        val json = bill.tariffSnapshotJson ?: return null
+        val charges = runCatching {
+            val array = JSONObject(json).optJSONArray("charges") ?: return@runCatching emptyList()
+            (0 until array.length()).map { index ->
+                val item = array.getJSONObject(index)
+                TariffCalibration.CalibrationCharge(
+                    type = item.optString("type"),
+                    season = item.optString("season"),
+                    quantityKwh = item.optDouble("quantityKwh").takeIf { !it.isNaN() },
+                    unitRateMxn = item.optDouble("unitRateMxn").takeIf { !it.isNaN() },
+                )
+            }
+        }.getOrDefault(emptyList())
+        if (charges.isEmpty()) return null
+
+        val label = periodLabel(bill.periodStartEpochDay, bill.periodEndEpochDay)
+        val result = TariffCalibration.fromCharges(
+            tariffCode = bill.tariffCode,
+            effectivePeriod = label,
+            charges = charges,
+            sourceBillId = bill.id,
+        )
+        return TariffCalibrationState(result.snapshot, result.coverage, label)
+    }
+
     override fun updateProfile(userName: String, householdName: String, location: String, goalMxn: Int) {
         super.updateProfile(userName, householdName, location, goalMxn)
         val state = mutableSession.value
         if (state.householdName.isNotBlank() || state.location.isNotBlank()) {
             scope.launch { persistHousehold(state) }
         }
+    }
+
+    override fun setTariff(tariff: String) {
+        super.setTariff(tariff)
+        persistService(mutableSession.value.activeServiceId)
     }
 
     override fun updateElectricService(
@@ -476,6 +528,9 @@ internal object SessionJsonCodec {
             }
         })
         put("savedSimulatorScenario", state.savedSimulatorScenario)
+        put("simulatorScenarioName", state.simulatorScenarioName)
+        put("simulatorScenarioWatts", state.simulatorScenarioWatts)
+        put("simulatorScenarioHoursPerWeek", state.simulatorScenarioHoursPerWeek)
         put("planStatuses", JSONObject(state.planActions.associate { it.id to it.status.name }))
         put("dialAngles", JSONArray(state.dialAngles))
         put("dialSelectedIndex", state.dialSelectedIndex)
@@ -551,6 +606,12 @@ internal object SessionJsonCodec {
                 applianceHoursPerWeek = hours,
                 customAppliances = json.optJSONArray("customAppliances").toAppliances(),
                 savedSimulatorScenario = json.optBoolean("savedSimulatorScenario", false),
+                simulatorScenarioName = json.optString("simulatorScenarioName", defaults.simulatorScenarioName),
+                simulatorScenarioWatts = json.optInt("simulatorScenarioWatts", defaults.simulatorScenarioWatts).coerceAtLeast(0),
+                simulatorScenarioHoursPerWeek = json.optDouble(
+                    "simulatorScenarioHoursPerWeek",
+                    defaults.simulatorScenarioHoursPerWeek,
+                ).coerceIn(0.0, 168.0),
                 planActions = defaults.planActions.map { action ->
                     action.copy(status = enumValueOr(statuses?.optString(action.id), action.status))
                 },

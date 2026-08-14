@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.recibozen.app.core.model.PlanActionStatus
 import com.recibozen.app.core.model.ConfidenceLevel
 import com.recibozen.app.core.model.ReadingMethod
+import com.recibozen.app.core.calculation.DacRiskCalculator
 import com.recibozen.app.demo.data.DemoReciboZenData
 import com.recibozen.app.demo.repository.ReciboZenRepository
 import kotlinx.coroutines.flow.SharingStarted
@@ -18,7 +19,8 @@ class HomeViewModel(private val repository: ReciboZenRepository) : ViewModel() {
     val uiState: StateFlow<HomeUiState> = combine(
         repository.session,
         repository.importedBillHistory,
-    ) { state, importedBills ->
+        repository.tariffCalibration,
+    ) { state, importedBills, _ ->
             val projection = repository.billProjection(state)
             val energy = repository.energySummary(state)
             val appliances = repository.appliances(state)
@@ -87,6 +89,12 @@ class HomeViewModel(private val repository: ReciboZenRepository) : ViewModel() {
                 recentReadingsCountLabel = "$liveReadings lecturas posteriores al recibo",
                 previousBillsLoadedCount = importedBills.size,
                 missingApplianceSchedules = appliances.count { it.hoursPerWeek == null },
+                dacRisk = DacRiskCalculator.calculate(
+                    history = importedBills,
+                    tariffCode = state.tariff,
+                    projectedNextBillKwh = energy.projectedKwh.takeIf { hasReadingAfterBill && it > 0 },
+                    projectedBillingDays = energy.billingDays.takeIf { hasReadingAfterBill && it > 0 } ?: 0,
+                ),
             )
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HomeUiState())

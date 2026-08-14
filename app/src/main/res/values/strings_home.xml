@@ -2,6 +2,9 @@
 <resources>
     <string name="home_chart_start">inicio</string>
     <string name="home_chart_today">hoy</string>
+    <string name="home_chart_axis_max">%1$d kWh</string>
+    <string name="home_chart_axis_unit">acumulado</string>
+    <string name="home_chart_axis_zero">0 kWh</string>
     <string name="home_chart_end">fin del periodo</string>
     <string name="home_chart_selected_observed">Día %1$d · %2$d kWh observados</string>
     <string name="home_chart_selected_projected">Día %1$d · %2$d kWh proyectados</string>
@@ -58,10 +61,14 @@
     <string name="home_pace_explanation_prefix">Estás usando alrededor de </string>
     <string name="home_pace_explanation_bold">%1$s kWh diarios más</string>
     <string name="home_pace_explanation_suffix"> de lo recomendado para llegar a tu meta. Te quedan cerca de %1$d kWh para los próximos %2$d días.</string>
+    <string name="home_pace_no_goal">—</string>
+    <string name="home_pace_no_goal_hint">Define una meta de pago en tu perfil para ver cuánto te conviene consumir por día.</string>
 
     <!-- "Cómo va el periodo" card -->
     <string name="home_period_title">Cómo va el periodo</string>
     <string name="home_period_legend_observed">observado</string>
+    <string name="home_period_legend_projected">proyección</string>
+    <string name="home_period_legend_goal">meta (%1$d kWh)</string>
     <string name="home_period_explanation">Llevas %1$d kWh en %2$d días. Si mantienes este ritmo, cerrarías cerca de %3$d kWh, unos %4$d por encima de tu meta.</string>
     <string name="home_view_full_analysis">Ver análisis completo</string>
 
@@ -89,6 +96,22 @@
     <string name="home_data_quality_explanation">El historial del PDF ya sirve para comparar periodos. Todavía no lo llamamos proyección del periodo actual hasta tener una lectura posterior.</string>
     <string name="home_confidence_first_live_reading_hint">Registra una lectura posterior al cierre del recibo para iniciar la proyección actual.</string>
     <string name="home_register_reading_button">Registrar una lectura</string>
+
+    <!-- Prevención DAC -->
+    <string name="home_dac_normal_title">Prevención DAC: margen saludable</string>
+    <string name="home_dac_watch_title">Prevención DAC: vigila tu tendencia</string>
+    <string name="home_dac_risk_title">Prevención DAC: estás cerca del límite</string>
+    <string name="home_dac_over_title">Prevención DAC: promedio estimado sobre el límite</string>
+    <string name="home_dac_already_title">Tu recibo indica tarifa DAC</string>
+    <string name="home_dac_setup_title">Configura la prevención DAC</string>
+    <string name="home_dac_partial_title">Prevención DAC: completando tu historial</string>
+    <string name="home_dac_already_body">Revisa el historial y los datos necesarios para construir un plan de salida sin inventar un límite genérico.</string>
+    <string name="home_dac_setup_body">El límite depende de la tarifa asignada a tu localidad. Configúrala o importa un recibo.</string>
+    <string name="home_dac_import_body">Tu tarifa tiene un límite de %1$d kWh/mes. Importa historial para calcular el promedio móvil.</string>
+    <string name="home_dac_partial_body">Tendencia: %1$d de %2$d kWh/mes, con aproximadamente %3$d meses cubiertos. Aún no afirmamos riesgo definitivo.</string>
+    <string name="home_dac_projection_risk_body">Proyectamos %1$d kWh para el siguiente recibo; procura %2$d kWh o menos para mantener el promedio bajo el límite.</string>
+    <string name="home_dac_margin_body">Promedio móvil: %1$d de %2$d kWh/mes.</string>
+    <string name="home_dac_action">Ver margen y próximo recibo →</string>
 
     <!-- Footer -->
     <string name="home_how_we_calculate">Cómo lo calculamos</string>

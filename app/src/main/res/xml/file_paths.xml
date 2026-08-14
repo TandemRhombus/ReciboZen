@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <cache-path name="camera_cache" path="reading_photos/" />
+    <cache-path name="bill_photos" path="bill_photos/" />
     <cache-path name="reports_cache" path="reports/" />
     <files-path name="saved_readings" path="reading_photos/" />
 </paths>

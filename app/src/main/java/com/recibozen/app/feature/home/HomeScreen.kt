@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -63,6 +64,7 @@ import com.recibozen.app.core.designsystem.RzPalette
 import com.recibozen.app.core.designsystem.RzSpacing
 import com.recibozen.app.core.designsystem.RzTheme
 import com.recibozen.app.core.model.PlanActionStatus
+import com.recibozen.app.core.calculation.DacRiskLevel
 import com.recibozen.app.demo.repository.ReciboZenRepository
 import com.recibozen.app.navigation.Routes
 import com.recibozen.app.navigation.rzViewModel
@@ -93,6 +95,7 @@ fun HomeRoute(navController: NavHostController, repository: ReciboZenRepository)
         onRegisterReading = { navController.navigate(Routes.ReadingMethod) },
         onHowWeCalculate = { navController.navigate(Routes.HowWeCalculate) },
         onImportBill = { navController.navigate(Routes.BillImport) },
+        onDacClick = { navController.navigate(Routes.Dac) },
     )
 }
 
@@ -110,6 +113,7 @@ fun HomeScreen(
     onRegisterReading: () -> Unit,
     onHowWeCalculate: () -> Unit,
     onImportBill: () -> Unit = {},
+    onDacClick: () -> Unit = {},
 ) {
     Scaffold(
         modifier = Modifier.fillMaxSize().statusBarsPadding(),
@@ -166,8 +170,65 @@ fun HomeScreen(
                     item { HowWeCalculateRow(onHowWeCalculate) }
                 }
             }
+            item { DacRiskCard(uiState, onDacClick) }
             }
         }
+    }
+}
+
+@Composable
+private fun DacRiskCard(uiState: HomeUiState, onClick: () -> Unit) {
+    val risk = uiState.dacRisk
+    val title = when (risk.level) {
+        DacRiskLevel.NORMAL -> stringResource(R.string.home_dac_normal_title)
+        DacRiskLevel.WATCH -> stringResource(R.string.home_dac_watch_title)
+        DacRiskLevel.RISK -> stringResource(R.string.home_dac_risk_title)
+        DacRiskLevel.ABOVE_LIMIT -> stringResource(R.string.home_dac_over_title)
+        DacRiskLevel.ALREADY_DAC -> stringResource(R.string.home_dac_already_title)
+        DacRiskLevel.UNKNOWN -> stringResource(
+            if (risk.monthlyAverageKwh != null) R.string.home_dac_partial_title else R.string.home_dac_setup_title,
+        )
+        else -> stringResource(R.string.home_dac_setup_title)
+    }
+    val body = when {
+        risk.level == DacRiskLevel.ALREADY_DAC -> stringResource(R.string.home_dac_already_body)
+        risk.monthlyLimitKwh == null -> stringResource(R.string.home_dac_setup_body)
+        risk.monthlyAverageKwh == null -> stringResource(R.string.home_dac_import_body, risk.monthlyLimitKwh)
+        !risk.hasCompleteHistory -> stringResource(
+            R.string.home_dac_partial_body,
+            risk.monthlyAverageKwh.roundToInt(),
+            risk.monthlyLimitKwh,
+            risk.coveredMonths,
+        )
+        risk.wouldExceedWithProjection -> stringResource(
+            R.string.home_dac_projection_risk_body,
+            risk.projectedNextBillKwh ?: 0,
+            risk.recommendedNextBillMaxKwh ?: 0,
+        )
+        else -> stringResource(
+            R.string.home_dac_margin_body,
+            risk.monthlyAverageKwh.roundToInt(),
+            risk.monthlyLimitKwh,
+        )
+    }
+    RzCard(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(RzSpacing.sm)) {
+            Icon(RzIcons.Monitoring, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            Icon(RzIcons.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.outline)
+        }
+        Text(
+            body,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = RzSpacing.sm),
+        )
+        Text(
+            stringResource(R.string.home_dac_action),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(top = RzSpacing.sm),
+        )
     }
 }
 
@@ -500,6 +561,10 @@ private fun PaceCard(uiState: HomeUiState) {
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurface,
         )
+        // Scale both bars off whichever value is larger instead of a fixed
+        // demo constant, so real households whose daily rate is above (or
+        // well below) the old ~7-8 kWh/day demo range still compare visually.
+        val paceScale = maxOf(uiState.dailyRateNow, uiState.dailyRateRecommended, 0.1)
         Row(
             horizontalArrangement = Arrangement.spacedBy(RzSpacing.lg),
             modifier = Modifier.padding(top = RzSpacing.md),
@@ -507,7 +572,7 @@ private fun PaceCard(uiState: HomeUiState) {
             PaceColumn(
                 label = stringResource(R.string.home_pace_now_label),
                 value = uiState.dailyRateNow,
-                progressFraction = (uiState.dailyRateNow / 8.0).toFloat(),
+                progressFraction = (uiState.dailyRateNow / paceScale).toFloat(),
                 color = RzTheme.extendedColors.warning,
                 contentDescription = stringResource(R.string.home_content_desc_pace_now, formatRate(uiState.dailyRateNow)),
                 modifier = Modifier.weight(1f),
@@ -515,11 +580,21 @@ private fun PaceCard(uiState: HomeUiState) {
             PaceColumn(
                 label = stringResource(R.string.home_pace_recommended_label),
                 value = uiState.dailyRateRecommended,
-                progressFraction = (uiState.dailyRateRecommended / 8.0).toFloat(),
+                progressFraction = (uiState.dailyRateRecommended / paceScale).toFloat(),
                 color = RzTheme.extendedColors.success,
                 contentDescription = stringResource(R.string.home_content_desc_pace_recommended, formatRate(uiState.dailyRateRecommended)),
+                displayOverride = stringResource(R.string.home_pace_no_goal).takeIf { uiState.goalMxn <= 0 },
                 modifier = Modifier.weight(1f),
             )
+        }
+        if (uiState.goalMxn <= 0) {
+            Text(
+                stringResource(R.string.home_pace_no_goal_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(top = RzSpacing.sm),
+            )
+            return@RzCard
         }
 
         val diff = ((uiState.dailyRateNow - uiState.dailyRateRecommended) * 10).roundToInt() / 10.0
@@ -549,17 +624,18 @@ private fun PaceColumn(
     color: Color,
     contentDescription: String,
     modifier: Modifier = Modifier,
+    displayOverride: String? = null,
 ) {
     Column(modifier = modifier) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(
-            formatRate(value),
+            displayOverride ?: formatRate(value),
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(top = 2.dp),
         )
         RzLinearProgress(
-            progress = progressFraction,
+            progress = if (displayOverride != null) 0f else progressFraction,
             progressColor = color,
             contentDescription = contentDescription,
             modifier = Modifier.padding(top = 6.dp),
@@ -590,43 +666,72 @@ private fun PeriodChartCard(uiState: HomeUiState, onViewFullAnalysis: () -> Unit
             (uiState.projectedKwh * selectedDay.toFloat() / uiState.billingDays).roundToInt()
         } else uiState.projectedKwh
     }
+    val chartCeilingKwh = maxOf(uiState.observedTodayKwh, uiState.projectedKwh, uiState.goalKwh, 1)
     RzCard(modifier = Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            stringResource(R.string.home_period_title),
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+
+        // Without a value scale the three lines are just shapes; showing the
+        // ceiling and the floor makes the height mean something.
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.sm),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
             Text(
-                stringResource(R.string.home_period_title),
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
+                stringResource(R.string.home_chart_axis_max, chartCeilingKwh),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline,
             )
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Box(
-                    modifier = Modifier
-                        .width(16.dp)
-                        .height(2.dp)
-                        .background(RzTheme.extendedColors.chartObserved),
-                )
-                Text(
-                    stringResource(R.string.home_period_legend_observed),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            Text(
+                stringResource(R.string.home_chart_axis_unit),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline,
+            )
         }
 
         RzLineChart(
             series = homeChartSeries(uiState),
-            modifier = Modifier.padding(top = RzSpacing.md),
+            modifier = Modifier.padding(top = RzSpacing.xs),
             height = 120.dp,
             selectedIndex = selectedIndex,
             onPointSelected = { selectedIndex = it },
         )
 
         Row(modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.xs)) {
-            Text(stringResource(R.string.home_chart_start), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+            Text(stringResource(R.string.home_chart_axis_zero), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
             Box(Modifier.weight(1f))
             Text(stringResource(R.string.home_chart_today), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Box(Modifier.weight(1f))
             Text(stringResource(R.string.home_chart_end), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+        }
+
+        // Full legend: previously only "observado" was labelled, leaving the
+        // dashed and dotted lines unexplained.
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(RzSpacing.md),
+            verticalArrangement = Arrangement.spacedBy(RzSpacing.xs),
+            modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.sm),
+        ) {
+            ChartLegendItem(
+                label = stringResource(R.string.home_period_legend_observed),
+                color = RzTheme.extendedColors.chartObserved,
+                dashed = false,
+            )
+            ChartLegendItem(
+                label = stringResource(R.string.home_period_legend_projected),
+                color = RzTheme.extendedColors.chartObserved,
+                dashed = true,
+            )
+            if (uiState.goalKwh > 0) {
+                ChartLegendItem(
+                    label = stringResource(R.string.home_period_legend_goal, uiState.goalKwh),
+                    color = RzTheme.extendedColors.chartGoalLine,
+                    dashed = true,
+                )
+            }
         }
         Text(
             stringResource(
@@ -682,6 +787,27 @@ private fun PeriodChartCard(uiState: HomeUiState, onViewFullAnalysis: () -> Unit
  * final 2. The visible observed series ends exactly at the mock's "today"
  * break point; the remaining values only keep every series x-aligned.
  */
+/** Legend swatch that mirrors the line style it stands for, not just its color. */
+@Composable
+private fun ChartLegendItem(label: String, color: Color, dashed: Boolean) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (dashed) {
+            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                repeat(3) {
+                    Box(modifier = Modifier.width(4.dp).height(2.dp).background(color))
+                }
+            }
+        } else {
+            Box(modifier = Modifier.width(16.dp).height(2.dp).background(color))
+        }
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
 @Composable
 private fun homeChartSeries(uiState: HomeUiState): List<RzChartSeries> {
     val pointCount = 8

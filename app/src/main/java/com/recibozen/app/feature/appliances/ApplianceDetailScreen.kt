@@ -13,9 +13,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -48,7 +53,7 @@ import com.recibozen.app.navigation.Routes
 import com.recibozen.app.navigation.rzViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 
 data class ApplianceDetailUiState(
@@ -67,8 +72,7 @@ class ApplianceDetailViewModel(
     private val applianceId: String,
 ) : ViewModel() {
 
-    val uiState: StateFlow<ApplianceDetailUiState> = repository.session
-        .map { session ->
+    val uiState: StateFlow<ApplianceDetailUiState> = combine(repository.session, repository.tariffCalibration) { session, _ ->
             val appliance = repository.appliance(applianceId, session)
             val actionId = recommendationActionId(applianceId)
             ApplianceDetailUiState(
@@ -91,6 +95,8 @@ class ApplianceDetailViewModel(
     fun onToggleRecommendation() {
         recommendationActionId(applianceId)?.let { repository.togglePlanAction(it) }
     }
+
+    fun onRemove() = repository.removeAppliance(applianceId)
 
     private fun recommendationActionId(id: String): String? = when (id) {
         "minisplit" -> DemoReciboZenData.MINISPLIT_ACTION_ID
@@ -115,6 +121,10 @@ fun ApplianceDetailRoute(
         onToggleRecommendation = viewModel::onToggleRecommendation,
         onHowWeCalculate = { navController.navigate(Routes.HowWeCalculate) },
         onEditData = { navController.navigate(Routes.applianceUsage(applianceId)) },
+        onRemove = {
+            viewModel.onRemove()
+            navController.popBackStack()
+        },
     )
 }
 
@@ -126,8 +136,10 @@ fun ApplianceDetailScreen(
     onToggleRecommendation: () -> Unit,
     onHowWeCalculate: () -> Unit,
     onEditData: () -> Unit,
+    onRemove: () -> Unit = {},
 ) {
     val appliance = uiState.appliance
+    var showRemoveDialog by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
         RzFlowTopBar(title = appliance?.name.orEmpty(), onBack = onBack)
@@ -204,7 +216,34 @@ fun ApplianceDetailScreen(
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
+
+            RzSecondaryButton(
+                text = stringResource(R.string.appliances_detail_remove),
+                onClick = { showRemoveDialog = true },
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
+    }
+
+    if (showRemoveDialog && appliance != null) {
+        AlertDialog(
+            onDismissRequest = { showRemoveDialog = false },
+            title = { Text(stringResource(R.string.appliances_detail_remove_title, appliance.name)) },
+            text = { Text(stringResource(R.string.appliances_detail_remove_body)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showRemoveDialog = false
+                        onRemove()
+                    },
+                ) { Text(stringResource(R.string.appliances_detail_remove_confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRemoveDialog = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
     }
 }
 

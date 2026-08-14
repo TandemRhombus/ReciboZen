@@ -3,6 +3,7 @@ package com.recibozen.app.feature.home
 import com.recibozen.app.core.model.ConfidenceLevel
 import com.recibozen.app.core.model.BillPeriod
 import com.recibozen.app.core.model.PlanActionStatus
+import com.recibozen.app.core.calculation.DacRiskSnapshot
 
 enum class HomeDataMode { EMPTY, BILL_REFERENCE, PROJECTION }
 
@@ -56,4 +57,5 @@ data class HomeUiState(
     val previousBillsLoadedCount: Int = 0,
     val recentReadingsCountLabel: String = "0 lecturas recientes",
     val missingApplianceSchedules: Int = 0,
+    val dacRisk: DacRiskSnapshot = DacRiskSnapshot(),
 )

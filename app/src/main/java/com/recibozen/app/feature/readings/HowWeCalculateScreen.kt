@@ -35,7 +35,7 @@ import com.recibozen.app.demo.repository.ReciboZenRepository
 import com.recibozen.app.navigation.rzViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import java.util.Locale
 
@@ -50,8 +50,7 @@ data class HowWeCalculateUiState(
 )
 
 class HowWeCalculateViewModel(repository: ReciboZenRepository) : ViewModel() {
-    val uiState: StateFlow<HowWeCalculateUiState> = repository.session
-        .map { state ->
+    val uiState: StateFlow<HowWeCalculateUiState> = combine(repository.session, repository.tariffCalibration) { state, _ ->
             val energy = repository.energySummary(state)
             HowWeCalculateUiState(
                 observedKwh = energy.observedKwh,

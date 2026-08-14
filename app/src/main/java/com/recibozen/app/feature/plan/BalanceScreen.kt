@@ -32,12 +32,14 @@ import com.recibozen.app.core.components.RzStackedBarRow
 import com.recibozen.app.core.components.RzStatusChip
 import com.recibozen.app.core.designsystem.ReciboZenTheme
 import com.recibozen.app.core.designsystem.RzSpacing
+import com.recibozen.app.core.designsystem.RzTheme
 import com.recibozen.app.demo.repository.ReciboZenRepository
 import com.recibozen.app.navigation.Routes
 import com.recibozen.app.navigation.rzViewModel
+import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 
 /** Pushed flow screen "Balance de consumo": how much of the bill is explained vs unidentified. */
@@ -48,6 +50,12 @@ data class BalanceUiState(
     val explainedKwh: Int = 0,
     val unexplainedKwh: Int = 0,
     val observedKwh: Int = 0,
+    val observedDays: Int = 0,
+    val billingDays: Int = 0,
+    /** True while the reading only covers part of the period, so figures are for those days. */
+    val isPartialWindow: Boolean = false,
+    /** Declared appliances exceed what the meter actually measured — hours are overstated. */
+    val appliancesOverExplain: Boolean = false,
     val suspects: List<String> = emptyList(),
     val hasOvernightTest: Boolean = false,
     val overnightObservedKwh: Double = 0.0,
@@ -56,19 +64,28 @@ data class BalanceUiState(
 )
 
 class BalanceViewModel(repository: ReciboZenRepository) : ViewModel() {
-    val uiState: StateFlow<BalanceUiState> = repository.session
-        .map { state ->
-            val observed = repository.energySummary(state).observedKwh
-            val explained = repository.appliances(state).sumOf { it.kwh }.coerceAtMost(observed)
+    val uiState: StateFlow<BalanceUiState> = combine(repository.session, repository.tariffCalibration) { state, _ ->
+            val energy = repository.energySummary(state)
+            val observed = energy.observedKwh
+            // Appliance kWh is per full period. Against a mid-period reading it
+            // has to be prorated to the measured window, otherwise the
+            // appliances "explain" everything and nothing is ever unidentified.
+            val periodApplianceKwh = repository.appliances(state).sumOf { it.kwh }
+            val expectedInWindow = (periodApplianceKwh * energy.observedWindowFraction).roundToInt()
+            val explained = expectedInWindow.coerceAtMost(observed)
             val unexplained = (observed - explained).coerceAtLeast(0)
             val explainedShare = if (observed == 0) 0 else (explained * 100f / observed).toInt().coerceIn(0, 100)
             BalanceUiState(
-                hasUsageData = repository.energySummary(state).hasUsageEvidence,
+                hasUsageData = energy.hasUsageEvidence,
                 explainedSharePercent = explainedShare,
                 unidentifiedSharePercent = if (observed > 0) 100 - explainedShare else 0,
                 explainedKwh = explained,
                 unexplainedKwh = unexplained,
                 observedKwh = observed,
+                observedDays = energy.observedDays,
+                billingDays = energy.billingDays,
+                isPartialWindow = energy.observedWindowFraction < 0.99,
+                appliancesOverExplain = expectedInWindow > observed && observed > 0,
                 suspects = repository.appliances(state)
                     .filter { it.confidence != com.recibozen.app.core.model.ConfidenceLevel.HIGH }
                     .map { it.name },
@@ -159,6 +176,26 @@ fun BalanceScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = RzSpacing.md),
                 )
+                if (uiState.hasUsageData && uiState.isPartialWindow) {
+                    Text(
+                        stringResource(
+                            R.string.balance_partial_window_note,
+                            uiState.observedDays,
+                            uiState.billingDays,
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = RzSpacing.sm),
+                    )
+                }
+                if (uiState.appliancesOverExplain) {
+                    Text(
+                        stringResource(R.string.balance_appliances_over_explain),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = RzTheme.extendedColors.warningText,
+                        modifier = Modifier.padding(top = RzSpacing.sm),
+                    )
+                }
                 RzPrimaryButton(
                     text = stringResource(R.string.balance_review_remaining_action),
                     onClick = onReviewRemaining,
