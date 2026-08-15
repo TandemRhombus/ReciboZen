@@ -3,6 +3,8 @@ package com.recibozen.app.demo.repository
 import com.recibozen.app.core.designsystem.AppThemeMode
 import com.recibozen.app.core.calculation.TariffEngine
 import com.recibozen.app.core.model.Appliance
+import com.recibozen.app.core.model.ApplianceDataSource
+import com.recibozen.app.core.model.ApplianceUsageModel
 import com.recibozen.app.core.model.BillPeriod
 import com.recibozen.app.core.model.HistoryReadingEntry
 import com.recibozen.app.core.model.HistoryUnit
@@ -13,6 +15,8 @@ import com.recibozen.app.core.model.ElectricServiceIdentity
 import com.recibozen.app.core.model.EntitlementPolicy
 import com.recibozen.app.core.model.EntitlementTier
 import com.recibozen.app.core.model.ServiceCreationResult
+import com.recibozen.app.core.model.HouseSpace
+import com.recibozen.app.core.model.HouseSpaceDefaults
 import com.recibozen.app.core.importer.ParsedCfeBill
 import com.recibozen.app.core.importer.BillImportResult
 import com.recibozen.app.core.components.MeterDialMath
@@ -90,43 +94,43 @@ open class DemoReciboZenRepository : ReciboZenRepository {
         }
     }
 
-    /** Applies persisted schedule overrides without consulting [energySummary], avoiding a forecast cycle. */
+    /** Applies persisted schedule and quantity data without consulting [energySummary], avoiding a forecast cycle. */
     private fun adjustedAppliances(state: ReciboZenSessionState): List<Appliance> =
         state.customAppliances
             .distinctBy { it.id }
             .map { appliance ->
-            val hours = state.applianceHoursPerWeek[appliance.id] ?: appliance.hoursPerWeek
-            if (hours != null && appliance.hoursPerWeek != null) {
-                val ratio = hours.toDouble() / appliance.hoursPerWeek.coerceAtLeast(1)
-                val watts = appliance.powerWatts
-                val originalHours = appliance.hoursPerWeek
-                if (watts != null && watts > 0 && originalHours > 0) {
-                    val originalStandbyKwh = appliance.standbySharePercent
-                        ?.let { appliance.kwh * it / 100.0 }
-                        ?: 0.0
-                    val originalActiveKwh = (appliance.kwh - originalStandbyKwh).coerceAtLeast(0.0)
-                    val periodWeeks = originalActiveKwh / (watts / 1_000.0 * originalHours)
-                    val activeKwh = watts / 1_000.0 * hours * periodWeeks
-                    val standbyKwh = appliance.standbyWatts?.let { standbyWatts ->
-                        standbyWatts / 1_000.0 * (168 - hours).coerceAtLeast(0) * periodWeeks
+                val quantity = appliance.quantity.coerceIn(1, 999)
+                val hours = state.applianceHoursPerWeek[appliance.id] ?: appliance.hoursPerWeek
+                val isScheduled = appliance.usageModel == ApplianceUsageModel.POWER_SCHEDULE && hours != null
+                val referenceDays = appliance.referencePeriodDays.coerceAtLeast(1)
+                val legacyUnitKwh = appliance.kwh.toDouble() / appliance.quantity.coerceAtLeast(1)
+                val storedUnitKwh = appliance.unitKwh ?: legacyUnitKwh
+                val unitActiveKwh: Double
+                val unitStandbyKwh: Double
+                if (isScheduled && appliance.powerWatts?.let { it > 0 } == true) {
+                    unitActiveKwh = appliance.powerWatts / 1_000.0 * hours * referenceDays / 7.0
+                    unitStandbyKwh = appliance.standbyWatts?.let { standbyWatts ->
+                        standbyWatts / 1_000.0 * (168 - hours).coerceAtLeast(0) * referenceDays / 7.0
                     } ?: 0.0
-                    val totalKwh = (activeKwh + standbyKwh).roundToInt().coerceAtLeast(0)
-                    appliance.copy(
-                        hoursPerWeek = hours,
-                        kwh = totalKwh,
-                        costMxn = (appliance.costMxn * ratio).roundToInt(),
-                        standbySharePercent = if (totalKwh > 0 && standbyKwh > 0) {
-                            (standbyKwh * 100 / totalKwh).roundToInt().coerceIn(0, 100)
-                        } else null,
-                    )
+                } else if (isScheduled && appliance.hoursPerWeek?.let { it > 0 } == true) {
+                    val ratio = hours.toDouble() / appliance.hoursPerWeek.coerceAtLeast(1)
+                    unitActiveKwh = storedUnitKwh * ratio
+                    unitStandbyKwh = 0.0
                 } else {
-                    appliance.copy(
-                        hoursPerWeek = hours,
-                        kwh = (appliance.kwh * ratio).roundToInt(),
-                        costMxn = (appliance.costMxn * ratio).roundToInt(),
-                    )
+                    unitActiveKwh = storedUnitKwh.coerceAtLeast(0.0)
+                    unitStandbyKwh = 0.0
                 }
-            } else appliance
+                val unitTotalKwh = unitActiveKwh + unitStandbyKwh
+                val totalKwh = (unitTotalKwh * quantity).roundToInt().coerceAtLeast(0)
+                appliance.copy(
+                    quantity = quantity,
+                    hoursPerWeek = if (isScheduled) hours else null,
+                    kwh = totalKwh,
+                    unitKwh = unitTotalKwh,
+                    standbySharePercent = if (unitTotalKwh > 0 && unitStandbyKwh > 0) {
+                        (unitStandbyKwh * 100 / unitTotalKwh).roundToInt().coerceIn(0, 100)
+                    } else null,
+                )
         }
 
     override fun appliance(id: String, state: ReciboZenSessionState): Appliance? =
@@ -316,6 +320,56 @@ open class DemoReciboZenRepository : ReciboZenRepository {
         }
     }
 
+    override fun updateAppliance(
+        applianceId: String,
+        quantity: Int,
+        spaceId: String?,
+        room: String,
+        brand: String?,
+        model: String?,
+        usageModel: ApplianceUsageModel,
+        hoursPerWeek: Int?,
+        unitKwh: Double?,
+        dataSource: ApplianceDataSource,
+    ) {
+        _session.update { state ->
+            val safeQuantity = quantity.coerceIn(1, 999)
+            val safeHours = hoursPerWeek?.coerceIn(0, 168)
+            val safeUnitKwh = unitKwh?.coerceIn(0.0, 100_000.0)
+            val safeRoom = room.trim().take(40).ifEmpty { "Toda la casa" }
+            val updated = state.customAppliances.map { appliance ->
+                if (appliance.id != applianceId) appliance else appliance.copy(
+                    room = safeRoom,
+                    spaceId = spaceId,
+                    quantity = safeQuantity,
+                    brand = brand?.trim()?.take(40)?.takeIf { it.isNotEmpty() },
+                    model = model?.trim()?.take(60)?.takeIf { it.isNotEmpty() },
+                    usageModel = usageModel,
+                    hoursPerWeek = if (usageModel == ApplianceUsageModel.POWER_SCHEDULE) safeHours else null,
+                    unitKwh = safeUnitKwh ?: appliance.unitKwh,
+                    kwh = if (usageModel == ApplianceUsageModel.PERIOD_KWH && safeUnitKwh != null) {
+                        (safeUnitKwh * safeQuantity).roundToInt()
+                    } else appliance.kwh,
+                    dataSource = dataSource,
+                    confidence = when (dataSource) {
+                        ApplianceDataSource.USER_MEASURED,
+                        ApplianceDataSource.MANUFACTURER_LABEL -> com.recibozen.app.core.model.ConfidenceLevel.HIGH
+                        ApplianceDataSource.CATALOG,
+                        ApplianceDataSource.RECEIPT_INFERENCE -> com.recibozen.app.core.model.ConfidenceLevel.MEDIUM
+                        ApplianceDataSource.USER_ESTIMATE -> com.recibozen.app.core.model.ConfidenceLevel.LOW
+                    },
+                    referenceAnnualKwh = if (dataSource == ApplianceDataSource.MANUFACTURER_LABEL) {
+                        appliance.referenceAnnualKwh
+                    } else null,
+                )
+            }
+            val hoursMap = if (usageModel == ApplianceUsageModel.POWER_SCHEDULE && safeHours != null) {
+                state.applianceHoursPerWeek + (applianceId to safeHours)
+            } else state.applianceHoursPerWeek - applianceId
+            state.copy(customAppliances = updated, applianceHoursPerWeek = hoursMap)
+        }
+    }
+
     override fun addAppliance(appliance: Appliance) {
         _session.update { state ->
             if (appliances(state).any { it.id == appliance.id }) state
@@ -347,6 +401,51 @@ open class DemoReciboZenRepository : ReciboZenRepository {
                 applianceHoursPerWeek = state.applianceHoursPerWeek - applianceId,
                 planActions = state.planActions.filterNot { it.id.startsWith(applianceId) },
             )
+        }
+    }
+
+    override fun addHouseSpace(name: String): HouseSpace? {
+        val cleanName = name.trim().replace(Regex("\\s+"), " ").take(40)
+        if (cleanName.isBlank()) return null
+        var created: HouseSpace? = null
+        _session.update { state ->
+            if (state.houseSpaces.any { it.name.equals(cleanName, ignoreCase = true) }) state
+            else {
+                created = HouseSpace("space_${UUID.randomUUID()}", cleanName)
+                state.copy(houseSpaces = state.houseSpaces + created!!)
+            }
+        }
+        return created
+    }
+
+    override fun renameHouseSpace(spaceId: String, name: String) {
+        val cleanName = name.trim().replace(Regex("\\s+"), " ").take(40)
+        if (cleanName.isBlank()) return
+        _session.update { state ->
+            if (state.houseSpaces.any { it.id != spaceId && it.name.equals(cleanName, ignoreCase = true) }) state
+            else state.copy(
+                houseSpaces = state.houseSpaces.map { if (it.id == spaceId) it.copy(name = cleanName) else it },
+                customAppliances = state.customAppliances.map {
+                    if (it.spaceId == spaceId) it.copy(room = cleanName) else it
+                },
+            )
+        }
+    }
+
+    override fun removeHouseSpace(spaceId: String) {
+        if (spaceId == HouseSpaceDefaults.HOME_ID) return
+        _session.update { state ->
+            if (state.houseSpaces.none { it.id == spaceId }) state
+            else {
+                val home = state.houseSpaces.firstOrNull { it.id == HouseSpaceDefaults.HOME_ID }
+                    ?: HouseSpaceDefaults.items.first()
+                state.copy(
+                    houseSpaces = state.houseSpaces.filterNot { it.id == spaceId },
+                    customAppliances = state.customAppliances.map {
+                        if (it.spaceId == spaceId) it.copy(spaceId = home.id, room = home.name) else it
+                    },
+                )
+            }
         }
     }
 

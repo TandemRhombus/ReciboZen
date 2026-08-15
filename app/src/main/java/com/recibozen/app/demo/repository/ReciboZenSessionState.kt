@@ -6,6 +6,8 @@ import com.recibozen.app.core.model.HistoryUnit
 import com.recibozen.app.core.model.PlanAction
 import com.recibozen.app.core.model.Appliance
 import com.recibozen.app.core.model.EntitlementTier
+import com.recibozen.app.core.model.HouseSpace
+import com.recibozen.app.core.model.HouseSpaceDefaults
 
 /** User-owned state. The production repository persists this object with DataStore. */
 data class ReciboZenSessionState(
@@ -27,6 +29,7 @@ data class ReciboZenSessionState(
     val meterType: String = "",
     val applianceHoursPerWeek: Map<String, Int> = emptyMap(),
     val customAppliances: List<Appliance> = emptyList(),
+    val houseSpaces: List<HouseSpace> = HouseSpaceDefaults.items,
     val savedSimulatorScenario: Boolean = false,
     val simulatorScenarioName: String = "",
     val simulatorScenarioWatts: Int = 0,

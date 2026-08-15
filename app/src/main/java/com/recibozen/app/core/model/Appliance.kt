@@ -14,7 +14,40 @@ enum class ApplianceCategory {
     OTHER,
 }
 
-enum class ApplianceDataSource { CATALOG, USER_ESTIMATE, RECEIPT_INFERENCE }
+/** How the period consumption is calculated for one appliance entry. */
+enum class ApplianceUsageModel {
+    /** Power (W) multiplied by the weekly schedule. */
+    POWER_SCHEDULE,
+    /** Energy entered for one unit over the whole billing period. */
+    PERIOD_KWH,
+}
+
+/** Provenance shown to the user; an estimate must never look like a measurement. */
+enum class ApplianceDataSource {
+    CATALOG,
+    MANUFACTURER_LABEL,
+    USER_ESTIMATE,
+    USER_MEASURED,
+    RECEIPT_INFERENCE,
+}
+
+data class HouseSpace(
+    val id: String,
+    val name: String,
+)
+
+object HouseSpaceDefaults {
+    const val HOME_ID = "home"
+
+    val items = listOf(
+        HouseSpace(HOME_ID, "Toda la casa"),
+        HouseSpace("kitchen", "Cocina"),
+        HouseSpace("living_room", "Sala"),
+        HouseSpace("bedroom", "Recámara"),
+        HouseSpace("bathroom", "Baño"),
+        HouseSpace("laundry", "Lavandería"),
+    )
+}
 
 /**
  * One appliance card, either static (Refrigerador) or session-adjustable
@@ -41,4 +74,16 @@ data class Appliance(
     val powerWatts: Int? = null,
     val standbyWatts: Int? = null,
     val dataSource: ApplianceDataSource = ApplianceDataSource.RECEIPT_INFERENCE,
+    /** Number of equal units represented by this single row (for example, 20 bulbs). */
+    val quantity: Int = 1,
+    val spaceId: String? = null,
+    val brand: String? = null,
+    val model: String? = null,
+    val usageModel: ApplianceUsageModel = ApplianceUsageModel.POWER_SCHEDULE,
+    /** Unrounded kWh for one unit in [referencePeriodDays]. */
+    val unitKwh: Double? = null,
+    val referencePeriodDays: Int = 30,
+    val referenceAnnualKwh: Double? = null,
+    val sourceLabel: String? = null,
+    val sourceUrl: String? = null,
 )

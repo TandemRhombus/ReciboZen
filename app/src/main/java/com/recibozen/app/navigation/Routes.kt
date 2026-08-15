@@ -16,6 +16,7 @@ object Routes {
     // Flow routes (pushed with a back-button top bar)
     const val PeriodAnalysis = "period_analysis"
     const val ApplianceEmpty = "appliance_empty"
+    const val ApplianceSpaces = "appliance_spaces"
 
     const val ApplianceIdArg = "applianceId"
     const val ApplianceDetailPattern = "appliance_detail/{$ApplianceIdArg}"

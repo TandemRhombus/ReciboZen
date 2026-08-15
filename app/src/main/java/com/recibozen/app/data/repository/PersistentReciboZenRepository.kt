@@ -10,6 +10,7 @@ import com.recibozen.app.core.model.HistoryReadingEntry
 import com.recibozen.app.core.model.Appliance
 import com.recibozen.app.core.model.ApplianceCategory
 import com.recibozen.app.core.model.ApplianceDataSource
+import com.recibozen.app.core.model.ApplianceUsageModel
 import com.recibozen.app.core.model.ConfidenceLevel
 import com.recibozen.app.core.model.OpportunityLevel
 import com.recibozen.app.core.model.HistoryUnit
@@ -19,6 +20,7 @@ import com.recibozen.app.core.model.EntitlementTier
 import com.recibozen.app.core.model.ElectricServiceIdentity
 import com.recibozen.app.core.model.ServiceCreationResult
 import com.recibozen.app.core.model.BillPeriod
+import com.recibozen.app.core.model.HouseSpace
 import com.recibozen.app.data.local.ElectricServiceEntity
 import com.recibozen.app.data.local.HouseholdEntity
 import com.recibozen.app.data.local.MeterEntity
@@ -513,6 +515,14 @@ internal object SessionJsonCodec {
         put("goalMxn", state.goalMxn)
         put("meterType", state.meterType)
         put("applianceHours", JSONObject(state.applianceHoursPerWeek))
+        put("houseSpaces", JSONArray().apply {
+            state.houseSpaces.forEach { space ->
+                put(JSONObject().apply {
+                    put("id", space.id)
+                    put("name", space.name)
+                })
+            }
+        })
         put("customAppliances", JSONArray().apply {
             state.customAppliances.forEach { appliance ->
                 put(JSONObject().apply {
@@ -529,6 +539,16 @@ internal object SessionJsonCodec {
                     put("standbyWatts", appliance.standbyWatts ?: JSONObject.NULL)
                     put("dataSource", appliance.dataSource.name)
                     put("calculationNote", appliance.calculationNote ?: JSONObject.NULL)
+                    put("quantity", appliance.quantity)
+                    put("spaceId", appliance.spaceId ?: JSONObject.NULL)
+                    put("brand", appliance.brand ?: JSONObject.NULL)
+                    put("model", appliance.model ?: JSONObject.NULL)
+                    put("usageModel", appliance.usageModel.name)
+                    put("unitKwh", appliance.unitKwh ?: JSONObject.NULL)
+                    put("referencePeriodDays", appliance.referencePeriodDays)
+                    put("referenceAnnualKwh", appliance.referenceAnnualKwh ?: JSONObject.NULL)
+                    put("sourceLabel", appliance.sourceLabel ?: JSONObject.NULL)
+                    put("sourceUrl", appliance.sourceUrl ?: JSONObject.NULL)
                 })
             }
         })
@@ -567,7 +587,7 @@ internal object SessionJsonCodec {
             val json = JSONObject(raw)
             val defaults = ReciboZenSessionState()
             val schemaVersion = json.optInt("schemaVersion", 1)
-            val migrateFixtureState = schemaVersion < CURRENT_SCHEMA_VERSION
+            val migrateFixtureState = schemaVersion < 2
             val serviceNumber = json.optString("serviceNumber", defaults.serviceNumber)
             val hours = if (migrateFixtureState) emptyMap() else {
                 json.optJSONObject("applianceHours").toIntMap(defaults.applianceHoursPerWeek)
@@ -577,6 +597,10 @@ internal object SessionJsonCodec {
             val decodedReadings = readingsJson.toReadings(defaults.readings).filterNot { reading ->
                 migrateFixtureState && reading.timestampEpochMillis == null
             }
+            val decodedAppliances = json.optJSONArray("customAppliances").toAppliances()
+            val decodedSpaces = json.optJSONArray("houseSpaces")
+                .toHouseSpaces(defaults.houseSpaces)
+                .withLegacyRooms(decodedAppliances)
             fun fixtureOrEmpty(key: String, fixture: String): String {
                 val value = json.optString(key)
                 return if (migrateFixtureState && value == fixture) "" else value
@@ -609,7 +633,8 @@ internal object SessionJsonCodec {
                 },
                 meterType = fixtureOrEmpty("meterType", DemoReciboZenData.METER_TYPE_SELECTED),
                 applianceHoursPerWeek = hours,
-                customAppliances = json.optJSONArray("customAppliances").toAppliances(),
+                customAppliances = decodedAppliances,
+                houseSpaces = decodedSpaces,
                 savedSimulatorScenario = json.optBoolean("savedSimulatorScenario", false),
                 simulatorScenarioName = json.optString("simulatorScenarioName", defaults.simulatorScenarioName),
                 simulatorScenarioWatts = json.optInt("simulatorScenarioWatts", defaults.simulatorScenarioWatts).coerceAtLeast(0),
@@ -638,7 +663,7 @@ internal object SessionJsonCodec {
         }.getOrElse { ReciboZenSessionState() }
     }
 
-    private const val CURRENT_SCHEMA_VERSION = 2
+    private const val CURRENT_SCHEMA_VERSION = 3
 
     private inline fun <reified T : Enum<T>> enumValueOr(raw: String?, fallback: T): T =
         enumValues<T>().firstOrNull { it.name == raw?.uppercase(Locale.ROOT) } ?: fallback
@@ -698,13 +723,56 @@ internal object SessionJsonCodec {
                         standbyWatts = item.optNullableInt("standbyWatts"),
                         dataSource = enumValueOr(item.optString("dataSource"), ApplianceDataSource.USER_ESTIMATE),
                         calculationNote = item.optNullableString("calculationNote"),
+                        quantity = item.optInt("quantity", 1).coerceIn(1, 999),
+                        spaceId = item.optNullableString("spaceId"),
+                        brand = item.optNullableString("brand"),
+                        model = item.optNullableString("model"),
+                        usageModel = enumValueOr(
+                            item.optString("usageModel"),
+                            if (item.optNullableInt("hours") == null) {
+                                ApplianceUsageModel.PERIOD_KWH
+                            } else ApplianceUsageModel.POWER_SCHEDULE,
+                        ),
+                        unitKwh = item.optNullableDouble("unitKwh"),
+                        referencePeriodDays = item.optInt("referencePeriodDays", 30).coerceIn(1, 366),
+                        referenceAnnualKwh = item.optNullableDouble("referenceAnnualKwh"),
+                        sourceLabel = item.optNullableString("sourceLabel"),
+                        sourceUrl = item.optNullableString("sourceUrl"),
                     ),
                 )
             }
         }
     }
 
+    private fun JSONArray?.toHouseSpaces(fallback: List<HouseSpace>): List<HouseSpace> {
+        if (this == null || length() == 0) return fallback
+        return buildList {
+            repeat(length()) { index ->
+                val item = optJSONObject(index) ?: return@repeat
+                val id = item.optString("id").takeIf { it.isNotBlank() } ?: return@repeat
+                val name = item.optString("name").trim().takeIf { it.isNotBlank() } ?: return@repeat
+                add(HouseSpace(id, name.take(40)))
+            }
+        }.distinctBy { it.id }.ifEmpty { fallback }
+    }
+
+    private fun List<HouseSpace>.withLegacyRooms(appliances: List<Appliance>): List<HouseSpace> {
+        val additions = appliances
+            .filter { it.spaceId == null && it.room.isNotBlank() }
+            .map { it.room.trim().take(40) }
+            .distinctBy { it.lowercase(Locale.ROOT) }
+            .filterNot { room -> any { it.name.equals(room, ignoreCase = true) } }
+            .map { room ->
+                HouseSpace(
+                    id = "legacy_${Integer.toUnsignedString(room.lowercase(Locale.ROOT).hashCode(), 16)}",
+                    name = room,
+                )
+            }
+        return this + additions
+    }
+
     private fun JSONObject.optNullableInt(key: String): Int? = if (isNull(key)) null else optInt(key)
     private fun JSONObject.optNullableLong(key: String): Long? = if (isNull(key)) null else optLong(key)
+    private fun JSONObject.optNullableDouble(key: String): Double? = if (isNull(key)) null else optDouble(key)
     private fun JSONObject.optNullableString(key: String): String? = if (isNull(key)) null else optString(key).takeIf { it.isNotBlank() }
 }

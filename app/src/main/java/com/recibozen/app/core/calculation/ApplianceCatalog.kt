@@ -3,6 +3,7 @@ package com.recibozen.app.core.calculation
 import com.recibozen.app.core.model.Appliance
 import com.recibozen.app.core.model.ApplianceCategory
 import com.recibozen.app.core.model.ApplianceDataSource
+import com.recibozen.app.core.model.ApplianceUsageModel
 import com.recibozen.app.core.model.ConfidenceLevel
 import com.recibozen.app.core.model.OpportunityLevel
 import kotlin.math.roundToInt
@@ -15,6 +16,11 @@ data class ApplianceCatalogItem(
     val defaultHoursPerWeek: Int?,
     val typicalKwhPer30Days: Double? = null,
     val standbyWatts: Int = 0,
+    val brand: String? = null,
+    val model: String? = null,
+    val annualKwh: Double? = null,
+    val sourceLabel: String? = null,
+    val sourceUrl: String? = null,
 )
 
 data class ApplianceUsageEstimate(
@@ -32,17 +38,23 @@ object ApplianceCalculator {
         daysPerWeek: Int,
         billingDays: Int,
         effectiveRateMxnPerKwh: Double,
+        quantity: Int = 1,
     ): ApplianceUsageEstimate {
         val safeWatts = watts.coerceIn(1, 100_000)
         val safeHours = hoursPerDay.coerceIn(0.0, 24.0)
         val safeDays = daysPerWeek.coerceIn(0, 7)
         val safeBillingDays = billingDays.coerceIn(1, 366)
-        val kwhExact = safeWatts / 1_000.0 * safeHours * safeDays / 7.0 * safeBillingDays
+        val safeQuantity = quantity.coerceIn(1, 999)
+        val unitKwh = safeWatts / 1_000.0 * safeHours * safeDays / 7.0 * safeBillingDays
+        val kwhExact = unitKwh * safeQuantity
         val kwh = kwhExact.roundToInt().coerceAtLeast(0)
         return ApplianceUsageEstimate(
             kwh = kwh,
             costMxn = (kwhExact * effectiveRateMxnPerKwh.coerceAtLeast(0.0)).roundToInt(),
-            calculation = "$safeWatts W × ${format(safeHours)} h/día × $safeDays días/semana × $safeBillingDays días ÷ 7 ÷ 1,000",
+            calculation = buildString {
+                append("$safeWatts W × ${format(safeHours)} h/día × $safeDays días/semana × $safeBillingDays días ÷ 7 ÷ 1,000")
+                if (safeQuantity > 1) append(" × $safeQuantity unidades")
+            },
         )
     }
 
@@ -51,20 +63,33 @@ object ApplianceCalculator {
         hoursPerWeek: Int? = item.defaultHoursPerWeek,
         billingDays: Int,
         effectiveRateMxnPerKwh: Double,
+        quantity: Int = 1,
+        periodKwhPerUnit: Double? = null,
     ): ApplianceUsageEstimate {
         val safeBillingDays = billingDays.coerceAtLeast(1)
-        val activeKwh = item.typicalKwhPer30Days?.let { it * safeBillingDays / 30.0 }
+        val safeQuantity = quantity.coerceIn(1, 999)
+        val unitActiveKwh = periodKwhPerUnit?.coerceAtLeast(0.0)
+            ?: item.annualKwh?.let { it * safeBillingDays / 365.0 }
+            ?: item.typicalKwhPer30Days?.let { it * safeBillingDays / 30.0 }
             ?: (item.typicalWatts / 1_000.0 * (hoursPerWeek ?: 0) * safeBillingDays / 7.0)
-        val standbyKwh = if (item.typicalKwhPer30Days == null && item.standbyWatts > 0) {
+        val unitStandbyKwh = if (
+            periodKwhPerUnit == null && item.annualKwh == null && item.typicalKwhPer30Days == null && item.standbyWatts > 0
+        ) {
             val inactiveHoursPerWeek = (168 - (hoursPerWeek ?: 0)).coerceAtLeast(0)
             item.standbyWatts / 1_000.0 * inactiveHoursPerWeek * safeBillingDays / 7.0
         } else 0.0
+        val activeKwh = unitActiveKwh * safeQuantity
+        val standbyKwh = unitStandbyKwh * safeQuantity
         val exactKwh = activeKwh + standbyKwh
         val kwh = exactKwh.roundToInt().coerceAtLeast(0)
-        val calculation = if (item.typicalKwhPer30Days != null) {
-            "${format(item.typicalKwhPer30Days)} kWh/30 días × $billingDays días"
-        } else {
-            "${item.typicalWatts} W × ${hoursPerWeek ?: 0} h/semana × $billingDays días ÷ 7 ÷ 1,000"
+        val calculation = buildString {
+            when {
+                periodKwhPerUnit != null -> append("${format(periodKwhPerUnit)} kWh por unidad en $billingDays días")
+                item.annualKwh != null -> append("${format(item.annualKwh)} kWh/año × $billingDays ÷ 365")
+                item.typicalKwhPer30Days != null -> append("${format(item.typicalKwhPer30Days)} kWh/30 días × $billingDays ÷ 30")
+                else -> append("${item.typicalWatts} W × ${hoursPerWeek ?: 0} h/semana × $billingDays días ÷ 7 ÷ 1,000")
+            }
+            if (safeQuantity > 1) append(" × $safeQuantity unidades")
         }
         return ApplianceUsageEstimate(
             kwh = kwh,
@@ -80,38 +105,150 @@ object ApplianceCalculator {
 
 object ApplianceCatalog {
     val items = listOf(
-        ApplianceCatalogItem("minisplit_inverter", "Minisplit inverter", ApplianceCategory.CLIMATE, 1_150, 25),
-        ApplianceCatalogItem("minisplit_conventional", "Minisplit convencional", ApplianceCategory.CLIMATE, 1_500, 25),
-        ApplianceCatalogItem("ventilador_techo", "Ventilador de techo", ApplianceCategory.CLIMATE, 65, 42),
-        ApplianceCatalogItem("ventilador_pedestal", "Ventilador de pedestal", ApplianceCategory.CLIMATE, 55, 35),
-        ApplianceCatalogItem("calefactor", "Calefactor eléctrico", ApplianceCategory.CLIMATE, 1_500, 14),
-        ApplianceCatalogItem("refrigerador", "Refrigerador", ApplianceCategory.KITCHEN, 180, null, typicalKwhPer30Days = 35.0),
-        ApplianceCatalogItem("segundo_refrigerador", "Segundo refrigerador", ApplianceCategory.KITCHEN, 220, null, typicalKwhPer30Days = 45.0),
-        ApplianceCatalogItem("congelador", "Congelador", ApplianceCategory.KITCHEN, 200, null, typicalKwhPer30Days = 42.0),
-        ApplianceCatalogItem("microondas", "Horno de microondas", ApplianceCategory.KITCHEN, 1_200, 2),
-        ApplianceCatalogItem("horno_electrico", "Horno eléctrico", ApplianceCategory.KITCHEN, 1_500, 4),
-        ApplianceCatalogItem("parrilla_electrica", "Parrilla eléctrica", ApplianceCategory.KITCHEN, 1_800, 7),
-        ApplianceCatalogItem("cafetera", "Cafetera", ApplianceCategory.KITCHEN, 900, 2),
-        ApplianceCatalogItem("licuadora", "Licuadora", ApplianceCategory.KITCHEN, 500, 1),
+        // Modelos con consumo anual declarado en páginas/manuales oficiales del fabricante.
+        ApplianceCatalogItem(
+            "model_lg_gb35bvb", "Refrigerador Bottom Freezer 12 pies³", ApplianceCategory.KITCHEN, 0, null,
+            brand = "LG", model = "GB35BVB", annualKwh = 329.0, sourceLabel = "Ficha oficial LG México",
+            sourceUrl = "https://www.lg.com/mx/small-medium-business/refrigeradores/refrigeradores-bottom-freezer-congelador-abajo/gb35bvb/",
+        ),
+        ApplianceCatalogItem(
+            "model_lg_gm39bt", "Refrigerador French Door 29 pies³", ApplianceCategory.KITCHEN, 0, null,
+            brand = "LG", model = "GM39BT", annualKwh = 534.0, sourceLabel = "Ficha oficial LG México",
+            sourceUrl = "https://www.lg.com/mx/refrigeradores/refrigeradores-french-door/gm39bt/",
+        ),
+        ApplianceCatalogItem(
+            "model_lg_gm65bpp", "Refrigerador French Door 25 pies³", ApplianceCategory.KITCHEN, 0, null,
+            brand = "LG", model = "GM65BPP", annualKwh = 535.0, sourceLabel = "Ficha oficial LG México",
+            sourceUrl = "https://www.lg.com/mx/refrigeradores/refrigeradores-french-door/gm65bpp/",
+        ),
+        ApplianceCatalogItem(
+            "model_lg_gm90fip", "Refrigerador Multi-Door 32 pies³", ApplianceCategory.KITCHEN, 0, null,
+            brand = "LG", model = "GM90FIP", annualKwh = 712.0, sourceLabel = "Ficha oficial LG México",
+            sourceUrl = "https://www.lg.com/mx/refrigeradores/refrigeradores-french-door/gm90fip/",
+        ),
+        ApplianceCatalogItem(
+            "model_samsung_rf22a4010s9", "Refrigerador French Door 22 pies³", ApplianceCategory.KITCHEN, 0, null,
+            brand = "Samsung", model = "RF22A4010S9/EM", annualKwh = 504.0, sourceLabel = "Ficha oficial Samsung México",
+            sourceUrl = "https://www.samsung.com/mx/refrigerators/french-door/rf4500a-french-door-refrigerator-flat-door-design-silver-rf22a4010s9-em/",
+        ),
+        ApplianceCatalogItem(
+            "model_mabe_rma0821xmxgc", "Refrigerador 8 pies³", ApplianceCategory.KITCHEN, 0, null,
+            brand = "Mabe", model = "RMA0821XMXGC", annualKwh = 316.0, sourceLabel = "Manual oficial Mabe",
+            sourceUrl = "https://servicio.mabeglobal.com/medias/RMA0821XMXGC-ManualUsuario-Refrigerador.pdf",
+        ),
+
+        // Catálogo genérico: potencia orientativa y perfiles editables basados en la base CFE entregada.
+        ApplianceCatalogItem("refrigerador_10_14", "Refrigerador 10–14 pies³", ApplianceCategory.KITCHEN, 120, null, typicalKwhPer30Days = 30.0),
+        ApplianceCatalogItem("refrigerador_15_22", "Refrigerador 15–22 pies³", ApplianceCategory.KITCHEN, 160, null, typicalKwhPer30Days = 40.0),
+        ApplianceCatalogItem("congelador_horizontal", "Congelador horizontal", ApplianceCategory.KITCHEN, 140, null, typicalKwhPer30Days = 36.0),
+        ApplianceCatalogItem("minisplit_inverter_1t", "Minisplit inverter 1 tonelada", ApplianceCategory.CLIMATE, 700, 35),
+        ApplianceCatalogItem("minisplit_convencional_1t", "Minisplit convencional 1 tonelada", ApplianceCategory.CLIMATE, 1_200, 35),
+        ApplianceCatalogItem("minisplit_inverter_15t", "Minisplit inverter 1.5 toneladas", ApplianceCategory.CLIMATE, 1_000, 35),
+        ApplianceCatalogItem("aire_ventana_1t", "Aire de ventana 1 tonelada", ApplianceCategory.CLIMATE, 1_200, 35),
+        ApplianceCatalogItem("aire_central_3t", "Aire acondicionado central 3 toneladas", ApplianceCategory.CLIMATE, 3_200, 35),
+        ApplianceCatalogItem("ventilador_pedestal", "Ventilador de pedestal", ApplianceCategory.CLIMATE, 55, 42),
+        ApplianceCatalogItem("ventilador_techo", "Ventilador de techo", ApplianceCategory.CLIMATE, 55, 42),
+        ApplianceCatalogItem("calefactor_electrico", "Calefactor eléctrico", ApplianceCategory.CLIMATE, 1_500, 14),
+        ApplianceCatalogItem("calefactor_ceramico", "Calefactor cerámico", ApplianceCategory.CLIMATE, 1_200, 14),
+        ApplianceCatalogItem("purificador_aire", "Purificador de aire", ApplianceCategory.CLIMATE, 50, 84),
+        ApplianceCatalogItem("humidificador", "Humidificador", ApplianceCategory.CLIMATE, 30, 42),
+        ApplianceCatalogItem("deshumidificador", "Deshumidificador", ApplianceCategory.CLIMATE, 450, 42),
+        ApplianceCatalogItem("enfriador_evaporativo", "Enfriador evaporativo", ApplianceCategory.CLIMATE, 300, 42),
+        ApplianceCatalogItem("extractor_bano", "Extractor de baño", ApplianceCategory.CLIMATE, 30, 4),
+
+        ApplianceCatalogItem("boiler_deposito", "Boiler eléctrico de depósito", ApplianceCategory.WATER, 3_000, 7),
+        ApplianceCatalogItem("boiler_instantaneo", "Boiler eléctrico instantáneo", ApplianceCategory.WATER, 7_000, 3),
+        ApplianceCatalogItem("bomba_agua_media_hp", "Bomba de agua 1/2 HP", ApplianceCategory.WATER, 450, 5),
+        ApplianceCatalogItem("bomba_agua_1_hp", "Bomba de agua 1 HP", ApplianceCategory.WATER, 850, 5),
+        ApplianceCatalogItem("bomba_piscina", "Bomba de piscina", ApplianceCategory.WATER, 1_000, 21),
+        ApplianceCatalogItem("calentador_piscina", "Calentador eléctrico de piscina", ApplianceCategory.WATER, 9_000, 7),
+        ApplianceCatalogItem("dispensador_agua", "Dispensador de agua frío/caliente", ApplianceCategory.WATER, 250, null, typicalKwhPer30Days = 25.0),
+        ApplianceCatalogItem("acuario_bomba", "Bomba o filtro de acuario", ApplianceCategory.WATER, 12, null, typicalKwhPer30Days = 8.6),
+        ApplianceCatalogItem("acuario_calentador", "Calentador de acuario", ApplianceCategory.WATER, 100, 42),
+
+        ApplianceCatalogItem("lavadora_superior", "Lavadora de carga superior", ApplianceCategory.LAUNDRY, 450, 4),
+        ApplianceCatalogItem("lavadora_frontal", "Lavadora frontal", ApplianceCategory.LAUNDRY, 400, 4),
+        ApplianceCatalogItem("secadora_electrica", "Secadora eléctrica", ApplianceCategory.LAUNDRY, 3_500, 4),
+        ApplianceCatalogItem("secadora_gas_motor", "Secadora de gas (motor eléctrico)", ApplianceCategory.LAUNDRY, 400, 4),
+        ApplianceCatalogItem("plancha_ropa", "Plancha de ropa", ApplianceCategory.LAUNDRY, 1_300, 3),
+        ApplianceCatalogItem("centro_planchado", "Centro de planchado", ApplianceCategory.LAUNDRY, 2_200, 3),
+        ApplianceCatalogItem("maquina_coser", "Máquina de coser", ApplianceCategory.LAUNDRY, 90, 3),
+        ApplianceCatalogItem("calentador_toallas", "Calentador de toallas", ApplianceCategory.LAUNDRY, 150, 7),
+
+        ApplianceCatalogItem("lavavajillas", "Lavavajillas", ApplianceCategory.KITCHEN, 1_200, 5),
+        ApplianceCatalogItem("horno_electrico", "Horno eléctrico", ApplianceCategory.KITCHEN, 2_500, 4),
+        ApplianceCatalogItem("parrilla_induccion", "Parrilla de inducción (1 zona)", ApplianceCategory.KITCHEN, 1_800, 7),
+        ApplianceCatalogItem("parrilla_resistencia", "Parrilla eléctrica de resistencia", ApplianceCategory.KITCHEN, 1_500, 7),
+        ApplianceCatalogItem("microondas", "Horno de microondas", ApplianceCategory.KITCHEN, 1_200, 2, standbyWatts = 2),
         ApplianceCatalogItem("freidora_aire", "Freidora de aire", ApplianceCategory.KITCHEN, 1_500, 4),
-        ApplianceCatalogItem("lavadora", "Lavadora", ApplianceCategory.LAUNDRY, 500, 4),
-        ApplianceCatalogItem("secadora_electrica", "Secadora eléctrica", ApplianceCategory.LAUNDRY, 4_500, 4),
-        ApplianceCatalogItem("plancha", "Plancha", ApplianceCategory.LAUNDRY, 1_200, 3),
-        ApplianceCatalogItem("television_led", "Televisión LED", ApplianceCategory.ENTERTAINMENT, 100, 28, standbyWatts = 1),
-        ApplianceCatalogItem("consola_videojuegos", "Consola de videojuegos", ApplianceCategory.ENTERTAINMENT, 200, 14, standbyWatts = 2),
-        ApplianceCatalogItem("barra_sonido", "Barra de sonido", ApplianceCategory.ENTERTAINMENT, 40, 14, standbyWatts = 1),
-        ApplianceCatalogItem("decodificador", "Decodificador de TV", ApplianceCategory.ENTERTAINMENT, 18, 35, standbyWatts = 12),
-        ApplianceCatalogItem("computadora_escritorio", "Computadora de escritorio", ApplianceCategory.COMPUTING, 250, 28, standbyWatts = 3),
-        ApplianceCatalogItem("laptop", "Laptop", ApplianceCategory.COMPUTING, 65, 35, standbyWatts = 1),
-        ApplianceCatalogItem("monitor", "Monitor", ApplianceCategory.COMPUTING, 30, 28, standbyWatts = 1),
-        ApplianceCatalogItem("modem_router", "Módem / router", ApplianceCategory.COMPUTING, 12, null, typicalKwhPer30Days = 8.6),
-        ApplianceCatalogItem("foco_led", "Foco LED", ApplianceCategory.LIGHTING, 10, 28),
-        ApplianceCatalogItem("bomba_agua", "Bomba de agua", ApplianceCategory.WATER, 750, 5),
-        ApplianceCatalogItem("boiler_electrico", "Boiler eléctrico", ApplianceCategory.WATER, 4_000, 7),
-        ApplianceCatalogItem("dispensador_agua", "Dispensador de agua", ApplianceCategory.WATER, 500, null, typicalKwhPer30Days = 25.0),
-        ApplianceCatalogItem("aspiradora", "Aspiradora", ApplianceCategory.PERSONAL_CARE, 1_200, 2),
-        ApplianceCatalogItem("secadora_cabello", "Secadora de cabello", ApplianceCategory.PERSONAL_CARE, 1_500, 1),
-        ApplianceCatalogItem("bomba_piscina", "Bomba de piscina", ApplianceCategory.WATER, 1_100, 21),
+        ApplianceCatalogItem("cafetera_goteo", "Cafetera de goteo", ApplianceCategory.KITCHEN, 900, 2),
+        ApplianceCatalogItem("cafetera_espresso", "Cafetera espresso", ApplianceCategory.KITCHEN, 1_300, 2),
+        ApplianceCatalogItem("hervidor", "Hervidor eléctrico", ApplianceCategory.KITCHEN, 1_500, 1),
+        ApplianceCatalogItem("tostador", "Tostador", ApplianceCategory.KITCHEN, 1_000, 1),
+        ApplianceCatalogItem("licuadora", "Licuadora", ApplianceCategory.KITCHEN, 600, 1),
+        ApplianceCatalogItem("procesador_alimentos", "Procesador de alimentos", ApplianceCategory.KITCHEN, 650, 1),
+        ApplianceCatalogItem("extractor_cocina", "Extractor de cocina", ApplianceCategory.KITCHEN, 100, 7),
+
+        ApplianceCatalogItem("tv_led_32", "Televisión LED 32 pulgadas", ApplianceCategory.ENTERTAINMENT, 45, 28, standbyWatts = 1),
+        ApplianceCatalogItem("tv_led_43", "Televisión LED 43 pulgadas", ApplianceCategory.ENTERTAINMENT, 75, 28, standbyWatts = 1),
+        ApplianceCatalogItem("television_led", "Televisión LED 55 pulgadas", ApplianceCategory.ENTERTAINMENT, 100, 28, standbyWatts = 1),
+        ApplianceCatalogItem("tv_oled_55", "Televisión OLED 55 pulgadas", ApplianceCategory.ENTERTAINMENT, 120, 28, standbyWatts = 1),
+        ApplianceCatalogItem("tv_75", "Televisión 75 pulgadas", ApplianceCategory.ENTERTAINMENT, 180, 28, standbyWatts = 1),
+        ApplianceCatalogItem("barra_sonido", "Barra de sonido", ApplianceCategory.ENTERTAINMENT, 35, 14, standbyWatts = 1),
+        ApplianceCatalogItem("equipo_sonido", "Equipo de sonido", ApplianceCategory.ENTERTAINMENT, 80, 14, standbyWatts = 2),
+        ApplianceCatalogItem("decodificador", "Decodificador de TV", ApplianceCategory.ENTERTAINMENT, 15, 35, standbyWatts = 8),
+        ApplianceCatalogItem("consola_actual", "Consola de videojuegos actual", ApplianceCategory.ENTERTAINMENT, 150, 14, standbyWatts = 2),
+        ApplianceCatalogItem("consola_portatil", "Consola portátil cargando", ApplianceCategory.ENTERTAINMENT, 25, 7),
+        ApplianceCatalogItem("smart_speaker", "Bocina inteligente", ApplianceCategory.ENTERTAINMENT, 4, null, typicalKwhPer30Days = 2.9),
+        ApplianceCatalogItem("proyector", "Proyector", ApplianceCategory.ENTERTAINMENT, 300, 14, standbyWatts = 1),
+
+        ApplianceCatalogItem("router_wifi", "Router Wi‑Fi", ApplianceCategory.COMPUTING, 12, null, typicalKwhPer30Days = 8.6),
+        ApplianceCatalogItem("ont_fibra", "ONT de fibra", ApplianceCategory.COMPUTING, 7, null, typicalKwhPer30Days = 5.0),
+        ApplianceCatalogItem("pc_oficina", "PC de escritorio para oficina", ApplianceCategory.COMPUTING, 120, 35, standbyWatts = 3),
+        ApplianceCatalogItem("pc_gaming", "PC gaming de alta gama", ApplianceCategory.COMPUTING, 350, 21, standbyWatts = 4),
+        ApplianceCatalogItem("laptop_ultrabook", "Laptop ultrabook", ApplianceCategory.COMPUTING, 35, 35, standbyWatts = 1),
+        ApplianceCatalogItem("laptop_gaming", "Laptop gaming", ApplianceCategory.COMPUTING, 120, 21, standbyWatts = 1),
+        ApplianceCatalogItem("monitor_24", "Monitor 24 pulgadas", ApplianceCategory.COMPUTING, 25, 35, standbyWatts = 1),
+        ApplianceCatalogItem("monitor_27", "Monitor 27 pulgadas 1440p", ApplianceCategory.COMPUTING, 35, 35, standbyWatts = 1),
+        ApplianceCatalogItem("monitor_32", "Monitor 32 pulgadas 4K", ApplianceCategory.COMPUTING, 55, 35, standbyWatts = 1),
+        ApplianceCatalogItem("impresora_inyeccion", "Impresora de inyección", ApplianceCategory.COMPUTING, 15, 2, standbyWatts = 1),
+        ApplianceCatalogItem("impresora_laser", "Impresora láser", ApplianceCategory.COMPUTING, 350, 1, standbyWatts = 5),
+        ApplianceCatalogItem("multifuncional_laser", "Multifuncional láser", ApplianceCategory.COMPUTING, 500, 2, standbyWatts = 8),
+        ApplianceCatalogItem("nas_2_bahias", "Servidor NAS de 2 bahías", ApplianceCategory.COMPUTING, 25, null, typicalKwhPer30Days = 18.0),
+        ApplianceCatalogItem("ups", "UPS / no-break", ApplianceCategory.COMPUTING, 20, null, typicalKwhPer30Days = 14.4),
+        ApplianceCatalogItem("regulador", "Regulador de voltaje", ApplianceCategory.COMPUTING, 8, null, typicalKwhPer30Days = 5.8),
+        ApplianceCatalogItem("switch_8", "Switch de red 8 puertos", ApplianceCategory.COMPUTING, 15, null, typicalKwhPer30Days = 10.8),
+        ApplianceCatalogItem("switch_poe_24", "Switch PoE 24 puertos", ApplianceCategory.COMPUTING, 120, null, typicalKwhPer30Days = 86.4),
+
+        ApplianceCatalogItem("foco_led_9", "Foco LED 9 W", ApplianceCategory.LIGHTING, 9, 28),
+        ApplianceCatalogItem("foco_led_15", "Foco LED 15 W", ApplianceCategory.LIGHTING, 15, 28),
+        ApplianceCatalogItem("foco_incandescente_60", "Foco incandescente 60 W", ApplianceCategory.LIGHTING, 60, 28),
+        ApplianceCatalogItem("foco_halógeno_50", "Foco halógeno 50 W", ApplianceCategory.LIGHTING, 50, 28),
+        ApplianceCatalogItem("tira_led_5m", "Tira LED de 5 m", ApplianceCategory.LIGHTING, 35, 28),
+
+        ApplianceCatalogItem("cargador_telefono", "Cargador de teléfono", ApplianceCategory.PERSONAL_CARE, 12, 10),
+        ApplianceCatalogItem("tablet_cargando", "Tablet cargando", ApplianceCategory.PERSONAL_CARE, 15, 10),
+        ApplianceCatalogItem("aspiradora", "Aspiradora convencional", ApplianceCategory.PERSONAL_CARE, 1_200, 2),
+        ApplianceCatalogItem("robot_aspirador", "Robot aspirador", ApplianceCategory.PERSONAL_CARE, 45, 7, standbyWatts = 3),
+        ApplianceCatalogItem("secadora_cabello", "Secadora de cabello", ApplianceCategory.PERSONAL_CARE, 1_600, 1),
+        ApplianceCatalogItem("plancha_cabello", "Rizadora o plancha de cabello", ApplianceCategory.PERSONAL_CARE, 60, 2),
+        ApplianceCatalogItem("cobija_electrica", "Cobija eléctrica", ApplianceCategory.PERSONAL_CARE, 80, 21),
+        ApplianceCatalogItem("despertador", "Despertador", ApplianceCategory.PERSONAL_CARE, 2, null, typicalKwhPer30Days = 1.4),
+
+        ApplianceCatalogItem("camara_wifi", "Cámara de seguridad Wi‑Fi", ApplianceCategory.OTHER, 5, null, typicalKwhPer30Days = 3.6),
+        ApplianceCatalogItem("nvr_dvr", "NVR / DVR de videovigilancia", ApplianceCategory.OTHER, 30, null, typicalKwhPer30Days = 21.6),
+        ApplianceCatalogItem("porton_electrico", "Portón eléctrico", ApplianceCategory.OTHER, 400, 1, standbyWatts = 4),
+        ApplianceCatalogItem("refrigerador_comercial", "Refrigerador comercial", ApplianceCategory.OTHER, 500, null, typicalKwhPer30Days = 180.0),
+        ApplianceCatalogItem("congelador_comercial", "Congelador comercial", ApplianceCategory.OTHER, 650, null, typicalKwhPer30Days = 234.0),
+        ApplianceCatalogItem("vitrina_refrigerada", "Vitrina refrigerada", ApplianceCategory.OTHER, 750, null, typicalKwhPer30Days = 270.0),
+        ApplianceCatalogItem("microondas_comercial", "Microondas comercial", ApplianceCategory.OTHER, 1_800, 7),
+        ApplianceCatalogItem("maquina_hielo", "Máquina de hielo", ApplianceCategory.OTHER, 700, 21),
+        ApplianceCatalogItem("compresor_aire", "Compresor de aire pequeño", ApplianceCategory.OTHER, 1_200, 7),
+        ApplianceCatalogItem("maquina_expendedora", "Máquina expendedora", ApplianceCategory.OTHER, 600, null, typicalKwhPer30Days = 216.0),
+        ApplianceCatalogItem("secador_manos", "Secador de manos", ApplianceCategory.OTHER, 1_200, 2),
+        ApplianceCatalogItem("copiadora", "Copiadora de oficina", ApplianceCategory.OTHER, 500, 2, standbyWatts = 10),
+        ApplianceCatalogItem("terminal_pos", "Terminal de punto de venta", ApplianceCategory.OTHER, 30, 84, standbyWatts = 2),
+        ApplianceCatalogItem("servidor_rack", "Servidor rack pequeño", ApplianceCategory.OTHER, 350, null, typicalKwhPer30Days = 252.0),
     )
 
     fun find(id: String): ApplianceCatalogItem? = items.firstOrNull { it.id == id }
@@ -123,8 +260,23 @@ object ApplianceCatalog {
         hoursPerWeek: Int? = item.defaultHoursPerWeek,
         billingDays: Int = 61,
         effectiveRateMxnPerKwh: Double = 2.3,
+        quantity: Int = 1,
+        spaceId: String? = null,
+        brand: String? = item.brand,
+        model: String? = item.model,
+        periodKwhPerUnit: Double? = null,
     ): Appliance {
-        val estimate = ApplianceCalculator.fromCatalog(item, hoursPerWeek, billingDays, effectiveRateMxnPerKwh)
+        val safeQuantity = quantity.coerceIn(1, 999)
+        val estimate = ApplianceCalculator.fromCatalog(
+            item = item,
+            hoursPerWeek = hoursPerWeek,
+            billingDays = billingDays,
+            effectiveRateMxnPerKwh = effectiveRateMxnPerKwh,
+            quantity = safeQuantity,
+            periodKwhPerUnit = periodKwhPerUnit,
+        )
+        val usesPeriodKwh = periodKwhPerUnit != null || item.annualKwh != null || item.typicalKwhPer30Days != null
+        val exactUnitKwh = (estimate.activeKwh + estimate.standbyKwh) / safeQuantity
         return Appliance(
             id = instanceId,
             name = item.name,
@@ -132,8 +284,8 @@ object ApplianceCatalog {
             costMxn = estimate.costMxn,
             kwh = estimate.kwh,
             sharePercent = 0,
-            hoursPerWeek = hoursPerWeek,
-            confidence = ConfidenceLevel.MEDIUM,
+            hoursPerWeek = if (usesPeriodKwh) null else hoursPerWeek,
+            confidence = if (item.annualKwh != null) ConfidenceLevel.HIGH else ConfidenceLevel.MEDIUM,
             opportunity = OpportunityLevel.MEDIUM,
             activeCostMxn = if (estimate.standbyKwh > 0) {
                 (estimate.activeKwh * effectiveRateMxnPerKwh).roundToInt()
@@ -148,7 +300,17 @@ object ApplianceCatalog {
             category = item.category,
             powerWatts = item.typicalWatts,
             standbyWatts = item.standbyWatts.takeIf { it > 0 },
-            dataSource = ApplianceDataSource.CATALOG,
+            dataSource = if (item.annualKwh != null) ApplianceDataSource.MANUFACTURER_LABEL else ApplianceDataSource.CATALOG,
+            quantity = safeQuantity,
+            spaceId = spaceId,
+            brand = brand?.trim()?.takeIf { it.isNotEmpty() },
+            model = model?.trim()?.takeIf { it.isNotEmpty() },
+            usageModel = if (usesPeriodKwh) ApplianceUsageModel.PERIOD_KWH else ApplianceUsageModel.POWER_SCHEDULE,
+            unitKwh = exactUnitKwh,
+            referencePeriodDays = billingDays.coerceAtLeast(1),
+            referenceAnnualKwh = item.annualKwh,
+            sourceLabel = item.sourceLabel,
+            sourceUrl = item.sourceUrl,
         )
     }
 }

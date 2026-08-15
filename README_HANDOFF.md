@@ -2,7 +2,7 @@
 
 Este proyecto comenzó como la conversión visual del prototipo **ReciboZen V2** y ahora es un **MVP local-first funcional** en Kotlin + Jetpack Compose. Conserva la navegación y el diseño originales, pero ya incluye persistencia con DataStore, cálculo progresivo configurable, lecturas por manecillas/manual/foto, OCR local con ML Kit, edición de perfil/meta, aparatos editables, historial con kWh reales y exportación PDF del preestudio solar.
 
-## Estado funcional actual (11 ago 2026)
+## Estado funcional actual (15 ago 2026)
 
 - DataStore conserva preferencias y estado de sesión; Room conserva hogares, suministros, medidores, recibos, cargos, historial y datasets de referencia.
 - Historial permite elegir un PDF de CFE **o fotografiar el recibo impreso** (`CfePhotoDocumentExtractor`, ML Kit on-device), procesarlo localmente, **corregir cualquier campo mal leído** e importar el recibo y sus periodos anteriores. Ambas rutas comparten el mismo parser y la misma pantalla de revisión editable.
@@ -14,7 +14,10 @@ Este proyecto comenzó como la conversión visual del prototipo **ReciboZen V2**
 - **Las tarifas se auto-calibran con el recibo del usuario.** `TariffCalibration` reconstruye un `TariffRateSnapshot` a partir del `unitRateMxn` de cada tramo impreso en el último recibo importado, y `energySummary`/`billProjection` calculan con ese motor calibrado. Sin recibo se usan los escalones genéricos. Se decidió calibrar-desde-recibo en vez de empaquetar una tabla de tarifas porque CFE ajusta precios mensualmente y los umbrales por tramo dependen de la localidad: cualquier tabla nace vencida. `repository.tariffCalibration` expone `Coverage` (FULL/PARTIAL/NONE) para poder ser honestos sobre de dónde salió el número.
 - Onboarding pide siempre meta de pago y tarifa (antes solo aparecían tras importar un PDF, dejando `goalMxn = 0` y el ritmo recomendado en cero para quien entraba sin recibo). El campo Ciudad puede autocompletarse con `CityLocator` (Geocoder on-device, permiso opcional, siempre editable). La **tarifa nunca se infiere de la ubicación**: SHCP la asigna por localidad según temperatura, así que adivinarla facturaría mal en silencio.
 - Las horas de todos los aparatos configurables recalculan kWh, costo, participación, balance y un **pronóstico inferior-arriba del inventario**. Inicio compara ese resultado con el ritmo del medidor: son dos estimaciones del mismo consumo y nunca se suman. Si todavía no hay lecturas, el inventario puede producir una proyección preliminar con un rango de incertidumbre mayor; cuando sí las hay, el medidor conserva la prioridad y los aparatos muestran qué porcentaje explican.
-- Editar uso admite cualquier valor entre 0 y 168 horas semanales, muestra el promedio diario y actualiza el pronóstico en vivo. Los equipos del catálogo que reportan watts en reposo incluyen también esa energía en su cálculo.
+- Aparatos admite 100+ referencias genéricas y un primer grupo de modelos LG, Samsung y Mabe con kWh/año y enlace de procedencia oficial. La UI distingue etiqueta/fabricante, medición del usuario y estimación para no presentar un promedio como consumo real.
+- Una sola fila puede representar de 1 a 999 unidades iguales (por ejemplo, 20 focos). El motor calcula el consumo por unidad y luego multiplica cantidad, incluyendo reposo cuando corresponde.
+- Editar aparato admite cualquier valor entre 0 y 168 horas semanales **o** kWh directos por unidad y periodo. Esto incluye refrigeradores, routers y demás cargas por ciclo que antes eran fijas; también permite cambiar marca, modelo, cantidad y espacio.
+- Los espacios del hogar son administrables: crear, renombrar y eliminar. Al eliminar uno, sus aparatos se reasignan a “Toda la casa” en lugar de borrarse. La migración de esquema 2 convierte las habitaciones existentes en espacios manejables.
 - Los filtros de Aparatos ordenan/filtran realmente y las sugerencias/simulador pueden agregar aparatos persistentes.
 - Manual, manecillas y foto preparan el valor/método correcto antes de confirmar; las nuevas lecturas se fechan, aparecen en Historial y persisten.
 - Foto abre la cámara instalada mediante `TakePicture`, procesa la imagen en el dispositivo con ML Kit, permite reintentar/corregir y conservar o descartar el archivo.
@@ -79,6 +82,7 @@ Los Composables **nunca** crean repositorios, ni calculan tarifas, ni conocen Na
 | `History` | Historial | pestaña |
 | `PeriodAnalysis` | Análisis del periodo | flujo |
 | `ApplianceEmpty` | Aparatos · estado vacío | flujo |
+| `ApplianceSpaces` | Administrar espacios del hogar | flujo |
 | `ApplianceDetailPattern` (`applianceId`) | Detalle de aparato | flujo |
 | `ApplianceUsagePattern` (`applianceId`) | Editar uso | flujo |
 | `Simulator` | ¿Y si lo compro? | flujo |
@@ -107,7 +111,7 @@ Uno por pantalla, mismo patrón (`class XxxViewModel(repository: ReciboZenReposi
 - **onboarding**: `OnboardingViewModel`
 - **home**: `HomeViewModel`
 - **period**: `PeriodAnalysisViewModel`
-- **appliances**: `AppliancesViewModel`, `AppliancesEmptyViewModel`, `ApplianceDetailViewModel`, `ApplianceUsageViewModel`, `ApplianceSimulatorViewModel`
+- **appliances**: `AppliancesViewModel`, `AppliancesEmptyViewModel`, `ApplianceDetailViewModel`, `ApplianceUsageViewModel`, `ApplianceSpacesViewModel`, `ApplianceSimulatorViewModel`
 - **plan**: `PlanViewModel`, `BalanceViewModel`, `DacViewModel`
 - **solar**: `SolarViewModel`
 - **readings**: `ReadingMethodViewModel`, `ReadingPhotoViewModel`, `ReadingPhotoUnclearViewModel`, `ReadingManualViewModel`, `ReadingDialViewModel`, `ReadingConfirmViewModel`, `HowWeCalculateViewModel`
@@ -123,7 +127,8 @@ El estado de sesión vive en **`demo/repository/ReciboZenSessionState.kt`** por 
 ## Interacciones funcionales y persistentes
 
 - Agregar/quitar una acción del Plan (`repository.togglePlanAction`) — recalcula el recibo proyectado en vivo.
-- Ajustar horas/semana de aparatos compatibles (`repository.setApplianceHoursPerWeek`) — recalcula costo, kWh, participación, balance y proyección.
+- Ajustar horas/semana o kWh directos, cantidad, marca/modelo y espacio (`repository.updateAppliance`) — recalcula costo, kWh, participación, balance y proyección.
+- Crear/renombrar/eliminar espacios (`repository.addHouseSpace/renameHouseSpace/removeHouseSpace`) sin perder aparatos.
 - Ajustar manecillas del medidor (`RzMeterDialCluster` + `repository.setDialAngle/nudgeDial/setDialDigit`) — matemática de ángulo→dígito idéntica a la del prototipo original.
 - Elegir escenario solar (Económico/Recomendado/Mayor cobertura).
 - Cambiar tema claro/oscuro/sistema en toda la app.
@@ -147,6 +152,7 @@ El estado de sesión vive en **`demo/repository/ReciboZenSessionState.kt`** por 
 ## Límites actuales
 
 - No hay login ni sincronización entre dispositivos; el producto funciona sin conexión y guarda todo localmente. El backend actual es sólo la frontera segura inicial para premium.
+- El catálogo de modelos es local y auditable, pero todavía no se actualiza desde backend. Cada modelo declara su fuente; ampliar marcas no requiere cambiar el motor, sólo incorporar registros verificados.
 - No hay conexión ni descarga automática desde CFE; el usuario elige el PDF desde el selector del sistema.
 - OCR reconoce números impresos/digitales; un medidor analógico de carátulas puede requerir el flujo interactivo de manecillas.
 - Las tarifas embebidas son una configuración estimativa. Antes de publicar se debe conectar una fuente oficial/versionada o permitir captura completa de tarifa, temporada, región, subsidios y cargos del recibo.

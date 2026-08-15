@@ -13,6 +13,7 @@ import com.recibozen.app.feature.appliances.ApplianceSimulatorRoute
 import com.recibozen.app.feature.appliances.ApplianceUsageRoute
 import com.recibozen.app.feature.appliances.AppliancesEmptyRoute
 import com.recibozen.app.feature.appliances.AppliancesRoute
+import com.recibozen.app.feature.appliances.ApplianceSpacesRoute
 import com.recibozen.app.feature.home.HomeRoute
 import com.recibozen.app.feature.onboarding.OnboardingRoute
 import com.recibozen.app.feature.period.PeriodAnalysisRoute
@@ -61,6 +62,7 @@ fun ReciboZenNavHost(
 
         composable(Routes.PeriodAnalysis) { PeriodAnalysisRoute(navController, repository) }
         composable(Routes.ApplianceEmpty) { AppliancesEmptyRoute(navController, repository) }
+        composable(Routes.ApplianceSpaces) { ApplianceSpacesRoute(navController, repository) }
         composable(Routes.ApplianceDetailPattern) { backStackEntry ->
             val id = backStackEntry.arguments?.getString(Routes.ApplianceIdArg).orEmpty()
             ApplianceDetailRoute(navController, repository, applianceId = id)

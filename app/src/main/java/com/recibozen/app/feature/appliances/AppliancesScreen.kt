@@ -70,6 +70,7 @@ data class AppliancesUiState(
     val meterProjectedKwh: Int = 0,
     val hasCurrentMeterProjection: Boolean = false,
     val inventoryCoveragePercent: Int = 0,
+    val spaceCount: Int = 0,
 )
 
 class AppliancesViewModel(private val repository: ReciboZenRepository) : ViewModel() {
@@ -133,6 +134,7 @@ class AppliancesViewModel(private val repository: ReciboZenRepository) : ViewMod
                 .roundToInt()
                 .coerceIn(0, 100)
         } else 0,
+        spaceCount = houseSpaces.size,
     )
     }
 
@@ -156,6 +158,7 @@ fun AppliancesRoute(navController: NavHostController, repository: ReciboZenRepos
         onUnidentifiedClick = { navController.navigate(Routes.Balance) },
         onAddApplianceClick = { navController.navigate(Routes.ApplianceEmpty) },
         onSimulateClick = { navController.navigate(Routes.Simulator) },
+        onManageSpacesClick = { navController.navigate(Routes.ApplianceSpaces) },
     )
 }
 
@@ -169,6 +172,7 @@ fun AppliancesScreen(
     onUnidentifiedClick: () -> Unit,
     onAddApplianceClick: () -> Unit,
     onSimulateClick: () -> Unit,
+    onManageSpacesClick: () -> Unit,
     onHouseholdClick: () -> Unit = {},
 ) {
     val filterLabels = listOf(
@@ -309,6 +313,16 @@ fun AppliancesScreen(
                     modifier = Modifier.weight(1f),
                 )
             }
+            RzSecondaryButton(
+                text = stringResource(R.string.appliances_manage_spaces_cta),
+                onClick = onManageSpacesClick,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                stringResource(R.string.appliances_spaces_summary, uiState.spaceCount),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+            )
         }
     }
 }
@@ -378,7 +392,9 @@ private fun ApplianceCard(
         Column(modifier = Modifier.clickable(onClick = onClick)) {
             Row {
                 Text(
-                    appliance.name,
+                    if (appliance.quantity > 1) {
+                        stringResource(R.string.appliances_name_with_quantity, appliance.name, appliance.quantity)
+                    } else appliance.name,
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f),
@@ -407,39 +423,44 @@ private fun ApplianceCard(
                 color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.padding(top = 2.dp),
             )
+            if (appliance.brand != null || appliance.model != null) {
+                Text(
+                    listOfNotNull(appliance.brand, appliance.model).joinToString(" · "),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = RzSpacing.xs),
+                )
+            }
             RzLinearProgress(
                 progress = appliance.sharePercent / 100f,
                 modifier = Modifier.padding(top = RzSpacing.md),
             )
         }
 
-        if (appliance.hoursPerWeek != null) {
-            Row(
-                modifier = Modifier.padding(top = RzSpacing.md),
-                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(RzSpacing.sm),
-            ) {
-                Text(
-                    text = if (appliance.usageNote != null) {
-                        stringResource(R.string.appliances_hours_per_week_note, appliance.hoursPerWeek, appliance.usageNote)
-                    } else {
-                        stringResource(R.string.appliances_hours_per_week, appliance.hoursPerWeek)
-                    },
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f),
-                )
-                RzSecondaryButton(
-                    text = stringResource(R.string.appliances_edit_usage),
-                    onClick = onEditUsageClick,
-                )
-            }
-        } else {
+        Row(
+            modifier = Modifier.padding(top = RzSpacing.md),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(RzSpacing.sm),
+        ) {
             Text(
-                stringResource(R.string.appliances_fridge_cycle_note),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = RzSpacing.md),
+                text = if (appliance.hoursPerWeek != null) {
+                    if (appliance.usageNote != null) {
+                        stringResource(R.string.appliances_hours_per_week_note, appliance.hoursPerWeek, appliance.usageNote)
+                    } else stringResource(R.string.appliances_hours_per_week, appliance.hoursPerWeek)
+                } else {
+                    stringResource(
+                        R.string.appliances_period_kwh_summary,
+                        appliance.unitKwh ?: appliance.kwh.toDouble() / appliance.quantity.coerceAtLeast(1),
+                        billingDays,
+                    )
+                },
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            RzSecondaryButton(
+                text = stringResource(R.string.appliances_edit_usage),
+                onClick = onEditUsageClick,
             )
         }
 
@@ -521,6 +542,7 @@ private fun AppliancesScreenPreview() {
             onUnidentifiedClick = {},
             onAddApplianceClick = {},
             onSimulateClick = {},
+            onManageSpacesClick = {},
         )
     }
 }

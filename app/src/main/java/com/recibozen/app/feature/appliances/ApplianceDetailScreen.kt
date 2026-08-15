@@ -23,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.ViewModel
@@ -43,6 +44,7 @@ import com.recibozen.app.core.designsystem.RzSpacing
 import com.recibozen.app.core.designsystem.RzTheme
 import com.recibozen.app.core.designsystem.ReciboZenTheme
 import com.recibozen.app.core.model.Appliance
+import com.recibozen.app.core.model.ApplianceDataSource
 import com.recibozen.app.core.model.ConfidenceLevel
 import com.recibozen.app.core.model.EffortLevel
 import com.recibozen.app.core.model.PlanAction
@@ -139,6 +141,7 @@ fun ApplianceDetailScreen(
     onRemove: () -> Unit = {},
 ) {
     val appliance = uiState.appliance
+    val uriHandler = LocalUriHandler.current
     var showRemoveDialog by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
@@ -186,7 +189,36 @@ fun ApplianceDetailScreen(
                 )
             }
 
-            if (appliance.calculationNote != null && appliance.hoursPerWeek != null) {
+            RzCard(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    stringResource(R.string.appliances_detail_source_title),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Text(
+                    appliance.sourceLabel ?: when (appliance.dataSource) {
+                        ApplianceDataSource.MANUFACTURER_LABEL -> stringResource(R.string.appliances_source_label)
+                        ApplianceDataSource.USER_MEASURED -> stringResource(R.string.appliances_source_measured)
+                        ApplianceDataSource.CATALOG -> stringResource(R.string.appliances_detail_source_catalog)
+                        ApplianceDataSource.RECEIPT_INFERENCE -> stringResource(R.string.appliances_detail_source_inferred)
+                        ApplianceDataSource.USER_ESTIMATE -> stringResource(R.string.appliances_source_estimated)
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = RzSpacing.xs),
+                )
+                appliance.sourceUrl?.let { sourceUrl ->
+                    Text(
+                        stringResource(R.string.appliances_detail_open_source),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .padding(top = RzSpacing.sm)
+                            .clickable { runCatching { uriHandler.openUri(sourceUrl) } },
+                    )
+                }
+            }
+
+            if (appliance.calculationNote != null) {
                 RzCard(
                     modifier = Modifier.fillMaxWidth().clickable(onClick = onHowWeCalculate),
                 ) {
@@ -199,7 +231,7 @@ fun ApplianceDetailScreen(
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
                             Text(
-                                appliance.calculationNote.format(appliance.hoursPerWeek),
+                                appliance.calculationNote,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.outline,
                             )
@@ -209,13 +241,11 @@ fun ApplianceDetailScreen(
                 }
             }
 
-            if (appliance.hoursPerWeek != null) {
-                RzSecondaryButton(
-                    text = stringResource(R.string.appliances_detail_edit_data),
-                    onClick = onEditData,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
+            RzSecondaryButton(
+                text = stringResource(R.string.appliances_detail_edit_data),
+                onClick = onEditData,
+                modifier = Modifier.fillMaxWidth(),
+            )
 
             RzSecondaryButton(
                 text = stringResource(R.string.appliances_detail_remove),
@@ -261,11 +291,21 @@ private fun HeaderCard(appliance: Appliance, onModifyUsage: () -> Unit) {
             RzStatusChip(text = stringResource(labelRes), icon = icon, containerColor = container, contentColor = content)
         }
         Text(
-            appliance.name,
+            if (appliance.quantity > 1) {
+                stringResource(R.string.appliances_name_with_quantity, appliance.name, appliance.quantity)
+            } else appliance.name,
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(top = RzSpacing.xs),
         )
+        if (appliance.brand != null || appliance.model != null) {
+            Text(
+                listOfNotNull(appliance.brand, appliance.model).joinToString(" · "),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = RzSpacing.xs),
+            )
+        }
         Text(
             stringResource(R.string.appliances_detail_cost_label),
             style = MaterialTheme.typography.titleSmall,
@@ -278,29 +318,33 @@ private fun HeaderCard(appliance: Appliance, onModifyUsage: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurface,
         )
 
-        if (appliance.hoursPerWeek != null) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = RzSpacing.lg)
-                    .background(MaterialTheme.colorScheme.background, RzExtraShapes.cardMedium)
-                    .padding(horizontal = RzSpacing.lg, vertical = RzSpacing.md),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        stringResource(R.string.appliances_detail_usage_label),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.outline,
-                    )
-                    Text(
-                        stringResource(R.string.appliances_detail_usage_value, appliance.hoursPerWeek, appliance.kwh),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-                RzSecondaryButton(text = stringResource(R.string.appliances_detail_modify), onClick = onModifyUsage)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = RzSpacing.lg)
+                .background(MaterialTheme.colorScheme.background, RzExtraShapes.cardMedium)
+                .padding(horizontal = RzSpacing.lg, vertical = RzSpacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    stringResource(R.string.appliances_detail_usage_label),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+                Text(
+                    appliance.hoursPerWeek?.let {
+                        stringResource(R.string.appliances_detail_usage_value, it, appliance.kwh)
+                    } ?: stringResource(
+                        R.string.appliances_detail_usage_fixed_value,
+                        appliance.unitKwh ?: appliance.kwh.toDouble() / appliance.quantity.coerceAtLeast(1),
+                        appliance.kwh,
+                    ),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
             }
+            RzSecondaryButton(text = stringResource(R.string.appliances_detail_modify), onClick = onModifyUsage)
         }
 
         if (appliance.previousPeriodDeltaPercent != null) {

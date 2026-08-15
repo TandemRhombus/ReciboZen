@@ -11,6 +11,9 @@ import com.recibozen.app.core.importer.ParsedCfeBill
 import com.recibozen.app.core.importer.BillImportResult
 import com.recibozen.app.core.calculation.TariffBlock
 import com.recibozen.app.core.model.EntitlementTier
+import com.recibozen.app.core.model.ApplianceDataSource
+import com.recibozen.app.core.model.ApplianceUsageModel
+import com.recibozen.app.core.model.HouseSpace
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -48,8 +51,23 @@ interface ReciboZenRepository {
 
     fun setThemeMode(mode: AppThemeMode)
     fun setApplianceHoursPerWeek(applianceId: String, hours: Int)
+    fun updateAppliance(
+        applianceId: String,
+        quantity: Int,
+        spaceId: String?,
+        room: String,
+        brand: String?,
+        model: String?,
+        usageModel: ApplianceUsageModel,
+        hoursPerWeek: Int?,
+        unitKwh: Double?,
+        dataSource: ApplianceDataSource,
+    )
     fun addAppliance(appliance: Appliance)
     fun removeAppliance(applianceId: String)
+    fun addHouseSpace(name: String): HouseSpace?
+    fun renameHouseSpace(spaceId: String, name: String)
+    fun removeHouseSpace(spaceId: String)
     fun saveSimulatorScenario(name: String, watts: Int, hoursPerWeek: Double)
     fun togglePlanAction(id: String)
     fun setDialAngle(index: Int, angleDegrees: Float)

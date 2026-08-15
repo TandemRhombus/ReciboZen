@@ -23,12 +23,14 @@
 
     <string name="appliances_card_subtitle">%1$s · %2$d kWh en %3$d días · %4$d%% del hogar</string>
     <string name="appliances_card_subtitle_with_standby">%1$s · %2$d kWh en %5$d días · %3$d%% del hogar · $%4$d en reposo</string>
+    <string name="appliances_name_with_quantity">%1$s × %2$d</string>
     <string name="appliances_cost_period">$%1$d / %2$d días</string>
     <string name="appliances_cost_pending">Costo pendiente</string>
     <string name="appliances_hours_per_week">%1$d h/semana</string>
     <string name="appliances_hours_per_week_note">%1$d h/semana · %2$s</string>
     <string name="appliances_edit_usage">Editar uso</string>
     <string name="appliances_fridge_cycle_note">Funciona por ciclos; no necesitas indicar horas exactas.</string>
+    <string name="appliances_period_kwh_summary">%1$.1f kWh por unidad en %2$d días</string>
 
     <string name="appliances_chip_essential">Uso esencial</string>
     <string name="appliances_chip_high_opportunity">Alta oportunidad</string>
@@ -48,6 +50,21 @@
 
     <string name="appliances_add_cta">Agregar aparato</string>
     <string name="appliances_simulate_cta">¿Y si lo compro?</string>
+    <string name="appliances_manage_spaces_cta">Administrar espacios</string>
+    <string name="appliances_spaces_summary">%1$d espacios organizan tu inventario.</string>
+
+    <!-- Espacios del hogar -->
+    <string name="appliances_spaces_title">Espacios</string>
+    <string name="appliances_spaces_headline">Organiza los aparatos por lugar</string>
+    <string name="appliances_spaces_description">Crea recámaras, oficina, patio u otras zonas. Si eliminas una, sus aparatos se moverán a “Toda la casa” y no se perderán.</string>
+    <string name="appliances_spaces_count">%1$d aparatos o grupos registrados</string>
+    <string name="appliances_spaces_rename">Renombrar</string>
+    <string name="appliances_spaces_remove">Eliminar</string>
+    <string name="appliances_spaces_add">Agregar espacio</string>
+    <string name="appliances_spaces_name">Nombre del espacio</string>
+    <string name="appliances_spaces_remove_title">¿Eliminar %1$s?</string>
+    <string name="appliances_spaces_remove_body">Sus %1$d aparatos o grupos se moverán a “Toda la casa”.</string>
+    <string name="appliances_spaces_remove_confirm">Mover y eliminar</string>
 
     <!-- Catálogo y alta -->
     <string name="appliances_catalog_top_bar_title">Agregar aparato</string>
@@ -55,16 +72,30 @@
     <string name="appliances_catalog_description">Busca entre %1$d aparatos comunes. Usamos potencia y uso típicos como punto de partida; podrás ajustarlos.</string>
     <string name="appliances_catalog_period_context">Las estimaciones siguientes cubren %1$d días, según el ciclo de tu suministro.</string>
     <string name="appliances_catalog_search">Buscar aparato</string>
+    <string name="appliances_catalog_watts_short">%1$d W</string>
+    <string name="appliances_catalog_annual_short">%1$.0f kWh/año</string>
     <string name="appliances_catalog_all">Todos</string>
     <string name="appliances_catalog_no_results">No encontramos ese aparato. Puedes registrarlo como personalizado al final.</string>
     <string name="appliances_catalog_room">Habitación o zona</string>
     <string name="appliances_catalog_hours">Horas por semana</string>
     <string name="appliances_catalog_cycle_based">Este aparato funciona por ciclos; usamos un consumo mensual típico en vez de pedirte 24 horas diarias.</string>
+    <string name="appliances_catalog_cycle_based_editable">Este equipo funciona por ciclos. Puedes corregir los kWh por unidad con la etiqueta, un enchufe medidor o tu experiencia real.</string>
     <string name="appliances_catalog_estimate">Estimación para %1$d días: %2$d kWh · $%3$d</string>
     <string name="appliances_catalog_estimate_without_cost">Estimación para %1$d días: %2$d kWh · costo pendiente hasta tener un recibo</string>
     <string name="appliances_catalog_add">Agregar</string>
     <string name="appliances_catalog_monthly_reference">Referencia: %1$.1f kWh cada 30 días</string>
+    <string name="appliances_catalog_annual_reference">Etiqueta/fabricante: %1$.0f kWh al año</string>
+    <string name="appliances_catalog_source">Fuente del dato: %1$s</string>
     <string name="appliances_catalog_weekly_reference">Uso inicial: %1$d h/semana</string>
+    <string name="appliances_space_select">¿Dónde está?</string>
+    <string name="appliances_quantity">Cantidad de equipos iguales</string>
+    <string name="appliances_quantity_hint">Ejemplo: registra 20 focos iguales una sola vez.</string>
+    <string name="appliances_brand">Marca (opcional)</string>
+    <string name="appliances_model">Modelo (opcional)</string>
+    <string name="appliances_period_kwh_per_unit">kWh por unidad en %1$d días</string>
+    <string name="appliances_consumption_method">¿Cómo quieres calcularlo?</string>
+    <string name="appliances_consumption_by_power">Potencia y horas</string>
+    <string name="appliances_consumption_by_kwh">kWh del periodo</string>
     <string name="appliances_custom_title">No encuentro mi aparato</string>
     <string name="appliances_custom_description">Agrégalo manualmente con los watts de su etiqueta y cuánto lo usas. ReciboZen calcula los kWh.</string>
     <string name="appliances_custom_dialog_title">Aparato personalizado</string>
@@ -101,10 +132,15 @@
     </string-array>
 
     <!-- Editar uso -->
-    <string name="appliances_usage_top_bar_title">Editar uso</string>
+    <string name="appliances_usage_top_bar_title">Editar aparato</string>
+    <string name="appliances_usage_identity_title">Datos del aparato</string>
+    <string name="appliances_usage_not_found">No encontramos este aparato. Regresa al inventario e inténtalo de nuevo.</string>
     <string name="appliances_usage_intro">¿Cuántas horas la usas por semana, más o menos? Un aproximado es suficiente.</string>
     <string name="appliances_usage_label">Uso habitual</string>
     <string name="appliances_usage_hours_unit">h/semana</string>
+    <string name="appliances_usage_hours_value">%1$d h por semana</string>
+    <string name="appliances_usage_zero_hours">0 h</string>
+    <string name="appliances_usage_full_week">168 h</string>
     <string name="appliances_usage_cost_prefix">Costo estimado del periodo:</string>
     <string name="appliances_usage_cost_summary_suffix">· %1$d kWh</string>
     <string name="appliances_usage_option_lt5">Menos de 5 h</string>
@@ -112,6 +148,13 @@
     <string name="appliances_usage_option_10_20">10–20 h</string>
     <string name="appliances_usage_option_gt20">Más de 20 h</string>
     <string name="appliances_usage_hint">¿No estás seguro? Dinos cuántas veces la usas y cuánto dura cada vez; nosotros calculamos el total.</string>
+    <string name="appliances_usage_kwh_hint">Escribe el consumo de una sola unidad para este periodo; la app lo multiplica por la cantidad.</string>
+    <string name="appliances_usage_source_title">Origen de este consumo</string>
+    <string name="appliances_source_measured">Medido por mí</string>
+    <string name="appliances_source_label">Etiqueta/fabricante</string>
+    <string name="appliances_source_estimated">Estimado</string>
+    <string name="appliances_usage_draft_total">El grupo consumiría aproximadamente %1$d kWh en %2$d días.</string>
+    <string name="appliances_usage_per_unit_note">Consumo calculado por unidad: %1$.1f kWh.</string>
     <string name="appliances_usage_daily_average">Equivale a un promedio de %1$.1f horas al día. Puedes ajustar el control hora por hora.</string>
     <string name="appliances_usage_detail_title">Detalle opcional</string>
     <string name="appliances_usage_detail_standby_label">Tiempo en reposo</string>
@@ -132,6 +175,7 @@
     <string name="appliances_detail_cost_label">Costo estimado del periodo</string>
     <string name="appliances_detail_usage_label">Uso habitual</string>
     <string name="appliances_detail_usage_value">%1$d h/semana · %2$d kWh</string>
+    <string name="appliances_detail_usage_fixed_value">%1$.1f kWh por unidad · %2$d kWh en total</string>
     <string name="appliances_detail_modify">Modificar</string>
     <string name="appliances_detail_delta_banner">%1$d%% más que el periodo anterior.</string>
     <string name="appliances_detail_active_standby_title">Uso activo y reposo</string>
@@ -149,6 +193,10 @@
     <string name="appliances_detail_recommendation_cta_add">Agregar a mi plan</string>
     <string name="appliances_detail_recommendation_cta_remove">Quitar de mi plan</string>
     <string name="appliances_detail_calc_title">Cómo se calculó</string>
+    <string name="appliances_detail_source_title">Origen del consumo</string>
+    <string name="appliances_detail_source_catalog">Promedio genérico del catálogo</string>
+    <string name="appliances_detail_source_inferred">Inferencia a partir del recibo</string>
+    <string name="appliances_detail_open_source">Abrir ficha oficial</string>
     <string name="appliances_detail_edit_data">Editar datos del aparato</string>
     <string name="appliances_detail_remove">Quitar este aparato</string>
     <string name="appliances_detail_remove_title">¿Quitar %1$s?</string>
