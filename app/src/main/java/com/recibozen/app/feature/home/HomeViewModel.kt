@@ -8,6 +8,7 @@ import com.recibozen.app.core.model.ReadingMethod
 import com.recibozen.app.core.calculation.DacRiskCalculator
 import com.recibozen.app.core.calculation.BillingPeriodTimeline
 import com.recibozen.app.core.calculation.ConsumptionPaceCalculator
+import com.recibozen.app.demo.repository.EnergyForecastBasis
 import com.recibozen.app.demo.data.DemoReciboZenData
 import com.recibozen.app.demo.repository.ReciboZenRepository
 import kotlinx.coroutines.flow.SharingStarted
@@ -34,6 +35,7 @@ class HomeViewModel(private val repository: ReciboZenRepository) : ViewModel() {
             }
             val dataMode = when {
                 latestBill != null && !hasReadingAfterBill -> HomeDataMode.BILL_REFERENCE
+                energy.forecastBasis == EnergyForecastBasis.APPLIANCES -> HomeDataMode.APPLIANCE_FORECAST
                 projection.hasUsageEvidence -> HomeDataMode.PROJECTION
                 else -> HomeDataMode.EMPTY
             }
@@ -78,6 +80,14 @@ class HomeViewModel(private val repository: ReciboZenRepository) : ViewModel() {
                 billingDays = energy.billingDays,
                 projectedKwh = energy.projectedKwh,
                 goalKwh = paceGoal.goalKwh,
+                applianceProjectedKwh = energy.applianceProjectedKwh,
+                applianceProjectedMxn = energy.applianceProjectedCostMxn,
+                applianceCoveragePercent = if (energy.meterProjectedKwh > 0) {
+                    (energy.applianceProjectedKwh * 100f / energy.meterProjectedKwh)
+                        .toInt()
+                        .coerceIn(0, 100)
+                } else 0,
+                hasCurrentMeterProjection = energy.hasCurrentMeterProjection,
                 dailyRateNow = energy.dailyAverageKwh,
                 dailyRateRecommended = paceGoal.recommendedDailyKwh,
                 remainingGoalKwh = paceGoal.remainingKwh,
@@ -90,6 +100,7 @@ class HomeViewModel(private val repository: ReciboZenRepository) : ViewModel() {
                 confidenceLevel = when {
                     dataMode == HomeDataMode.BILL_REFERENCE && importedBills.size >= 6 -> ConfidenceLevel.HIGH
                     dataMode == HomeDataMode.PROJECTION && liveReadings >= 2 -> ConfidenceLevel.HIGH
+                    dataMode == HomeDataMode.APPLIANCE_FORECAST && appliances.all { it.hoursPerWeek != null || it.kwh > 0 } -> ConfidenceLevel.MEDIUM
                     importedBills.isNotEmpty() || liveReadings > 0 -> ConfidenceLevel.MEDIUM
                     else -> ConfidenceLevel.LOW
                 },

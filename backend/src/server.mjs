@@ -6,11 +6,18 @@ import {
 import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { pathToFileURL } from "node:url";
+import { EntitlementLeaseIssuer } from "./entitlement-lease.mjs";
+import {
+  GooglePlayPurchaseVerifier,
+  GoogleServiceAccountTokenProvider,
+  PurchaseVerificationError,
+} from "./google-play.mjs";
 
 const SERVICE_NAME = "recibozen-api";
 const SERVICE_VERSION = "0.1.0";
 const MAX_JSON_BYTES = 64 * 1024;
 const PRODUCT_ID_PATTERN = /^[a-z0-9._-]{1,128}$/;
+const SUBJECT_PATTERN = /^[a-zA-Z0-9._:-]{8,128}$/;
 
 class HttpError extends Error {
   constructor(status, code, message) {
@@ -82,6 +89,9 @@ function validateExchangeRequest(body) {
   if (typeof body.productId !== "string" || !PRODUCT_ID_PATTERN.test(body.productId)) {
     throw new HttpError(400, "invalid_product_id", "productId is invalid");
   }
+  if (typeof body.subject !== "string" || !SUBJECT_PATTERN.test(body.subject)) {
+    throw new HttpError(400, "invalid_subject", "subject is invalid");
+  }
   if (typeof body.purchaseToken !== "string" || body.purchaseToken.length < 20 || body.purchaseToken.length > 4096) {
     throw new HttpError(400, "invalid_purchase_token", "purchaseToken is invalid");
   }
@@ -90,7 +100,7 @@ function validateExchangeRequest(body) {
   }
 }
 
-export function buildRequestHandler({ entitlementKey = null, logger = console } = {}) {
+export function buildRequestHandler({ entitlementKey = null, purchaseVerifier = null, leaseIssuer = null, logger = console } = {}) {
   return async function requestHandler(request, response) {
     const requestId = randomUUID();
     let status = 500;
@@ -111,11 +121,12 @@ export function buildRequestHandler({ entitlementKey = null, logger = console } 
       }
 
       if (request.method === "GET" && pathname === "/readyz") {
-        status = entitlementKey ? 200 : 503;
+        const billingReady = Boolean(purchaseVerifier && leaseIssuer);
+        status = entitlementKey && billingReady ? 200 : 503;
         sendJson(response, status, {
-          status: entitlementKey ? "ready" : "not_ready",
+          status: entitlementKey && billingReady ? "ready" : "not_ready",
           entitlementKeyConfigured: Boolean(entitlementKey),
-          playBillingConfigured: false,
+          playBillingConfigured: billingReady,
         }, requestId);
         return;
       }
@@ -136,34 +147,54 @@ export function buildRequestHandler({ entitlementKey = null, logger = console } 
       }
 
       if (request.method === "POST" && pathname === "/v1/entitlements/exchange") {
-        validateExchangeRequest(await readJson(request));
-        throw new HttpError(
-          503,
-          "play_verification_not_configured",
-          "Premium activation remains disabled until account authentication and Google Play verification are configured",
-        );
+        const input = await readJson(request);
+        validateExchangeRequest(input);
+        if (!purchaseVerifier || !leaseIssuer) {
+          throw new HttpError(
+            503,
+            "play_verification_not_configured",
+            "Premium activation remains disabled until Google Play verification is configured",
+          );
+        }
+        const verified = await purchaseVerifier.verify(input);
+        const entitlementLease = leaseIssuer.issue({
+          subject: input.subject,
+          tier: verified.tier,
+          purchaseExpiresAtEpochSeconds: verified.expiresAtEpochSeconds,
+        });
+        status = 200;
+        sendJson(response, status, {
+          schemaVersion: 1,
+          tier: verified.tier,
+          entitlementLease,
+        }, requestId);
+        return;
       }
 
       throw new HttpError(404, "not_found", "Route not found");
     } catch (error) {
       const safeError = error instanceof HttpError
         ? error
-        : new HttpError(500, "internal_error", "An internal error occurred");
+        : error instanceof PurchaseVerificationError
+          ? new HttpError(error.status, error.code, error.message)
+          : new HttpError(500, "internal_error", "An internal error occurred");
       status = safeError.status;
       if (!response.headersSent) {
         sendJson(response, status, { error: safeError.code, message: safeError.message }, requestId);
       } else {
         response.destroy();
       }
-      if (!(error instanceof HttpError)) logger.error({ requestId, error: error?.message ?? "unknown" });
+      if (!(error instanceof HttpError) && !(error instanceof PurchaseVerificationError)) {
+        logger.error({ requestId, error: error?.message ?? "unknown" });
+      }
     } finally {
       logger.info({ requestId, method: request.method, path: pathname, status });
     }
   };
 }
 
-export function startServer({ port, entitlementKey, logger = console }) {
-  const server = createServer(buildRequestHandler({ entitlementKey, logger }));
+export function startServer({ port, entitlementKey, purchaseVerifier = null, leaseIssuer = null, logger = console }) {
+  const server = createServer(buildRequestHandler({ entitlementKey, purchaseVerifier, leaseIssuer, logger }));
   server.headersTimeout = 5_000;
   server.requestTimeout = 10_000;
   server.keepAliveTimeout = 5_000;
@@ -176,7 +207,45 @@ function run() {
   const port = Number(process.env.PORT ?? "8080");
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("PORT must be a valid TCP port");
   const entitlementKey = loadEntitlementPublicKey(process.env.ENTITLEMENT_PUBLIC_KEY_FILE);
-  const server = startServer({ port, entitlementKey });
+  const privateKeyPem = process.env.ENTITLEMENT_PRIVATE_KEY_FILE
+    ? readFileSync(process.env.ENTITLEMENT_PRIVATE_KEY_FILE, "utf8")
+    : null;
+  const serviceAccount = process.env.GOOGLE_SERVICE_ACCOUNT_FILE
+    ? JSON.parse(readFileSync(process.env.GOOGLE_SERVICE_ACCOUNT_FILE, "utf8"))
+    : null;
+  const productTiers = process.env.PREMIUM_PRODUCTS_JSON
+    ? JSON.parse(process.env.PREMIUM_PRODUCTS_JSON)
+    : null;
+  if (productTiers && (Array.isArray(productTiers) || typeof productTiers !== "object" ||
+    Object.entries(productTiers).some(([productId, tier]) => !PRODUCT_ID_PATTERN.test(productId) || !["PLUS", "FAMILY"].includes(tier)))) {
+    throw new Error("PREMIUM_PRODUCTS_JSON must map valid product IDs only to PLUS or FAMILY");
+  }
+  const expectedCertificateDigests = (process.env.PLAY_CERTIFICATE_SHA256_DIGESTS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const packageName = process.env.ANDROID_PACKAGE_NAME ?? "com.recibozen.app";
+  if (privateKeyPem && entitlementKey) {
+    const privateDerivedDer = createPublicKey(privateKeyPem).export({ type: "spki", format: "der" });
+    const privateDerivedKeyId = createHash("sha256").update(privateDerivedDer).digest("base64url").slice(0, 22);
+    if (privateDerivedKeyId !== entitlementKey.keyId) {
+      throw new Error("Entitlement private and public keys do not match");
+    }
+  }
+  const billingConfigured = Boolean(
+    privateKeyPem && serviceAccount?.client_email && serviceAccount?.private_key &&
+    productTiers && Object.keys(productTiers).length > 0 && expectedCertificateDigests.length > 0,
+  );
+  const tokenProvider = billingConfigured
+    ? new GoogleServiceAccountTokenProvider({ credentials: serviceAccount })
+    : null;
+  const purchaseVerifier = billingConfigured
+    ? new GooglePlayPurchaseVerifier({ packageName, productTiers, expectedCertificateDigests, tokenProvider })
+    : null;
+  const leaseIssuer = billingConfigured
+    ? new EntitlementLeaseIssuer({ privateKeyPem, audience: packageName })
+    : null;
+  const server = startServer({ port, entitlementKey, purchaseVerifier, leaseIssuer });
   const shutdown = (signal) => {
     console.info({ event: "shutdown", signal });
     server.close((error) => process.exit(error ? 1 : 0));

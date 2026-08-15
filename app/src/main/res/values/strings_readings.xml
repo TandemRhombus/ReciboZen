@@ -91,16 +91,31 @@
     <!-- Cómo lo calculamos (18) -->
     <string name="how_we_calculate_title">Cómo lo calculamos</string>
     <string name="how_we_calculate_flow_title">De tus lecturas al recibo</string>
+    <string name="how_we_calculate_appliance_flow_title">De tus aparatos al recibo</string>
     <string name="how_we_calculate_step1_label">Observado.</string>
-    <string name="how_we_calculate_step1_body">18,426 − 18,099 = 327 kWh en 43 días.</string>
     <string name="how_we_calculate_step2_label">Ritmo.</string>
-    <string name="how_we_calculate_step2_body">327 ÷ 1,032 horas × 24 = 7.2 kWh/día. Contamos horas reales, no días completos.</string>
     <string name="how_we_calculate_step3_label">Proyectado.</string>
-    <string name="how_we_calculate_step3_body">327 + (7.2 × 18 días) ≈ 382 kWh al cierre.</string>
     <string name="how_we_calculate_step4_label">Costo.</string>
-    <string name="how_we_calculate_step4_body">Esos 382 kWh se reparten en los escalones de la Tarifa 1C.</string>
+    <string name="how_we_calculate_observed_body">%1$d kWh observados en %2$d días entre lecturas.</string>
+    <string name="how_we_calculate_pace_body">%1$s kWh por día según el intervalo observado.</string>
+    <string name="how_we_calculate_projected_body">Con %1$d días restantes estimamos %2$d kWh al cierre.</string>
+    <string name="how_we_calculate_cost_body">Los escalones de la tarifa %1$s dan una proyección aproximada de $%2$d.</string>
+    <string name="how_we_calculate_appliance_step1_label">Inventario.</string>
+    <string name="how_we_calculate_appliance_step1_body">Usamos únicamente los %1$d aparatos que registraste.</string>
+    <string name="how_we_calculate_appliance_step2_label">Uso declarado.</string>
+    <string name="how_we_calculate_appliance_step2_body">Cada aparato se calcula con su potencia, horas semanales y consumo en reposo cuando está disponible.</string>
+    <string name="how_we_calculate_appliance_step3_body">Los horarios suman aproximadamente %1$d kWh durante un periodo de %2$d días.</string>
+    <string name="how_we_calculate_bill_step1_label">Recibo cerrado.</string>
+    <string name="how_we_calculate_bill_step1_body">El último periodo registró %1$d kWh en %2$d días.</string>
+    <string name="how_we_calculate_bill_step2_label">Periodo actual.</string>
+    <string name="how_we_calculate_bill_step2_body">Todavía no proyectamos el periodo actual porque falta una lectura posterior al cierre.</string>
+    <string name="how_we_calculate_bill_appliance_body">Tus aparatos declaran %1$d kWh por periodo como referencia independiente.</string>
+    <string name="how_we_calculate_pending_label">Datos pendientes.</string>
+    <string name="how_we_calculate_pending_body">Agrega aparatos, importa un recibo o registra dos lecturas para crear una estimación.</string>
+    <string name="how_we_calculate_two_forecasts_title">Por qué aparecen dos estimaciones</string>
+    <string name="how_we_calculate_two_forecasts_body">El medidor proyecta %1$d kWh y los aparatos registrados %2$d kWh. No se suman: el medidor ya incluye todos los equipos. La comparación revela cuánto consumo falta por identificar o qué horarios conviene revisar.</string>
     <string name="how_we_calculate_assumptions_title">Qué supone y qué no</string>
-    <string name="how_we_calculate_assumptions_body">• La proyección usa el ritmo entre lecturas y el ciclo configurado.\n• Cuando no confirmas el modelo de un aparato usamos una potencia típica de su categoría.\n• El motor usa escalones de tarifa configurables guardados en la app.\n• No es una cifra oficial y puede diferir de tu recibo.</string>
+    <string name="how_we_calculate_assumptions_body">• Con lecturas suficientes, el ritmo del medidor es la referencia principal.\n• El inventario genera una segunda estimación con potencia, horario y reposo; nunca se suma encima del medidor.\n• Cuando no confirmas el modelo de un aparato usamos una potencia típica de su categoría.\n• El motor usa las tarifas extraídas de tu recibo cuando están disponibles y una referencia genérica en caso contrario.\n• No es una cifra oficial y puede diferir de tu recibo.</string>
     <string name="how_we_calculate_glossary_kwh_body">mide cuánta energía usaste.</string>
     <string name="how_we_calculate_glossary_kw_body">es la potencia de un aparato.</string>
     <string name="how_we_calculate_glossary_kwp_body">es la potencia de un sistema solar.</string>

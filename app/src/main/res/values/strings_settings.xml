@@ -14,9 +14,14 @@
     <string name="profile_row_service">Suministro y medidor</string>
     <string name="profile_row_services">Mis suministros</string>
     <string name="profile_row_reminders">Recordatorios de lectura</string>
-    <string name="profile_row_reminders_trailing">Cada 3 días</string>
+    <string name="profile_row_reminders_manage">Configurar</string>
+    <string name="profile_row_premium_badge">Premium</string>
+    <string name="profile_row_premium">ReciboZen Premium</string>
+    <string name="profile_row_premium_free">Plan gratuito</string>
+    <string name="profile_row_premium_active">Activo</string>
     <string name="profile_row_privacy">Privacidad y fotos guardadas</string>
-    <string name="profile_row_states_catalog">Estados y errores (referencia)</string>
+    <string name="profile_row_support">Ayuda, errores y soporte</string>
+    <string name="profile_row_donate">Apoyar el proyecto</string>
     <string name="profile_disclaimer">Tus lecturas se guardan en tu teléfono. Puedes exportarlas o borrar las fotos sin perder las lecturas. ReciboZen es independiente y no está afiliada a ninguna empresa eléctrica.</string>
     <string name="profile_edit_title">Datos del hogar</string>
     <string name="profile_edit_name">Tu nombre</string>
@@ -62,11 +67,11 @@
     <string name="appearance_meaning_note">El modo oscuro conserva el significado: violeta para proyección y acción, verde lima para la acción principal, verde para mejoras, ámbar para atención.</string>
 
     <!-- States catalog -->
-    <string name="states_catalog_title">Estados y errores</string>
-    <string name="states_catalog_intro">Cómo se ve la app cuando algo falta o falla. Ningún error deja al usuario sin salida.</string>
+    <string name="states_catalog_title">Estados y soluciones</string>
+    <string name="states_catalog_intro">Qué significa cada aviso y cuál es la acción más segura. Si el problema continúa, repórtalo desde Ayuda y soporte.</string>
 
     <string name="states_catalog_eyebrow_loading">CALCULANDO</string>
-    <string name="states_catalog_loading_caption">Actualizando solo esta tarjeta; el resto de la pantalla sigue disponible.</string>
+    <string name="states_catalog_loading_caption">Estamos recalculando con tus datos. Puedes seguir usando el resto de la app.</string>
 
     <string name="states_catalog_eyebrow_insufficient">INFORMACIÓN INSUFICIENTE</string>
     <string name="states_catalog_insufficient_title">Todavía no podemos proyectar tu recibo</string>
@@ -75,16 +80,16 @@
 
     <string name="states_catalog_eyebrow_offline">SIN CONEXIÓN</string>
     <string name="states_catalog_offline_title">Estás sin conexión</string>
-    <string name="states_catalog_offline_body">Puedes registrar lecturas y ver tus datos. Sincronizamos cuando vuelva el internet.</string>
+    <string name="states_catalog_offline_body">Puedes registrar lecturas y consultar tus datos locales. Las compras, restauraciones y reportes requieren conexión.</string>
 
     <string name="states_catalog_eyebrow_dubious">LECTURA DUDOSA</string>
-    <string name="states_catalog_dubious_title">Esta lectura implicaría 46 kWh diarios</string>
-    <string name="states_catalog_dubious_body">Está muy por encima de tu promedio de 8.3. Puedes revisarla o guardarla si es correcta.</string>
+    <string name="states_catalog_dubious_title">La lectura cambia mucho más de lo habitual</string>
+    <string name="states_catalog_dubious_body">Revisa los dígitos y la dirección de las manecillas. Si hubo cambio o reinicio de medidor, puedes guardarla y dejar constancia.</string>
     <string name="states_catalog_dubious_review">Revisar</string>
     <string name="states_catalog_dubious_save">Guardar</string>
 
     <string name="states_catalog_registered_title">Lectura registrada</string>
-    <string name="states_catalog_registered_body">Consumiste 7.8 kWh desde ayer, 0.6 menos que tu promedio semanal. Tu proyección bajó $12.</string>
+    <string name="states_catalog_registered_body">La lectura se guardó y la proyección se recalculó desde el inicio del periodo actual.</string>
 
     <string name="states_catalog_eyebrow_plan_empty">PLAN SIN ACCIONES</string>
     <string name="states_catalog_plan_empty_title">Aún no tienes acciones en tu plan</string>

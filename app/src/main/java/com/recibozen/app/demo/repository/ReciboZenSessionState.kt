@@ -57,6 +57,17 @@ data class BillProjection(
     val hasUsageEvidence: Boolean = false,
 )
 
+/** The evidence that currently drives the headline projection. */
+enum class EnergyForecastBasis {
+    NONE,
+    /** A closed CFE bill is the only measured reference available. */
+    CLOSED_BILL,
+    /** Declared appliance schedules are the only source for the next period. */
+    APPLIANCES,
+    /** A live meter pace is primary; appliance usage is kept as a comparison. */
+    METER,
+}
+
 data class EnergySummary(
     val observedKwh: Int,
     val observedDays: Int,
@@ -67,7 +78,19 @@ data class EnergySummary(
     val costToDateMxn: Int,
     val projectedCostMxn: Int,
     val hasUsageEvidence: Boolean = false,
+    /** Projection obtained only from the current period's meter pace. */
+    val meterProjectedKwh: Int = 0,
+    /** Bottom-up projection from the appliances and schedules declared by the user. */
+    val applianceProjectedKwh: Int = 0,
+    val applianceProjectedCostMxn: Int = 0,
+    val forecastBasis: EnergyForecastBasis = EnergyForecastBasis.NONE,
 ) {
+    val hasCurrentMeterProjection: Boolean
+        get() = forecastBasis == EnergyForecastBasis.METER
+
+    val hasApplianceProjection: Boolean
+        get() = applianceProjectedKwh > 0
+
     /**
      * How much of the billing period [observedKwh] actually covers.
      *

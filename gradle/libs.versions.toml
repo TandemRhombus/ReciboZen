@@ -15,6 +15,9 @@ mlKitTextRecognition = "16.0.1"
 room = "2.8.4"
 ksp = "2.3.10"
 jsonJava = "20251224"
+work = "2.11.2"
+billing = "9.1.0"
+playIntegrity = "1.6.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -42,6 +45,9 @@ androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = 
 androidx-room-testing = { group = "androidx.room", name = "room-testing", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 json-java = { group = "org.json", name = "json", version.ref = "jsonJava" }
+androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
+google-play-billing = { group = "com.android.billingclient", name = "billing", version.ref = "billing" }
+google-play-integrity = { group = "com.google.android.play", name = "integrity", version.ref = "playIntegrity" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -160,6 +160,12 @@ fun HomeScreen(
                     item { LatestRealBillCard(uiState) }
                     if (uiState.realBillHistory.size >= 2) item { HistoricalBillsChartCard(uiState) }
                     item { BuildProjectionCard(onRegisterReading, onViewAllAppliances) }
+                    if (uiState.hasAppliances) item { ApplianceForecastCard(uiState, onViewAllAppliances) }
+                    item { ApplianceDataCard(uiState, onViewAllAppliances) }
+                    item { ConfidenceCard(uiState, onRegisterReading) }
+                }
+                HomeDataMode.APPLIANCE_FORECAST -> {
+                    item { ApplianceForecastCard(uiState, onViewAllAppliances) }
                     item { ApplianceDataCard(uiState, onViewAllAppliances) }
                     item { ConfidenceCard(uiState, onRegisterReading) }
                 }
@@ -168,6 +174,7 @@ fun HomeScreen(
                     item { PaceCard(uiState) }
                     item { PeriodProgressCard(uiState, onViewFullAnalysis) }
                     if (uiState.realBillHistory.size >= 2) item { HistoricalBillsChartCard(uiState) }
+                    if (uiState.hasAppliances) item { ApplianceForecastCard(uiState, onViewAllAppliances) }
                     item { ApplianceDataCard(uiState, onViewAllAppliances) }
                     item { ConfidenceCard(uiState, onRegisterReading) }
                 }
@@ -382,6 +389,94 @@ private fun ApplianceDataCard(uiState: HomeUiState, onViewAllAppliances: () -> U
             stringResource(R.string.home_view_all),
             onViewAllAppliances,
             Modifier.fillMaxWidth().padding(top = RzSpacing.lg),
+        )
+    }
+}
+
+@Composable
+private fun ApplianceForecastCard(uiState: HomeUiState, onViewAllAppliances: () -> Unit) {
+    RzCard(modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(RzSpacing.sm)) {
+            Icon(RzIcons.HomeWork, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Text(
+                stringResource(R.string.home_appliance_forecast_title),
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.weight(1f),
+            )
+            RzStatusChip(
+                text = stringResource(R.string.home_appliance_forecast_badge),
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.primary,
+            )
+        }
+
+        if (uiState.hasCurrentMeterProjection) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.lg),
+                horizontalArrangement = Arrangement.spacedBy(RzSpacing.lg),
+            ) {
+                StatColumn(
+                    label = stringResource(R.string.home_appliance_forecast_meter_label),
+                    value = stringResource(R.string.home_period_kwh_value, uiState.projectedKwh),
+                    modifier = Modifier.weight(1f),
+                )
+                StatColumn(
+                    label = stringResource(R.string.home_appliance_forecast_inventory_label),
+                    value = stringResource(R.string.home_period_kwh_value, uiState.applianceProjectedKwh),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Text(
+                stringResource(R.string.home_appliance_forecast_coverage, uiState.applianceCoveragePercent),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = RzSpacing.md),
+            )
+            RzLinearProgress(
+                progress = uiState.applianceCoveragePercent / 100f,
+                progressColor = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = RzSpacing.xs),
+            )
+            Text(
+                stringResource(R.string.home_appliance_forecast_comparison_note),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = RzSpacing.md),
+            )
+        } else {
+            Row(
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.spacedBy(RzSpacing.sm),
+                modifier = Modifier.padding(top = RzSpacing.lg),
+            ) {
+                Text(
+                    "$${uiState.applianceProjectedMxn}",
+                    style = MaterialTheme.typography.displaySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    stringResource(R.string.home_appliance_forecast_kwh_period, uiState.applianceProjectedKwh, uiState.billingDays),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = RzSpacing.xs),
+                )
+            }
+            Text(
+                stringResource(
+                    if (uiState.dataMode == HomeDataMode.BILL_REFERENCE) {
+                        R.string.home_appliance_forecast_bill_note
+                    } else R.string.home_appliance_forecast_only_note,
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = RzSpacing.md),
+            )
+        }
+
+        RzSecondaryButton(
+            text = stringResource(R.string.home_appliance_forecast_edit),
+            onClick = onViewAllAppliances,
+            modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.lg),
         )
     }
 }

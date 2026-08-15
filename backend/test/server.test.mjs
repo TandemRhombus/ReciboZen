@@ -36,9 +36,9 @@ test("health endpoint exposes no operational secrets", async () => {
 
 test("readiness distinguishes process health from billing configuration", async () => {
   const response = await fetch(`${baseUrl}/readyz`);
-  assert.equal(response.status, 200);
+  assert.equal(response.status, 503);
   assert.deepEqual(await response.json(), {
-    status: "ready",
+    status: "not_ready",
     entitlementKeyConfigured: true,
     playBillingConfigured: false,
   });
@@ -58,6 +58,7 @@ test("premium exchange stays fail-closed with plausible client input", async () 
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
+      subject: "install-subject-1234",
       productId: "recibozen_plus_monthly",
       purchaseToken: "purchase-token-that-is-long-enough",
       integrityToken: "integrity-token-that-is-long-enough",
@@ -71,12 +72,54 @@ test("exchange rejects malformed requests without reflecting tokens", async () =
   const response = await fetch(`${baseUrl}/v1/entitlements/exchange`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ productId: "INVALID PRODUCT", purchaseToken: "secret", integrityToken: "secret" }),
+    body: JSON.stringify({ subject: "install-subject-1234", productId: "INVALID PRODUCT", purchaseToken: "secret", integrityToken: "secret" }),
   });
   assert.equal(response.status, 400);
   const responseText = await response.text();
   assert.match(responseText, /invalid_product_id/);
   assert.doesNotMatch(responseText, /secret/);
+});
+
+test("verified purchase receives only a backend-signed lease", async () => {
+  const verifiedHandler = buildRequestHandler({
+    entitlementKey,
+    logger,
+    purchaseVerifier: {
+      async verify(input) {
+        assert.equal(input.subject, "install-subject-1234");
+        return { tier: "PLUS", expiresAtEpochSeconds: Math.floor(Date.now() / 1000) + 3600 };
+      },
+    },
+    leaseIssuer: {
+      issue(input) {
+        assert.equal(input.tier, "PLUS");
+        return "signed.lease";
+      },
+    },
+  });
+  const isolated = createServer(verifiedHandler);
+  await new Promise((resolve) => isolated.listen(0, "127.0.0.1", resolve));
+  const url = `http://127.0.0.1:${isolated.address().port}`;
+  try {
+    const response = await fetch(`${url}/v1/entitlements/exchange`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        subject: "install-subject-1234",
+        productId: "recibozen_plus_monthly",
+        purchaseToken: "purchase-token-that-is-long-enough",
+        integrityToken: "integrity-token-that-is-long-enough",
+      }),
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      schemaVersion: 1,
+      tier: "PLUS",
+      entitlementLease: "signed.lease",
+    });
+  } finally {
+    await new Promise((resolve, reject) => isolated.close((error) => error ? reject(error) : resolve()));
+  }
 });
 
 test("unknown routes and query strings are rejected", async () => {

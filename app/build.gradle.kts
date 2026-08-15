@@ -13,6 +13,8 @@ val entitlementPublicKey = providers.gradleProperty("RECIBOZEN_ENTITLEMENT_PUBLI
     .orElse("")
 val apiBaseUrl = providers.gradleProperty("RECIBOZEN_API_BASE_URL")
     .orElse("https://api-recibozen.simapp.uk")
+val playCloudProjectNumber = providers.gradleProperty("RECIBOZEN_PLAY_CLOUD_PROJECT_NUMBER")
+    .orElse("0")
 
 android {
     namespace = "com.recibozen.app"
@@ -45,6 +47,11 @@ android {
             "String",
             "API_BASE_URL",
             apiBaseUrl.get().asBuildConfigString(),
+        )
+        buildConfigField(
+            "long",
+            "PLAY_CLOUD_PROJECT_NUMBER",
+            "${playCloudProjectNumber.get().toLongOrNull() ?: 0L}L",
         )
     }
 
@@ -97,6 +104,9 @@ dependencies {
     implementation(libs.google.mlkit.text.recognition)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.google.play.billing)
+    implementation(libs.google.play.integrity)
     ksp(libs.androidx.room.compiler)
     testImplementation(libs.junit)
     testImplementation(libs.androidx.room.testing)

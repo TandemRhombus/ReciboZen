@@ -5,6 +5,8 @@
     <!-- Optional: only used to prefill the city field during onboarding. The
          app works fully without it and the field always stays editable. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:allowBackup="false"

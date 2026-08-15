@@ -29,7 +29,9 @@ import com.recibozen.app.data.local.BillHistorySummaryEntity
 import com.recibozen.app.core.importer.ParsedCfeBill
 import com.recibozen.app.core.importer.BillImportResult
 import com.recibozen.app.core.model.EntitlementPolicy
-import com.recibozen.app.core.security.PremiumEntitlementAuthority
+import com.recibozen.app.core.security.PremiumAccessStore
+import com.recibozen.app.core.notifications.ReadingReminderScheduler
+import com.recibozen.app.core.notifications.ReadingReminderStore
 import com.recibozen.app.demo.data.DemoReciboZenData
 import com.recibozen.app.core.calculation.TariffCalibration
 import com.recibozen.app.demo.repository.DemoReciboZenRepository
@@ -67,23 +69,17 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val stateKey = stringPreferencesKey("session_json_v1")
-    private val entitlementLeaseKey = stringPreferencesKey("server_entitlement_lease_v1")
     private val database = ReciboZenDatabase.get(appContext)
     private val dao = database.dao()
-    private val premiumEntitlementAuthority = PremiumEntitlementAuthority(appContext)
+    private val premiumAccessStore = PremiumAccessStore(appContext)
 
     init {
         mutableSession.value = ReciboZenSessionState(isHydrated = false)
         scope.launch {
             val preferences = appContext.reciboZenDataStore.data.first()
             val stored = preferences[stateKey]
-            val trustedTier = premiumEntitlementAuthority.effectiveTier(
-                token = preferences[entitlementLeaseKey],
-                // There is no authenticated account yet, so premium must stay
-                // closed. Billing integration will supply the subject from its
-                // authenticated account session, never from mutable preferences.
-                expectedSubject = null,
-            )
+            val trustedTier = premiumAccessStore.effectiveTier()
+            ReadingReminderScheduler.apply(appContext, ReadingReminderStore(appContext).load(), trustedTier)
             val hydrated = SessionJsonCodec.decode(stored).copy(
                 entitlementTier = trustedTier,
                 isHydrated = true,
@@ -238,6 +234,15 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
     override fun setTariff(tariff: String) {
         super.setTariff(tariff)
         persistService(mutableSession.value.activeServiceId)
+    }
+
+    override fun premiumSubject(): String = premiumAccessStore.subject
+
+    override fun acceptPremiumLease(signedLease: String): EntitlementTier? {
+        val acceptedTier = premiumAccessStore.acceptSignedLease(signedLease) ?: return null
+        mutableSession.update { it.copy(entitlementTier = acceptedTier) }
+        ReadingReminderScheduler.apply(appContext, ReadingReminderStore(appContext).load(), acceptedTier)
+        return acceptedTier
     }
 
     override fun updateElectricService(

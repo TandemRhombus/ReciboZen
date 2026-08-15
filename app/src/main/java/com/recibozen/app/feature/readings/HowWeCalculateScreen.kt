@@ -32,6 +32,7 @@ import com.recibozen.app.core.designsystem.ReciboZenTheme
 import com.recibozen.app.core.designsystem.RzExtraShapes
 import com.recibozen.app.core.designsystem.RzSpacing
 import com.recibozen.app.demo.repository.ReciboZenRepository
+import com.recibozen.app.demo.repository.EnergyForecastBasis
 import com.recibozen.app.navigation.rzViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -47,6 +48,11 @@ data class HowWeCalculateUiState(
     val projectedKwh: Int = 0,
     val projectedMxn: Int = 0,
     val tariff: String = "",
+    val billingDays: Int = 0,
+    val applianceCount: Int = 0,
+    val applianceProjectedKwh: Int = 0,
+    val meterProjectedKwh: Int = 0,
+    val forecastBasis: EnergyForecastBasis = EnergyForecastBasis.NONE,
 )
 
 class HowWeCalculateViewModel(repository: ReciboZenRepository) : ViewModel() {
@@ -60,6 +66,11 @@ class HowWeCalculateViewModel(repository: ReciboZenRepository) : ViewModel() {
                 projectedKwh = energy.projectedKwh,
                 projectedMxn = repository.billProjection(state).projectedMxn,
                 tariff = state.tariff,
+                billingDays = energy.billingDays,
+                applianceCount = repository.appliances(state).size,
+                applianceProjectedKwh = energy.applianceProjectedKwh,
+                meterProjectedKwh = energy.meterProjectedKwh,
+                forecastBasis = energy.forecastBasis,
             )
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HowWeCalculateUiState())
@@ -88,15 +99,55 @@ fun HowWeCalculateScreen(uiState: HowWeCalculateUiState, onBack: () -> Unit) {
         ) {
             RzCard(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    stringResource(R.string.how_we_calculate_flow_title),
+                    stringResource(
+                        if (uiState.forecastBasis == EnergyForecastBasis.APPLIANCES) {
+                            R.string.how_we_calculate_appliance_flow_title
+                        } else R.string.how_we_calculate_flow_title,
+                    ),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Column(modifier = Modifier.padding(top = RzSpacing.md), verticalArrangement = Arrangement.spacedBy(RzSpacing.md)) {
-                    CalcStep(1, stringResource(R.string.how_we_calculate_step1_label), "${uiState.observedKwh} kWh observados en ${uiState.observedDays} días entre lecturas.")
-                    CalcStep(2, stringResource(R.string.how_we_calculate_step2_label), "${formatOneDecimal(uiState.dailyAverageKwh)} kWh por día según el intervalo observado.")
-                    CalcStep(3, stringResource(R.string.how_we_calculate_step3_label), "Con ${uiState.daysRemaining} días restantes estimamos ${uiState.projectedKwh} kWh al cierre.")
-                    CalcStep(4, stringResource(R.string.how_we_calculate_step4_label), "Los escalones de ${uiState.tariff} dan una proyección aproximada de $${uiState.projectedMxn}.")
+                    when (uiState.forecastBasis) {
+                        EnergyForecastBasis.APPLIANCES -> {
+                            CalcStep(1, stringResource(R.string.how_we_calculate_appliance_step1_label), stringResource(R.string.how_we_calculate_appliance_step1_body, uiState.applianceCount))
+                            CalcStep(2, stringResource(R.string.how_we_calculate_appliance_step2_label), stringResource(R.string.how_we_calculate_appliance_step2_body))
+                            CalcStep(3, stringResource(R.string.how_we_calculate_step3_label), stringResource(R.string.how_we_calculate_appliance_step3_body, uiState.applianceProjectedKwh, uiState.billingDays))
+                            CalcStep(4, stringResource(R.string.how_we_calculate_step4_label), stringResource(R.string.how_we_calculate_cost_body, uiState.tariff.ifBlank { "estimada" }, uiState.projectedMxn))
+                        }
+                        EnergyForecastBasis.CLOSED_BILL -> {
+                            CalcStep(1, stringResource(R.string.how_we_calculate_bill_step1_label), stringResource(R.string.how_we_calculate_bill_step1_body, uiState.observedKwh, uiState.billingDays))
+                            CalcStep(2, stringResource(R.string.how_we_calculate_bill_step2_label), stringResource(R.string.how_we_calculate_bill_step2_body))
+                            if (uiState.applianceProjectedKwh > 0) {
+                                CalcStep(3, stringResource(R.string.how_we_calculate_appliance_step1_label), stringResource(R.string.how_we_calculate_bill_appliance_body, uiState.applianceProjectedKwh))
+                            }
+                        }
+                        EnergyForecastBasis.METER -> {
+                            CalcStep(1, stringResource(R.string.how_we_calculate_step1_label), stringResource(R.string.how_we_calculate_observed_body, uiState.observedKwh, uiState.observedDays))
+                            CalcStep(2, stringResource(R.string.how_we_calculate_step2_label), stringResource(R.string.how_we_calculate_pace_body, formatOneDecimal(uiState.dailyAverageKwh)))
+                            CalcStep(3, stringResource(R.string.how_we_calculate_step3_label), stringResource(R.string.how_we_calculate_projected_body, uiState.daysRemaining, uiState.projectedKwh))
+                            CalcStep(4, stringResource(R.string.how_we_calculate_step4_label), stringResource(R.string.how_we_calculate_cost_body, uiState.tariff.ifBlank { "estimada" }, uiState.projectedMxn))
+                        }
+                        EnergyForecastBasis.NONE -> {
+                            CalcStep(1, stringResource(R.string.how_we_calculate_pending_label), stringResource(R.string.how_we_calculate_pending_body))
+                        }
+                    }
+                }
+            }
+
+            if (uiState.forecastBasis == EnergyForecastBasis.METER && uiState.applianceProjectedKwh > 0) {
+                RzCard(modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.how_we_calculate_two_forecasts_title), style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        stringResource(
+                            R.string.how_we_calculate_two_forecasts_body,
+                            uiState.meterProjectedKwh,
+                            uiState.applianceProjectedKwh,
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = RzSpacing.sm),
+                    )
                 }
             }
 

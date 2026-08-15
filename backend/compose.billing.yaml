@@ -1,0 +1,17 @@
+services:
+  api:
+    environment:
+      ANDROID_PACKAGE_NAME: com.recibozen.app
+      ENTITLEMENT_PRIVATE_KEY_FILE: /run/recibozen-secrets/entitlement-private.pem
+      GOOGLE_SERVICE_ACCOUNT_FILE: /run/recibozen-secrets/google-play-service-account.json
+      PREMIUM_PRODUCTS_JSON: '{"recibozen_plus_monthly":"PLUS","recibozen_family_monthly":"FAMILY"}'
+      PLAY_CERTIFICATE_SHA256_DIGESTS: ${PLAY_CERTIFICATE_SHA256_DIGESTS:-}
+    volumes:
+      - type: bind
+        source: ./secrets/entitlement-private.pem
+        target: /run/recibozen-secrets/entitlement-private.pem
+        read_only: true
+      - type: bind
+        source: ./secrets/google-play-service-account.json
+        target: /run/recibozen-secrets/google-play-service-account.json
+        read_only: true

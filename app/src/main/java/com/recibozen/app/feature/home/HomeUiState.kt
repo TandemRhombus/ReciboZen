@@ -6,7 +6,7 @@ import com.recibozen.app.core.model.PlanActionStatus
 import com.recibozen.app.core.calculation.DacRiskSnapshot
 import com.recibozen.app.core.calculation.ConsumptionPaceRelation
 
-enum class HomeDataMode { EMPTY, BILL_REFERENCE, PROJECTION }
+enum class HomeDataMode { EMPTY, BILL_REFERENCE, APPLIANCE_FORECAST, PROJECTION }
 
 /**
  * Everything the "Inicio" tab needs to render, derived from
@@ -39,6 +39,10 @@ data class HomeUiState(
     val billingDays: Int = 0,
     val projectedKwh: Int = 0,
     val goalKwh: Int = 0,
+    val applianceProjectedKwh: Int = 0,
+    val applianceProjectedMxn: Int = 0,
+    val applianceCoveragePercent: Int = 0,
+    val hasCurrentMeterProjection: Boolean = false,
 
     val minisplitStatus: PlanActionStatus = PlanActionStatus.SUGGESTED,
     val minisplitSavingsLabel: String = "",

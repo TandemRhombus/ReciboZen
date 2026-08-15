@@ -10,6 +10,7 @@ import com.recibozen.app.core.model.ServiceCreationResult
 import com.recibozen.app.core.importer.ParsedCfeBill
 import com.recibozen.app.core.importer.BillImportResult
 import com.recibozen.app.core.calculation.TariffBlock
+import com.recibozen.app.core.model.EntitlementTier
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -67,6 +68,8 @@ interface ReciboZenRepository {
     fun updateElectricService(alias: String, serviceNumber: String, rmu: String, meterNumber: String, tariffCode: String)
     fun addElectricService(alias: String, serviceNumber: String, rmu: String, meterNumber: String, tariffCode: String): ServiceCreationResult
     fun selectElectricService(serviceId: String)
+    fun premiumSubject(): String
+    fun acceptPremiumLease(signedLease: String): EntitlementTier?
     suspend fun importCfeBill(bill: ParsedCfeBill, sourceFileHash: String): BillImportResult
     fun setManualReadingDigits(digits: List<Int>)
     fun prepareReading(kwh: Int, method: ReadingMethod)

@@ -1,8 +1,9 @@
 # ReciboZen API
 
-Backend mínimo y aislado para establecer la frontera de confianza premium. En
-esta etapa **no concede entitlements**: el canje responde `503` hasta integrar
-identidad, Google Play Billing, Play Integrity y Google Play Developer API.
+Backend aislado para establecer la frontera de confianza premium. El canje
+sigue fallando cerrado con `503` hasta que el servidor tenga todas las
+credenciales, pero ya puede verificar una suscripción real con Google Play,
+validar Play Integrity, reconocer el producto y emitir un lease corto firmado.
 
 ## Endpoints iniciales
 
@@ -10,8 +11,10 @@ identidad, Google Play Billing, Play Integrity y Google Play Developer API.
 - `GET /readyz`: disponibilidad de la clave pública y estado de Billing.
 - `GET /.well-known/recibozen-entitlement-key`: ancla pública para configurar
   builds. La app no debe confiar dinámicamente en una clave descargada aquí.
-- `POST /v1/entitlements/exchange`: valida la forma del request y falla cerrado
-  mientras la verificación real de Google Play no esté configurada.
+- `POST /v1/entitlements/exchange`: vincula `subject`, producto y token de compra
+  al `requestHash` de Play Integrity; consulta `subscriptionsv2`, comprueba
+  vigencia y cuenta ofuscada, reconoce el pago si hace falta y devuelve un lease
+  de máximo 24 horas firmado con ECDSA P-256.
 
 El servicio nunca registra cuerpos, `purchaseToken` ni `integrityToken`.
 
@@ -23,10 +26,32 @@ publica `127.0.0.1:8787` para diagnóstico local. Un segundo contenedor
 publica exclusivamente `https://api-recibozen.simapp.uk`; no abre puertos del
 router ni permite llegar directamente al hardware.
 
-El archivo `secrets/entitlement-private.pem` se crea exclusivamente en el
-servidor con modo `600`; no se copia al contenedor actual. El contenedor monta
-sólo `entitlement-public.pem`, en modo de solo lectura. El directorio `secrets/`
-está ignorado por Git y por el contexto Docker.
+Los archivos `secrets/entitlement-private.pem` y
+`secrets/google-play-service-account.json` existen exclusivamente en el
+servidor y se montan en modo de solo lectura mediante `compose.billing.yaml`.
+Nunca se copian a la imagen. El directorio `secrets/` está ignorado por Git y
+por el contexto Docker.
+
+## Activar la verificación de Google Play
+
+1. Crear en Play Console las suscripciones `recibozen_plus_monthly` y
+   `recibozen_family_monthly`.
+2. Vincular el proyecto de Google Cloud, habilitar Android Publisher API y Play
+   Integrity API, y dar a la cuenta de servicio sólo los permisos necesarios.
+3. Guardar su JSON como `secrets/google-play-service-account.json` y la clave
+   ECDSA como `secrets/entitlement-private.pem`, legibles por el UID 10001 del
+   contenedor pero no por otros usuarios.
+4. Definir `PLAY_CERTIFICATE_SHA256_DIGESTS` con los digest base64url que devuelve
+   Play Integrity para la firma de producción.
+5. Iniciar con:
+
+```bash
+docker compose -f compose.yaml -f compose.billing.yaml up -d --build
+```
+
+`GET /readyz` sólo responde 200 cuando están disponibles la clave pública, la
+clave privada, la cuenta de servicio, el mapa de productos y al menos un digest
+de certificado. Nunca colocar estos secretos en `.env`, Gradle o el APK.
 
 Comandos operativos, desde el directorio del backend en el servidor:
 

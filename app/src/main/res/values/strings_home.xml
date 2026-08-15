@@ -30,6 +30,16 @@
     <string name="home_appliance_data_title">Aparatos del hogar</string>
     <string name="home_appliance_data_count">Tienes %1$d aparatos configurados. Sus cálculos usan los horarios que capturaste.</string>
     <string name="home_appliance_data_empty">Todavía no agregas aparatos; no atribuiremos consumo a equipos ficticios.</string>
+    <string name="home_appliance_forecast_title">Pronóstico por uso de aparatos</string>
+    <string name="home_appliance_forecast_badge">Inventario</string>
+    <string name="home_appliance_forecast_meter_label">Ritmo del medidor</string>
+    <string name="home_appliance_forecast_inventory_label">Horarios declarados</string>
+    <string name="home_appliance_forecast_coverage">Los aparatos registrados explican aproximadamente %1$d%% de la proyección del medidor.</string>
+    <string name="home_appliance_forecast_comparison_note">Son dos estimaciones del mismo consumo: no las sumamos. La lectura del medidor sigue siendo la referencia principal y el inventario ayuda a explicar de dónde viene y a probar cambios de uso.</string>
+    <string name="home_appliance_forecast_kwh_period">%1$d kWh en %2$d días</string>
+    <string name="home_appliance_forecast_bill_note">Este sería el consumo del siguiente periodo si mantuvieras los horarios registrados. Cuando agregues una lectura del periodo actual lo compararemos contra el medidor.</string>
+    <string name="home_appliance_forecast_only_note">Estimación preliminar basada únicamente en las potencias y horarios que registraste. Su rango es más amplio hasta contar con un recibo o dos lecturas del medidor.</string>
+    <string name="home_appliance_forecast_edit">Revisar aparatos y horarios</string>
 
     <!-- Recibo proyectado card -->
     <string name="home_projected_period_label">Recibo proyectado · %1$s</string>

@@ -44,6 +44,7 @@ import com.recibozen.app.core.model.OpportunityLevel
 import com.recibozen.app.demo.data.DemoReciboZenData
 import com.recibozen.app.demo.repository.ReciboZenRepository
 import com.recibozen.app.demo.repository.ReciboZenSessionState
+import com.recibozen.app.demo.repository.EnergyForecastBasis
 import com.recibozen.app.navigation.Routes
 import com.recibozen.app.navigation.rzViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -64,6 +65,11 @@ data class AppliancesUiState(
     val billingDays: Int,
     val referencePeriodLabel: String,
     val selectedFilterIndex: Int,
+    val applianceProjectedKwh: Int = 0,
+    val applianceProjectedMxn: Int = 0,
+    val meterProjectedKwh: Int = 0,
+    val hasCurrentMeterProjection: Boolean = false,
+    val inventoryCoveragePercent: Int = 0,
 )
 
 class AppliancesViewModel(private val repository: ReciboZenRepository) : ViewModel() {
@@ -93,7 +99,11 @@ class AppliancesViewModel(private val repository: ReciboZenRepository) : ViewMod
         // observed reading may cover only part of it.
         val expectedInWindow = (all.sumOf { it.kwh } * energy.observedWindowFraction).roundToInt()
         val explainedKwh = expectedInWindow.coerceAtMost(energy.observedKwh)
-        val unidentifiedKwh = if (energy.hasUsageEvidence) (energy.observedKwh - explainedKwh).coerceAtLeast(0) else null
+        val hasMeasuredReference = energy.forecastBasis == EnergyForecastBasis.METER ||
+            energy.forecastBasis == EnergyForecastBasis.CLOSED_BILL
+        val unidentifiedKwh = if (hasMeasuredReference) {
+            (energy.observedKwh - explainedKwh).coerceAtLeast(0)
+        } else null
         val unidentifiedCost = unidentifiedKwh?.let { missing ->
             if (energy.observedKwh > 0) (energy.costToDateMxn * missing.toDouble() / energy.observedKwh).toInt() else 0
         }
@@ -114,6 +124,15 @@ class AppliancesViewModel(private val repository: ReciboZenRepository) : ViewMod
             ?: if (billingCycle.contains("bi", ignoreCase = true)) 61 else 30,
         referencePeriodLabel = referencePeriodLabel,
         selectedFilterIndex = filterIndex,
+        applianceProjectedKwh = energy.applianceProjectedKwh,
+        applianceProjectedMxn = energy.applianceProjectedCostMxn,
+        meterProjectedKwh = energy.meterProjectedKwh,
+        hasCurrentMeterProjection = energy.hasCurrentMeterProjection,
+        inventoryCoveragePercent = if (energy.meterProjectedKwh > 0) {
+            (energy.applianceProjectedKwh * 100f / energy.meterProjectedKwh)
+                .roundToInt()
+                .coerceIn(0, 100)
+        } else 0,
     )
     }
 
@@ -198,6 +217,10 @@ fun AppliancesScreen(
                     color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.padding(top = RzSpacing.xs),
                 )
+            }
+
+            if (uiState.appliances.isNotEmpty()) {
+                ApplianceForecastSummary(uiState)
             }
 
             Row(
@@ -287,6 +310,60 @@ fun AppliancesScreen(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ApplianceForecastSummary(uiState: AppliancesUiState) {
+    RzCard(
+        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            stringResource(R.string.appliances_forecast_title),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            stringResource(
+                R.string.appliances_forecast_inventory_total,
+                uiState.applianceProjectedKwh,
+                uiState.billingDays,
+                uiState.applianceProjectedMxn,
+            ),
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = RzSpacing.sm),
+        )
+        if (uiState.hasCurrentMeterProjection) {
+            Text(
+                stringResource(
+                    R.string.appliances_forecast_meter_comparison,
+                    uiState.meterProjectedKwh,
+                    uiState.inventoryCoveragePercent,
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = RzSpacing.sm),
+            )
+            RzLinearProgress(
+                progress = uiState.inventoryCoveragePercent / 100f,
+                modifier = Modifier.padding(top = RzSpacing.sm),
+            )
+        } else {
+            Text(
+                stringResource(R.string.appliances_forecast_needs_meter),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = RzSpacing.sm),
+            )
+        }
+        Text(
+            stringResource(R.string.appliances_forecast_no_double_count),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.padding(top = RzSpacing.sm),
+        )
     }
 }
 

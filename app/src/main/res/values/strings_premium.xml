@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="premium_title">ReciboZen Premium</string>
+    <string name="premium_intro">Premium financia funciones con costo operativo y automatización. Las compras se realizan en Google Play y el backend comprueba que sean legítimas antes de habilitar cualquier beneficio.</string>
+    <string name="premium_active_title">Premium está activo</string>
+    <string name="premium_active_body">El backend verificó tu acceso %1$s para esta instalación.</string>
+    <string name="premium_benefit_notifications">Recordatorios automáticos de lecturas.</string>
+    <string name="premium_benefit_services">Más suministros: hasta 2 en Plus y 5 en Familiar.</string>
+    <string name="premium_benefit_future">Nuevas automatizaciones y alertas avanzadas conforme estén disponibles.</string>
+    <string name="premium_buy">Continuar con Google Play</string>
+    <string name="premium_restore">Restaurar compra</string>
+    <string name="premium_retry">Reintentar conexión</string>
+    <string name="premium_security_note">ReciboZen no recibe ni almacena los datos de tu tarjeta. Google Play procesa el pago; el backend valida el token, Play Integrity y la relación con esta instalación.</string>
+    <string name="premium_play_required">Los productos sólo aparecen en una versión instalada desde Google Play y cuando estén creados en Play Console.</string>
+    <string name="premium_play_disconnected">Se perdió la conexión con Google Play. Puedes intentar restaurar de nuevo.</string>
+    <string name="premium_products_unavailable">Google Play todavía no devolvió productos configurados para esta versión.</string>
+    <string name="premium_nothing_to_restore">No encontramos una compra activa en esta cuenta de Google Play.</string>
+    <string name="premium_purchase_cancelled">No se realizó ningún cargo.</string>
+    <string name="premium_purchase_pending">El pago está pendiente. Premium se activará únicamente cuando Google Play lo marque como completado.</string>
+    <string name="premium_verifying">Google Play confirmó el pago; ahora el backend está verificando la compra y la integridad de la app.</string>
+    <string name="premium_verified">Compra verificada. Premium ya está activo.</string>
+    <string name="premium_invalid_lease">El permiso devuelto por el servidor no superó la verificación local.</string>
+    <string name="premium_verification_failed">No pudimos verificar la compra. No se habilitó Premium ni se confió en el estado local.</string>
+    <string name="premium_play_unavailable">Google Play Billing no está disponible en este dispositivo o instalación.</string>
+</resources>

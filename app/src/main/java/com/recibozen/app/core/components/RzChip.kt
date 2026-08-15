@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
@@ -55,15 +56,17 @@ fun RzFilterChip(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     val container = if (selected) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.surface
     val content = if (selected) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.onSurface
     Row(
         modifier = modifier
+            .alpha(if (enabled) 1f else 0.45f)
             .defaultMinSize(minHeight = RzSpacing.minTouchTarget)
             .clip(RzExtraShapes.pill)
             .background(container)
-            .selectable(selected = selected, onClick = onClick, role = Role.RadioButton)
+            .selectable(selected = selected, enabled = enabled, onClick = onClick, role = Role.RadioButton)
             .padding(horizontal = RzSpacing.xl),
         verticalAlignment = Alignment.CenterVertically,
     ) {

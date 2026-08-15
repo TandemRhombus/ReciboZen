@@ -8,6 +8,7 @@ import com.recibozen.app.core.model.ConfidenceLevel
 import com.recibozen.app.core.model.HistoryReadingEntry
 import com.recibozen.app.core.model.ReadingMethod
 import com.recibozen.app.demo.repository.DemoReciboZenRepository
+import com.recibozen.app.demo.repository.EnergyForecastBasis
 import com.recibozen.app.demo.repository.ReciboZenSessionState
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -157,5 +158,102 @@ class DynamicConsumptionTest {
         assertEquals(30, energy.observedDays)
         assertEquals(353, energy.projectedKwh)
         assertEquals(32, energy.daysRemaining)
+    }
+
+    @Test
+    fun appliancesCanProduceAPreliminaryForecastWithoutMeterEvidence() {
+        val repository = Repository()
+        val state = ReciboZenSessionState(
+            billingCycle = "Mensual",
+            customAppliances = listOf(
+                Appliance(
+                    id = "equipo",
+                    name = "Equipo",
+                    room = "Hogar",
+                    costMxn = 0,
+                    kwh = 90,
+                    sharePercent = 0,
+                    hoursPerWeek = 21,
+                    confidence = ConfidenceLevel.MEDIUM,
+                ),
+            ),
+        )
+
+        val energy = repository.energySummary(state)
+        val bill = repository.billProjection(state)
+
+        assertEquals(EnergyForecastBasis.APPLIANCES, energy.forecastBasis)
+        assertEquals(90, energy.applianceProjectedKwh)
+        assertEquals(90, energy.projectedKwh)
+        assertEquals(0, energy.costToDateMxn)
+        assertEquals(true, bill.hasUsageEvidence)
+        assertEquals(true, bill.rangeHighMxn > bill.projectedMxn)
+    }
+
+    @Test
+    fun meterAndApplianceForecastsAreComparedInsteadOfDoubleCounted() {
+        val repository = Repository()
+        val periodStart = 20_584L
+        val periodEnd = 20_646L
+        repository.setBills(
+            listOf(
+                BillPeriod(
+                    monthLabel = "May–Jul 26",
+                    amountMxn = 2_274,
+                    consumptionKwh = 646,
+                    periodStartEpochDay = periodStart,
+                    periodEndEpochDay = periodEnd,
+                ),
+            ),
+        )
+        val state = ReciboZenSessionState(
+            customAppliances = listOf(
+                Appliance(
+                    id = "equipo",
+                    name = "Equipo",
+                    room = "Hogar",
+                    costMxn = 0,
+                    kwh = 100,
+                    sharePercent = 0,
+                    hoursPerWeek = 10,
+                    confidence = ConfidenceLevel.MEDIUM,
+                ),
+            ),
+            readings = listOf(
+                HistoryReadingEntry(9_974, "30 días", ReadingMethod.MANUAL, "+171", (periodEnd + 30) * 86_400_000),
+                HistoryReadingEntry(9_803, "Cierre", ReadingMethod.PDF, "PDF", periodEnd * 86_400_000),
+            ),
+        )
+
+        val energy = repository.energySummary(state)
+
+        assertEquals(EnergyForecastBasis.METER, energy.forecastBasis)
+        assertEquals(353, energy.meterProjectedKwh)
+        assertEquals(100, energy.applianceProjectedKwh)
+        assertEquals(353, energy.projectedKwh)
+    }
+
+    @Test
+    fun changingDeclaredHoursRecalculatesTheInventoryForecast() {
+        val repository = Repository()
+        repository.addAppliance(
+            Appliance(
+                id = "equipo",
+                name = "Equipo",
+                room = "Hogar",
+                costMxn = 0,
+                kwh = 40,
+                sharePercent = 0,
+                hoursPerWeek = 10,
+                confidence = ConfidenceLevel.MEDIUM,
+            ),
+        )
+
+        assertEquals(40, repository.energySummary().applianceProjectedKwh)
+
+        repository.setApplianceHoursPerWeek("equipo", 25)
+
+        assertEquals(100, repository.energySummary().applianceProjectedKwh)
+        assertEquals(EnergyForecastBasis.APPLIANCES, repository.energySummary().forecastBasis)
     }
 }

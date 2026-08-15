@@ -43,6 +43,7 @@ import com.recibozen.app.core.designsystem.RzTheme
 import com.recibozen.app.core.designsystem.ReciboZenTheme
 import com.recibozen.app.demo.repository.ReciboZenRepository
 import com.recibozen.app.core.model.Appliance
+import com.recibozen.app.core.model.ApplianceDataSource
 import com.recibozen.app.core.model.ConfidenceLevel
 import com.recibozen.app.core.model.OpportunityLevel
 import com.recibozen.app.navigation.rzViewModel
@@ -150,6 +151,9 @@ class ApplianceSimulatorViewModel(private val repository: ReciboZenRepository) :
                 hoursPerWeek = current.hoursPerWeek.toDoubleOrNull()?.roundToInt()?.coerceIn(1, 168),
                 confidence = ConfidenceLevel.MEDIUM,
                 opportunity = OpportunityLevel.NONE,
+                calculationNote = "${current.watts} W × ${current.hoursPerWeek} h/semana × ${current.billingDays} días ÷ 7 ÷ 1,000",
+                powerWatts = current.watts.toIntOrNull(),
+                dataSource = ApplianceDataSource.USER_ESTIMATE,
             ),
         )
     }

@@ -5,6 +5,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AddHome
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
@@ -14,6 +15,7 @@ import androidx.compose.material.icons.filled.DonutSmall
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Functions
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.GppMaybe
 import androidx.compose.material.icons.filled.Help
 import androidx.compose.material.icons.filled.Home
@@ -56,6 +58,8 @@ object RzIcons {
     val Timeline = Icons.Filled.Timeline
     val Lightbulb = Icons.Filled.Lightbulb
     val Bolt = Icons.Filled.Bolt
+    val BugReport = Icons.Filled.BugReport
+    val Favorite = Icons.Filled.Favorite
     val Help = Icons.Filled.Help
     val Savings = Icons.Filled.Savings
     val Functions = Icons.Filled.Functions

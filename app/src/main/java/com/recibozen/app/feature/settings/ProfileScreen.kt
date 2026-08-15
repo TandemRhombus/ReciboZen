@@ -48,6 +48,7 @@ import com.recibozen.app.core.components.RzFlowTopBar
 import com.recibozen.app.core.components.RzFilterChip
 import com.recibozen.app.core.calculation.TariffCatalog
 import com.recibozen.app.core.model.ElectricServiceValidator
+import com.recibozen.app.core.model.EntitlementTier
 import com.recibozen.app.core.designsystem.RzExtraShapes
 import com.recibozen.app.core.designsystem.RzIcons
 import com.recibozen.app.core.designsystem.RzSpacing
@@ -78,6 +79,7 @@ data class ProfileUiState(
     val location: String = "",
     val goalMxn: Int = 0,
     val activeServiceId: String = "",
+    val entitlementTier: EntitlementTier = EntitlementTier.FREE,
 )
 
 class ProfileViewModel(private val repository: ReciboZenRepository) : ViewModel() {
@@ -96,6 +98,7 @@ class ProfileViewModel(private val repository: ReciboZenRepository) : ViewModel(
                 location = state.location,
                 goalMxn = state.goalMxn,
                 activeServiceId = state.activeServiceId,
+                entitlementTier = state.entitlementTier,
             )
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ProfileUiState())
@@ -121,7 +124,10 @@ fun ProfileRoute(navController: NavHostController, repository: ReciboZenReposito
         uiState = uiState,
         onBack = { navController.popBackStack() },
         onNavigateAppearance = { navController.navigate(Routes.Appearance) },
-        onNavigateStatesCatalog = { navController.navigate(Routes.StatesCatalog) },
+        onNavigateSupport = { navController.navigate(Routes.Support) },
+        onNavigateNotifications = { navController.navigate(Routes.NotificationSettings) },
+        onNavigatePremium = { navController.navigate(Routes.Premium) },
+        onNavigateDonate = { navController.navigate(Routes.Donate) },
         onNavigateServices = { navController.navigate(Routes.Services) },
         onUpdateProfile = viewModel::update,
         onUpdateService = viewModel::updateService,
@@ -133,7 +139,10 @@ fun ProfileScreen(
     uiState: ProfileUiState,
     onBack: () -> Unit,
     onNavigateAppearance: () -> Unit,
-    onNavigateStatesCatalog: () -> Unit,
+    onNavigateSupport: () -> Unit,
+    onNavigateNotifications: () -> Unit,
+    onNavigatePremium: () -> Unit,
+    onNavigateDonate: () -> Unit,
     onNavigateServices: () -> Unit,
     onUpdateProfile: (String, String, String, Int) -> Unit,
     onUpdateService: (String, String, String, String, String) -> Unit,
@@ -220,10 +229,23 @@ fun ProfileScreen(
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 ProfileRow(
+                    icon = RzIcons.Savings,
+                    label = stringResource(R.string.profile_row_premium),
+                    trailing = stringResource(
+                        if (uiState.entitlementTier == EntitlementTier.FREE) R.string.profile_row_premium_free
+                        else R.string.profile_row_premium_active,
+                    ),
+                    onClick = onNavigatePremium,
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                ProfileRow(
                     icon = RzIcons.Notifications,
                     label = stringResource(R.string.profile_row_reminders),
-                    trailing = stringResource(R.string.profile_row_reminders_trailing),
-                    onClick = null,
+                    trailing = stringResource(
+                        if (uiState.entitlementTier == EntitlementTier.FREE) R.string.profile_row_premium_badge
+                        else R.string.profile_row_reminders_manage,
+                    ),
+                    onClick = onNavigateNotifications,
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 ProfileRow(
@@ -233,9 +255,15 @@ fun ProfileScreen(
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 ProfileRow(
-                    icon = RzIcons.Info,
-                    label = stringResource(R.string.profile_row_states_catalog),
-                    onClick = onNavigateStatesCatalog,
+                    icon = RzIcons.Help,
+                    label = stringResource(R.string.profile_row_support),
+                    onClick = onNavigateSupport,
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                ProfileRow(
+                    icon = RzIcons.Favorite,
+                    label = stringResource(R.string.profile_row_donate),
+                    onClick = onNavigateDonate,
                 )
             }
 
@@ -415,7 +443,10 @@ private fun ProfileScreenPreview() {
             uiState = ProfileUiState(),
             onBack = {},
             onNavigateAppearance = {},
-            onNavigateStatesCatalog = {},
+            onNavigateSupport = {},
+            onNavigateNotifications = {},
+            onNavigatePremium = {},
+            onNavigateDonate = {},
             onNavigateServices = {},
             onUpdateProfile = { _, _, _, _ -> },
             onUpdateService = { _, _, _, _, _ -> },

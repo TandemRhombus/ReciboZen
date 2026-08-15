@@ -10,6 +10,11 @@
     <string name="appliances_period_context">Los kWh y pesos de cada aparato corresponden a una estimación de %1$d días.</string>
     <string name="appliances_real_empty_title">Todavía no agregas aparatos</string>
     <string name="appliances_real_empty_body">La lista comienza vacía. Agrega los equipos que realmente tienes; ReciboZen no volverá a atribuirte un minisplit, refrigerador o consola de ejemplo.</string>
+    <string name="appliances_forecast_title">Pronóstico de tu inventario</string>
+    <string name="appliances_forecast_inventory_total">%1$d kWh en %2$d días · cerca de $%3$d</string>
+    <string name="appliances_forecast_meter_comparison">El ritmo del medidor proyecta %1$d kWh. Tus aparatos explican aproximadamente %2$d%% de ese consumo.</string>
+    <string name="appliances_forecast_needs_meter">Esta estimación usa las potencias y horarios capturados. Una lectura posterior permitirá contrastarla con el consumo real.</string>
+    <string name="appliances_forecast_no_double_count">El inventario y el medidor son dos cálculos del mismo consumo; nunca se suman entre sí.</string>
 
     <string name="appliances_filter_top_spend">Mayor gasto</string>
     <string name="appliances_filter_room">Habitación</string>
@@ -107,15 +112,20 @@
     <string name="appliances_usage_option_10_20">10–20 h</string>
     <string name="appliances_usage_option_gt20">Más de 20 h</string>
     <string name="appliances_usage_hint">¿No estás seguro? Dinos cuántas veces la usas y cuánto dura cada vez; nosotros calculamos el total.</string>
+    <string name="appliances_usage_daily_average">Equivale a un promedio de %1$.1f horas al día. Puedes ajustar el control hora por hora.</string>
     <string name="appliances_usage_detail_title">Detalle opcional</string>
-    <string name="appliances_usage_detail_days_label">Días de uso</string>
-    <string name="appliances_usage_detail_days_value">5 de 7</string>
     <string name="appliances_usage_detail_standby_label">Tiempo en reposo</string>
-    <string name="appliances_usage_detail_standby_value">Todo el día conectada</string>
-    <string name="appliances_usage_detail_seasonal_label">Uso estacional</string>
-    <string name="appliances_usage_detail_seasonal_value">Sin cambios</string>
+    <string name="appliances_usage_detail_power_label">Potencia de referencia</string>
+    <string name="appliances_usage_detail_power_value">%1$d W</string>
+    <string name="appliances_usage_detail_period_label">Periodo calculado</string>
+    <string name="appliances_usage_detail_period_value">%1$d días</string>
+    <string name="appliances_usage_detail_standby_watts">%1$d W conectado</string>
+    <string name="appliances_usage_detail_unknown">No capturada</string>
+    <string name="appliances_usage_detail_not_reported">No reportado</string>
+    <string name="appliances_usage_forecast_comparison">Con este ajuste, todos tus aparatos estiman %1$d kWh por periodo frente a %2$d kWh proyectados por el medidor.</string>
+    <string name="appliances_usage_forecast_inventory">Con este ajuste, tu inventario completo estima %1$d kWh por periodo.</string>
     <string name="appliances_usage_save">Guardar uso</string>
-    <string name="appliances_usage_save_note">Al guardar recalculamos la proyección y te decimos cuánto cambió.</string>
+    <string name="appliances_usage_save_note">El cambio actualiza de inmediato el pronóstico del inventario. No se suma encima del medidor.</string>
     <string name="appliances_usage_unsupported">Este aparato no tiene horas de uso configurables.</string>
 
     <!-- Detalle aparato -->

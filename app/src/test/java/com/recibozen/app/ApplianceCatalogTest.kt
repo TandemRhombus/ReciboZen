@@ -26,4 +26,19 @@ class ApplianceCatalogTest {
         assertTrue(ApplianceCatalog.items.size >= 30)
         assertEquals(ApplianceCatalog.items.size, ApplianceCatalog.items.map { it.id }.distinct().size)
     }
+
+    @Test
+    fun catalogForecastIncludesStandbyConsumptionWhenReported() {
+        val television = ApplianceCatalog.find("television_led")!!
+        val estimate = ApplianceCalculator.fromCatalog(
+            item = television,
+            hoursPerWeek = 28,
+            billingDays = 30,
+            effectiveRateMxnPerKwh = 2.5,
+        )
+
+        assertTrue(estimate.standbyKwh > 0.0)
+        assertEquals(13, estimate.kwh)
+        assertTrue(estimate.costMxn > 0)
+    }
 }

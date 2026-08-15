@@ -21,6 +21,8 @@ data class ApplianceUsageEstimate(
     val kwh: Int,
     val costMxn: Int,
     val calculation: String,
+    val activeKwh: Double = kwh.toDouble(),
+    val standbyKwh: Double = 0.0,
 )
 
 object ApplianceCalculator {
@@ -50,15 +52,27 @@ object ApplianceCalculator {
         billingDays: Int,
         effectiveRateMxnPerKwh: Double,
     ): ApplianceUsageEstimate {
-        val exactKwh = item.typicalKwhPer30Days?.let { it * billingDays.coerceAtLeast(1) / 30.0 }
-            ?: (item.typicalWatts / 1_000.0 * (hoursPerWeek ?: 0) * billingDays.coerceAtLeast(1) / 7.0)
+        val safeBillingDays = billingDays.coerceAtLeast(1)
+        val activeKwh = item.typicalKwhPer30Days?.let { it * safeBillingDays / 30.0 }
+            ?: (item.typicalWatts / 1_000.0 * (hoursPerWeek ?: 0) * safeBillingDays / 7.0)
+        val standbyKwh = if (item.typicalKwhPer30Days == null && item.standbyWatts > 0) {
+            val inactiveHoursPerWeek = (168 - (hoursPerWeek ?: 0)).coerceAtLeast(0)
+            item.standbyWatts / 1_000.0 * inactiveHoursPerWeek * safeBillingDays / 7.0
+        } else 0.0
+        val exactKwh = activeKwh + standbyKwh
         val kwh = exactKwh.roundToInt().coerceAtLeast(0)
         val calculation = if (item.typicalKwhPer30Days != null) {
             "${format(item.typicalKwhPer30Days)} kWh/30 días × $billingDays días"
         } else {
             "${item.typicalWatts} W × ${hoursPerWeek ?: 0} h/semana × $billingDays días ÷ 7 ÷ 1,000"
         }
-        return ApplianceUsageEstimate(kwh, (exactKwh * effectiveRateMxnPerKwh).roundToInt(), calculation)
+        return ApplianceUsageEstimate(
+            kwh = kwh,
+            costMxn = (exactKwh * effectiveRateMxnPerKwh).roundToInt(),
+            calculation = calculation,
+            activeKwh = activeKwh,
+            standbyKwh = standbyKwh,
+        )
     }
 
     private fun format(value: Double): String = if (value % 1.0 == 0.0) value.toInt().toString() else "%.1f".format(value)
@@ -121,6 +135,15 @@ object ApplianceCatalog {
             hoursPerWeek = hoursPerWeek,
             confidence = ConfidenceLevel.MEDIUM,
             opportunity = OpportunityLevel.MEDIUM,
+            activeCostMxn = if (estimate.standbyKwh > 0) {
+                (estimate.activeKwh * effectiveRateMxnPerKwh).roundToInt()
+            } else null,
+            standbyCostMxn = if (estimate.standbyKwh > 0) {
+                (estimate.standbyKwh * effectiveRateMxnPerKwh).roundToInt()
+            } else null,
+            standbySharePercent = if (estimate.kwh > 0 && estimate.standbyKwh > 0) {
+                (estimate.standbyKwh * 100 / estimate.kwh).roundToInt().coerceIn(0, 100)
+            } else null,
             calculationNote = estimate.calculation,
             category = item.category,
             powerWatts = item.typicalWatts,

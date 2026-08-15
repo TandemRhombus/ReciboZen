@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="support_title">Ayuda y soporte</string>
+    <string name="support_intro">Encuentra una salida cuando algo no se entienda, reporta una falla o conoce cómo apoyar el desarrollo independiente de ReciboZen.</string>
+    <string name="support_report">Reportar una falla</string>
+    <string name="support_report_hint">Describe qué pasó y abre un correo con diagnóstico básico.</string>
+    <string name="support_notifications">Notificaciones y recordatorios</string>
+    <string name="support_notifications_hint">Configura los avisos incluidos en Premium.</string>
+    <string name="support_states">Guía de estados y soluciones</string>
+    <string name="support_states_hint">Qué hacer si faltan datos, no hay conexión o una lectura parece extraña.</string>
+    <string name="support_donate">Apoyar el proyecto</string>
+    <string name="support_donate_hint">Una aportación voluntaria ayuda a mantener y mejorar la app.</string>
+    <string name="support_diagnostics">Versión %1$s (%2$d) · Android API %3$d</string>
+
+    <string name="donate_title">Apoyar ReciboZen</string>
+    <string name="donate_student_title">Un proyecto independiente hecho por un estudiante</string>
+    <string name="donate_student_body">Quiero que ReciboZen siga siendo útil y accesible. Aun cuando una parte importante de la app sea gratuita, mantenerla implica servidor, pruebas, publicación, soporte y muchas horas de desarrollo. Si te ayudó a entender o reducir tu consumo, tu apoyo permite que siga mejorando.</string>
+    <string name="donate_voluntary_title">Tu apoyo es completamente voluntario</string>
+    <string name="donate_voluntary_body">Donar no desbloquea funciones Premium ni cambia el servicio que recibes. Las compras de funciones se procesan por separado mediante Google Play.</string>
+    <string name="donate_paypal_label">Cuenta de PayPal</string>
+    <string name="donate_copy_email">Copiar correo de PayPal</string>
+    <string name="donate_email_copied">Correo copiado</string>
+    <string name="donate_open_paypal">Abrir PayPal</string>
+    <string name="donate_paypal_help">Copia el correo, abre PayPal y úsalo como destinatario. ReciboZen nunca solicita tu contraseña ni procesa la aportación dentro de la app.</string>
+
+    <string name="report_title">Reportar una falla</string>
+    <string name="report_intro">Cuéntame qué intentabas hacer, qué ocurrió y qué esperabas ver. Entre más concreto sea el reporte, más fácil será corregirlo.</string>
+    <string name="report_subject">Resumen breve</string>
+    <string name="report_details">Pasos y detalles</string>
+    <string name="report_privacy">El reporte agrega versión de la app y versión de Android. No adjunta recibos, lecturas, domicilio, número de servicio ni datos del medidor.</string>
+    <string name="report_send">Preparar correo</string>
+    <string name="report_no_email_app">No encontramos una aplicación de correo instalada. Puedes escribir directamente a emilianohdzv5@gmail.com.</string>
+
+    <string name="notifications_title">Notificaciones</string>
+    <string name="notifications_premium_title">Función Premium</string>
+    <string name="notifications_premium_body">Los recordatorios automáticos requieren una compra verificada. La app no confía en interruptores locales: sólo se activan con un permiso firmado por el backend.</string>
+    <string name="notifications_view_premium">Ver Premium</string>
+    <string name="notifications_reading_setting">Recordarme registrar una lectura</string>
+    <string name="notifications_reading_setting_body">Recibe un aviso periódico para mantener actualizada tu proyección.</string>
+    <string name="notifications_frequency">Frecuencia</string>
+    <string name="notifications_every_three_days">Cada 3 días</string>
+    <string name="notifications_every_seven_days">Cada 7 días</string>
+    <string name="notifications_delivery_note">Android puede retrasar algunos avisos para ahorrar batería. Si quitas el permiso de notificaciones desde el sistema, ReciboZen respetará esa decisión.</string>
+    <string name="notifications_channel_readings">Recordatorios de lectura</string>
+    <string name="notifications_channel_readings_description">Avisos para registrar una nueva lectura del medidor.</string>
+    <string name="notifications_reading_title">Actualiza tu consumo</string>
+    <string name="notifications_reading_body">Registra una lectura para mantener precisa la proyección de tu próximo recibo.</string>
+</resources>

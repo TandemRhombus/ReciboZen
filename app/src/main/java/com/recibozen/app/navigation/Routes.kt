@@ -40,4 +40,9 @@ object Routes {
     const val Services = "services"
     const val Appearance = "appearance"
     const val StatesCatalog = "states_catalog"
+    const val Support = "support"
+    const val Donate = "donate"
+    const val ReportIssue = "report_issue"
+    const val NotificationSettings = "notification_settings"
+    const val Premium = "premium"
 }

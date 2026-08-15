@@ -16,9 +16,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -61,6 +65,12 @@ data class ApplianceUsageUiState(
     val costMxn: Int,
     val kwh: Int,
     val isSupported: Boolean,
+    val powerWatts: Int? = null,
+    val standbyWatts: Int? = null,
+    val billingDays: Int = 30,
+    val homeApplianceKwh: Int = 0,
+    val meterProjectedKwh: Int = 0,
+    val hasCurrentMeterProjection: Boolean = false,
 )
 
 /**
@@ -74,16 +84,24 @@ class ApplianceUsageViewModel(
     private val applianceId: String,
 ) : ViewModel() {
 
-    val uiState: StateFlow<ApplianceUsageUiState> = combine(repository.session, repository.tariffCalibration) { session, _ ->
-        toUiState(repository.appliance(applianceId, session))
+    val uiState: StateFlow<ApplianceUsageUiState> = combine(
+        repository.session,
+        repository.importedBillHistory,
+        repository.tariffCalibration,
+    ) { session, _, _ ->
+        toUiState(repository.appliance(applianceId, session), session)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = toUiState(repository.appliance(applianceId)),
+        initialValue = toUiState(repository.appliance(applianceId), repository.session.value),
     )
 
-    private fun toUiState(appliance: Appliance?): ApplianceUsageUiState {
+    private fun toUiState(
+        appliance: Appliance?,
+        session: com.recibozen.app.demo.repository.ReciboZenSessionState,
+    ): ApplianceUsageUiState {
         val baseHours = appliance?.hoursPerWeek ?: 0
+        val energy = repository.energySummary(session)
         return ApplianceUsageUiState(
             applianceId = applianceId,
             applianceName = appliance?.name,
@@ -91,6 +109,12 @@ class ApplianceUsageViewModel(
             costMxn = appliance?.costMxn ?: 0,
             kwh = appliance?.kwh ?: 0,
             isSupported = appliance?.hoursPerWeek != null,
+            powerWatts = appliance?.powerWatts,
+            standbyWatts = appliance?.standbyWatts,
+            billingDays = energy.billingDays.takeIf { it > 0 } ?: 30,
+            homeApplianceKwh = energy.applianceProjectedKwh,
+            meterProjectedKwh = energy.meterProjectedKwh,
+            hasCurrentMeterProjection = energy.hasCurrentMeterProjection,
         )
     }
 
@@ -123,6 +147,9 @@ fun ApplianceUsageScreen(
     onSelectHours: (Int) -> Unit,
     onSave: () -> Unit,
 ) {
+    var draftHours by remember(uiState.applianceId, uiState.hoursPerWeek) {
+        mutableIntStateOf(uiState.hoursPerWeek)
+    }
     Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
         RzFlowTopBar(title = stringResource(R.string.appliances_usage_top_bar_title), onBack = onBack)
 
@@ -158,7 +185,7 @@ fun ApplianceUsageScreen(
                     )
                     Row(verticalAlignment = Alignment.Bottom) {
                         Text(
-                            uiState.hoursPerWeek.toString(),
+                            draftHours.toString(),
                             style = MaterialTheme.typography.displaySmall,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
@@ -178,17 +205,39 @@ fun ApplianceUsageScreen(
                         modifier = Modifier.padding(top = 4.dp),
                     )
 
+                    Slider(
+                        value = draftHours.toFloat(),
+                        onValueChange = { draftHours = it.toInt().coerceIn(0, 168) },
+                        onValueChangeFinished = { onSelectHours(draftHours) },
+                        valueRange = 0f..168f,
+                        steps = 167,
+                        modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.md),
+                    )
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("0 h", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                        Text("168 h", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                    }
+                    Text(
+                        stringResource(R.string.appliances_usage_daily_average, draftHours / 7.0),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = RzSpacing.xs),
+                    )
+
                     FlowRow(
                         modifier = Modifier.padding(top = RzSpacing.lg),
                         horizontalArrangement = Arrangement.spacedBy(RzSpacing.sm),
                         verticalArrangement = Arrangement.spacedBy(RzSpacing.sm),
                     ) {
                         ApplianceHourOptions.forEach { option ->
-                            val selected = option.representativeHours == uiState.hoursPerWeek
+                            val selected = option.representativeHours == draftHours
                             HourChip(
                                 label = stringResource(option.labelRes),
                                 selected = selected,
-                                onClick = { onSelectHours(option.representativeHours) },
+                                onClick = {
+                                    draftHours = option.representativeHours
+                                    onSelectHours(option.representativeHours)
+                                },
                             )
                         }
                     }
@@ -211,10 +260,33 @@ fun ApplianceUsageScreen(
                         modifier = Modifier.padding(top = RzSpacing.md),
                         verticalArrangement = Arrangement.spacedBy(RzSpacing.sm),
                     ) {
-                        DetailRow(stringResource(R.string.appliances_usage_detail_days_label), stringResource(R.string.appliances_usage_detail_days_value))
-                        DetailRow(stringResource(R.string.appliances_usage_detail_standby_label), stringResource(R.string.appliances_usage_detail_standby_value))
-                        DetailRow(stringResource(R.string.appliances_usage_detail_seasonal_label), stringResource(R.string.appliances_usage_detail_seasonal_value))
+                        DetailRow(
+                            stringResource(R.string.appliances_usage_detail_power_label),
+                            uiState.powerWatts?.let { stringResource(R.string.appliances_usage_detail_power_value, it) }
+                                ?: stringResource(R.string.appliances_usage_detail_unknown),
+                        )
+                        DetailRow(
+                            stringResource(R.string.appliances_usage_detail_period_label),
+                            stringResource(R.string.appliances_usage_detail_period_value, uiState.billingDays),
+                        )
+                        DetailRow(
+                            stringResource(R.string.appliances_usage_detail_standby_label),
+                            uiState.standbyWatts?.let { stringResource(R.string.appliances_usage_detail_standby_watts, it) }
+                                ?: stringResource(R.string.appliances_usage_detail_not_reported),
+                        )
                     }
+                    Text(
+                        if (uiState.hasCurrentMeterProjection) {
+                            stringResource(
+                                R.string.appliances_usage_forecast_comparison,
+                                uiState.homeApplianceKwh,
+                                uiState.meterProjectedKwh,
+                            )
+                        } else stringResource(R.string.appliances_usage_forecast_inventory, uiState.homeApplianceKwh),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = RzSpacing.md),
+                    )
                 }
 
                 RzPrimaryButton(

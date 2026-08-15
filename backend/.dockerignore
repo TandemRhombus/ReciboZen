@@ -4,4 +4,5 @@ secrets
 test
 README.md
 compose.yaml
+compose.billing.yaml
 cloudflared-config.yml
