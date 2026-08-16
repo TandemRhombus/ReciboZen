@@ -558,6 +558,7 @@ internal object SessionJsonCodec {
                     put("category", appliance.category.name)
                     put("powerWatts", appliance.powerWatts ?: JSONObject.NULL)
                     put("standbyWatts", appliance.standbyWatts ?: JSONObject.NULL)
+                    put("standbyEnabled", appliance.standbyEnabled)
                     put("dataSource", appliance.dataSource.name)
                     put("calculationNote", appliance.calculationNote ?: JSONObject.NULL)
                     put("quantity", appliance.quantity)
@@ -587,6 +588,8 @@ internal object SessionJsonCodec {
         put("dialVisitedFaces", JSONArray(state.dialVisitedFaces.sorted()))
         put("dialUnsure", state.dialUnsure)
         put("solarScenarioIndex", state.solarScenarioIndex)
+        put("solarDemandGrowthPercent", state.solarDemandGrowthPercent)
+        put("solarPlannedLoadsKwh", JSONObject(state.solarPlannedLoadsKwh))
         put("historyUnit", state.historyUnit.name)
         put("onboardingStep", state.onboardingStep)
         put("lastConfirmedReadingKwh", state.lastConfirmedReadingKwh)
@@ -678,6 +681,11 @@ internal object SessionJsonCodec {
                 dialUnsure = json.optBoolean("dialUnsure", defaults.dialUnsure),
                 solarScenarioIndex = json.optInt("solarScenarioIndex", defaults.solarScenarioIndex)
                     .coerceIn(DemoReciboZenData.solarScenarios.indices),
+                solarDemandGrowthPercent = json.optInt(
+                    "solarDemandGrowthPercent",
+                    defaults.solarDemandGrowthPercent,
+                ).coerceIn(0, 100),
+                solarPlannedLoadsKwh = json.optJSONObject("solarPlannedLoadsKwh").toAnnualKwhMap(),
                 historyUnit = enumValueOr(json.optString("historyUnit"), defaults.historyUnit),
                 onboardingStep = if (migrateFixtureState) 0 else json.optInt("onboardingStep", defaults.onboardingStep).coerceIn(0, 3),
                 lastConfirmedReadingKwh = decodedReadings.firstOrNull()?.kwh ?: 0,
@@ -704,6 +712,13 @@ internal object SessionJsonCodec {
         if (this == null) return fallback
         return keys().asSequence().mapNotNull { key ->
             optString(key).takeIf { it.isNotBlank() }?.let { key to it }
+        }.toMap()
+    }
+
+    private fun JSONObject?.toAnnualKwhMap(): Map<String, Int> {
+        if (this == null) return emptyMap()
+        return keys().asSequence().mapNotNull { key ->
+            optInt(key).takeIf { it in 1..50_000 }?.let { key.take(40) to it }
         }.toMap()
     }
 
@@ -755,6 +770,7 @@ internal object SessionJsonCodec {
                         category = enumValueOr(item.optString("category"), ApplianceCategory.OTHER),
                         powerWatts = item.optNullableInt("powerWatts"),
                         standbyWatts = item.optNullableInt("standbyWatts"),
+                        standbyEnabled = item.optBoolean("standbyEnabled", false),
                         dataSource = enumValueOr(item.optString("dataSource"), ApplianceDataSource.USER_ESTIMATE),
                         calculationNote = item.optNullableString("calculationNote"),
                         quantity = item.optInt("quantity", 1).coerceIn(1, 999),

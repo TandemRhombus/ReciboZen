@@ -73,6 +73,8 @@ data class Appliance(
     val category: ApplianceCategory = ApplianceCategory.OTHER,
     val powerWatts: Int? = null,
     val standbyWatts: Int? = null,
+    /** Whether the user actually leaves this appliance connected in standby. */
+    val standbyEnabled: Boolean = false,
     val dataSource: ApplianceDataSource = ApplianceDataSource.RECEIPT_INFERENCE,
     /** Number of equal units represented by this single row (for example, 20 bulbs). */
     val quantity: Int = 1,

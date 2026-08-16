@@ -43,6 +43,10 @@ data class ReciboZenSessionState(
     val dialVisitedFaces: Set<Int> = setOf(0),
     val dialUnsure: Boolean = false,
     val solarScenarioIndex: Int = 0,
+    /** Extra annual demand the user wants the solar design to support. */
+    val solarDemandGrowthPercent: Int = 0,
+    /** Annual kWh of future loads not yet present in bills or meter readings. */
+    val solarPlannedLoadsKwh: Map<String, Int> = emptyMap(),
     val historyUnit: HistoryUnit = HistoryUnit.MXN,
     val onboardingStep: Int = 0,
     val lastConfirmedReadingKwh: Int = 0,

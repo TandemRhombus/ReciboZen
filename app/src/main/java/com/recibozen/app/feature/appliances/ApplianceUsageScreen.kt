@@ -15,6 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -23,6 +24,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
@@ -71,6 +73,7 @@ data class ApplianceUsageUiState(
     val isSupported: Boolean,
     val powerWatts: Int? = null,
     val standbyWatts: Int? = null,
+    val standbyEnabled: Boolean = false,
     val billingDays: Int = 30,
     val homeApplianceKwh: Int = 0,
     val meterProjectedKwh: Int = 0,
@@ -96,6 +99,8 @@ data class ApplianceUsageDraft(
     val powerWatts: Int?,
     val unitKwh: Double?,
     val dataSource: ApplianceDataSource,
+    val standbyEnabled: Boolean,
+    val standbyWatts: Int?,
 )
 
 class ApplianceUsageViewModel(
@@ -131,6 +136,7 @@ class ApplianceUsageViewModel(
             isSupported = appliance != null,
             powerWatts = appliance?.powerWatts,
             standbyWatts = appliance?.standbyWatts,
+            standbyEnabled = appliance?.standbyEnabled == true,
             billingDays = energy.billingDays.takeIf { it > 0 } ?: 30,
             homeApplianceKwh = energy.applianceProjectedKwh,
             meterProjectedKwh = energy.meterProjectedKwh,
@@ -162,6 +168,8 @@ class ApplianceUsageViewModel(
             powerWatts = draft.powerWatts,
             unitKwh = draft.unitKwh,
             dataSource = draft.dataSource,
+            standbyEnabled = draft.standbyEnabled,
+            standbyWatts = draft.standbyWatts,
         )
     }
 }
@@ -206,6 +214,12 @@ fun ApplianceUsageScreen(
     var activeWatts by remember(uiState.applianceId, uiState.powerWatts) {
         mutableStateOf(uiState.powerWatts?.toString().orEmpty())
     }
+    var standbyEnabled by remember(uiState.applianceId, uiState.standbyEnabled) {
+        mutableStateOf(uiState.standbyEnabled)
+    }
+    var standbyWatts by remember(uiState.applianceId, uiState.standbyWatts) {
+        mutableStateOf(uiState.standbyWatts?.toString().orEmpty())
+    }
     var unitKwh by remember(uiState.applianceId, uiState.unitKwh) {
         mutableStateOf("%.1f".format(java.util.Locale.US, uiState.unitKwh))
     }
@@ -215,15 +229,19 @@ fun ApplianceUsageScreen(
     val parsedQuantity = quantity.toIntOrNull()?.takeIf { it in 1..999 }
     val parsedUnitKwh = unitKwh.toDoubleOrNull()?.takeIf { it in 0.0..100_000.0 }
     val parsedActiveWatts = activeWatts.toIntOrNull()?.takeIf { it in 1..100_000 }
+    val parsedStandbyWatts = standbyWatts.toIntOrNull()?.takeIf { it in 1..10_000 }
     val canUseSchedule = uiState.powerWatts?.let { it > 0 } == true
+    val supportsStandby = uiState.standbyWatts != null || uiState.standbyEnabled
     val effectiveMode = if (!canUseSchedule && draftMode == ApplianceUsageModel.POWER_SCHEDULE) {
         ApplianceUsageModel.PERIOD_KWH
     } else draftMode
     val valid = uiState.isSupported && parsedQuantity != null &&
-        (if (effectiveMode == ApplianceUsageModel.POWER_SCHEDULE) parsedActiveWatts != null else parsedUnitKwh != null)
+        (if (effectiveMode == ApplianceUsageModel.POWER_SCHEDULE) {
+            parsedActiveWatts != null && (!supportsStandby || !standbyEnabled || parsedStandbyWatts != null)
+        } else parsedUnitKwh != null)
     val draftUnitKwh = if (effectiveMode == ApplianceUsageModel.POWER_SCHEDULE && canUseSchedule) {
         val active = (parsedActiveWatts ?: uiState.powerWatts!!) / 1_000.0 * draftHours * uiState.billingDays / 7.0
-        val standby = uiState.standbyWatts?.let {
+        val standby = parsedStandbyWatts?.takeIf { supportsStandby && standbyEnabled }?.let {
             it / 1_000.0 * (168 - draftHours).coerceAtLeast(0) * uiState.billingDays / 7.0
         } ?: 0.0
         active + standby
@@ -351,6 +369,30 @@ fun ApplianceUsageScreen(
                                 )
                             }
                         }
+                        if (supportsStandby) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.md),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(stringResource(R.string.appliances_standby_question), style = MaterialTheme.typography.titleSmall)
+                                    Text(stringResource(R.string.appliances_standby_hint), style = MaterialTheme.typography.bodySmall)
+                                }
+                                Switch(checked = standbyEnabled, onCheckedChange = { standbyEnabled = it })
+                            }
+                            if (standbyEnabled) {
+                                OutlinedTextField(
+                                    value = standbyWatts,
+                                    onValueChange = { standbyWatts = it.filter(Char::isDigit).take(5) },
+                                    modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.sm),
+                                    label = { Text(stringResource(R.string.appliances_standby_watts)) },
+                                    supportingText = { Text(stringResource(R.string.appliances_standby_watts_hint)) },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                )
+                            }
+                        }
                     } else {
                         OutlinedTextField(
                             value = unitKwh,
@@ -444,6 +486,11 @@ fun ApplianceUsageScreen(
                                 dataSource = if (effectiveMode == ApplianceUsageModel.POWER_SCHEDULE) {
                                     ApplianceDataSource.USER_ESTIMATE
                                 } else dataSource,
+                                standbyEnabled = supportsStandby && standbyEnabled &&
+                                    effectiveMode == ApplianceUsageModel.POWER_SCHEDULE,
+                                standbyWatts = parsedStandbyWatts.takeIf {
+                                    standbyEnabled && effectiveMode == ApplianceUsageModel.POWER_SCHEDULE
+                                },
                             ),
                         )
                     },

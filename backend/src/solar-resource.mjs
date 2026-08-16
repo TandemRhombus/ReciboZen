@@ -1,5 +1,6 @@
 const NASA_POWER_URL = "https://power.larc.nasa.gov/api/temporal/climatology/point";
 const CACHE_MS = 24 * 60 * 60 * 1000;
+const MONTH_KEYS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
 export class SolarResourceService {
   constructor({ fetchImpl = fetch, now = () => Date.now() } = {}) {
@@ -29,8 +30,7 @@ export class SolarResourceService {
     if (!response.ok) throw new Error(`nasa_power_${response.status}`);
     const body = await response.json();
     const parameter = body?.properties?.parameter?.ALLSKY_SFC_SW_DWN;
-    const months = Array.from({ length: 12 }, (_, index) => {
-      const key = String(index + 1).padStart(2, "0");
+    const months = MONTH_KEYS.map((key) => {
       const value = Number(parameter?.[key]);
       if (!Number.isFinite(value) || value <= 0) throw new Error("nasa_power_invalid_payload");
       return value;

@@ -24,6 +24,11 @@ validar Play Integrity, reconocer el producto y emitir un lease corto firmado.
 El servicio nunca registra cuerpos, `purchaseToken`, `integrityToken` ni las
 coordenadas del recurso solar; esa ruta se anonimiza en los logs.
 
+CFE actualmente entrega su certificado TLS sin el intermedio. La imagen incluye
+únicamente el certificado público `Entrust EV TLS Issuing RSA CA 2` que falta en
+esa cadena (SHA-256 `5AA05DC42338E16DAC330A805747F7EDF296DE46546BDCB607184E98F1637C1A`).
+No se desactiva la validación TLS ni se permite HTTP.
+
 ## Despliegue Orange Pi
 
 El Compose usa un proyecto, contenedores, imágenes y red propios. El API sólo

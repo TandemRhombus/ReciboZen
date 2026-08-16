@@ -49,6 +49,8 @@ object ApplianceCalculator {
         billingDays: Int,
         effectiveRateMxnPerKwh: Double,
         quantity: Int = 1,
+        standbyWatts: Int = 0,
+        includeStandby: Boolean = false,
     ): ApplianceUsageEstimate {
         val safeWatts = watts.coerceIn(1, 100_000)
         val safeHours = hoursPerDay.coerceIn(0.0, 24.0)
@@ -56,7 +58,13 @@ object ApplianceCalculator {
         val safeBillingDays = billingDays.coerceIn(1, 366)
         val safeQuantity = quantity.coerceIn(1, 999)
         val unitKwh = safeWatts / 1_000.0 * safeHours * safeDays / 7.0 * safeBillingDays
-        val kwhExact = unitKwh * safeQuantity
+        val unitStandbyKwh = if (includeStandby && standbyWatts > 0) {
+            standbyWatts.coerceIn(1, 10_000) / 1_000.0 *
+                (168.0 - safeHours * safeDays).coerceAtLeast(0.0) * safeBillingDays / 7.0
+        } else 0.0
+        val activeKwh = unitKwh * safeQuantity
+        val standbyKwh = unitStandbyKwh * safeQuantity
+        val kwhExact = activeKwh + standbyKwh
         val kwh = kwhExact.roundToInt().coerceAtLeast(0)
         return ApplianceUsageEstimate(
             kwh = kwh,
@@ -64,7 +72,10 @@ object ApplianceCalculator {
             calculation = buildString {
                 append("$safeWatts W × ${format(safeHours)} h/día × $safeDays días/semana × $safeBillingDays días ÷ 7 ÷ 1,000")
                 if (safeQuantity > 1) append(" × $safeQuantity unidades")
+                if (unitStandbyKwh > 0) append(" + ${standbyWatts.coerceIn(1, 10_000)} W en espera")
             },
+            activeKwh = activeKwh,
+            standbyKwh = standbyKwh,
         )
     }
 
@@ -75,6 +86,7 @@ object ApplianceCalculator {
         effectiveRateMxnPerKwh: Double,
         quantity: Int = 1,
         periodKwhPerUnit: Double? = null,
+        includeStandby: Boolean = false,
     ): ApplianceUsageEstimate {
         val safeBillingDays = billingDays.coerceAtLeast(1)
         val safeQuantity = quantity.coerceIn(1, 999)
@@ -83,7 +95,8 @@ object ApplianceCalculator {
             ?: item.typicalKwhPer30Days?.let { it * safeBillingDays / 30.0 }
             ?: (item.typicalWatts / 1_000.0 * (hoursPerWeek ?: 0) * safeBillingDays / 7.0)
         val unitStandbyKwh = if (
-            periodKwhPerUnit == null && item.annualKwh == null && item.typicalKwhPer30Days == null && item.standbyWatts > 0
+            includeStandby && periodKwhPerUnit == null && item.annualKwh == null &&
+                item.typicalKwhPer30Days == null && item.standbyWatts > 0
         ) {
             val inactiveHoursPerWeek = (168 - (hoursPerWeek ?: 0)).coerceAtLeast(0)
             item.standbyWatts / 1_000.0 * inactiveHoursPerWeek * safeBillingDays / 7.0
@@ -99,6 +112,7 @@ object ApplianceCalculator {
                 item.typicalKwhPer30Days != null -> append("${format(item.typicalKwhPer30Days)} kWh/30 días × $billingDays ÷ 30")
                 else -> append("${item.typicalWatts} W × ${hoursPerWeek ?: 0} h/semana × $billingDays días ÷ 7 ÷ 1,000")
             }
+            if (unitStandbyKwh > 0) append(" + ${item.standbyWatts} W en espera")
             if (safeQuantity > 1) append(" × $safeQuantity unidades")
         }
         return ApplianceUsageEstimate(
@@ -157,19 +171,19 @@ object ApplianceCatalog {
         // Se calculan con las horas reales del usuario; no se presenta el perfil de uso del
         // fabricante como si fuera una medición de ese hogar.
         ApplianceCatalogItem(
-            "model_sony_ps5_cfi2016", "PlayStation 5", ApplianceCategory.ENTERTAINMENT, 217, 14,
+            "model_sony_ps5_cfi2016", "PlayStation 5", ApplianceCategory.ENTERTAINMENT, 217, 14, standbyWatts = 4,
             brand = "Sony", model = "CFI-2016", sourceLabel = "Promedio oficial de juego activo (tres juegos)",
             sourceUrl = "https://www.playstation.com/en-dk/legal/ecodesign/",
             dataSource = ApplianceDataSource.MANUFACTURER_LABEL, confidence = ConfidenceLevel.HIGH,
         ),
         ApplianceCatalogItem(
-            "model_sony_ps5_cfi1216b", "PlayStation 5 Digital", ApplianceCategory.ENTERTAINMENT, 201, 14,
+            "model_sony_ps5_cfi1216b", "PlayStation 5 Digital", ApplianceCategory.ENTERTAINMENT, 201, 14, standbyWatts = 4,
             brand = "Sony", model = "CFI-1216B", sourceLabel = "Promedio oficial de juego activo (tres juegos)",
             sourceUrl = "https://www.playstation.com/en-dk/legal/ecodesign/",
             dataSource = ApplianceDataSource.MANUFACTURER_LABEL, confidence = ConfidenceLevel.HIGH,
         ),
         ApplianceCatalogItem(
-            "model_sony_ps5_pro_cfi7021", "PlayStation 5 Pro", ApplianceCategory.ENTERTAINMENT, 216, 14,
+            "model_sony_ps5_pro_cfi7021", "PlayStation 5 Pro", ApplianceCategory.ENTERTAINMENT, 216, 14, standbyWatts = 5,
             brand = "Sony", model = "CFI-7021", sourceLabel = "Promedio oficial de juego activo (tres juegos)",
             sourceUrl = "https://www.playstation.com/en-dk/legal/ecodesign/",
             dataSource = ApplianceDataSource.MANUFACTURER_LABEL, confidence = ConfidenceLevel.HIGH,
@@ -181,43 +195,49 @@ object ApplianceCatalog {
             dataSource = ApplianceDataSource.MANUFACTURER_LABEL, confidence = ConfidenceLevel.HIGH,
         ),
         ApplianceCatalogItem(
-            "model_xbox_series_x", "Xbox Series X", ApplianceCategory.ENTERTAINMENT, 122, 14,
-            brand = "Microsoft", model = "Xbox Series X", sourceLabel = "Promedio global de juego medido por telemetría Xbox",
-            sourceUrl = "https://learn.microsoft.com/en-us/xbox/sustainability/global-platform-baselines",
+            "model_xbox_series_x", "Xbox Series X", ApplianceCategory.ENTERTAINMENT, 150, 14, standbyWatts = 10,
+            brand = "Microsoft", model = "Xbox Series X", sourceLabel = "Promedio oficial de juego activo en perfiles comunes",
+            sourceUrl = "https://learn.microsoft.com/en-us/gaming/sustainability/lab-platform-baselines",
             dataSource = ApplianceDataSource.MANUFACTURER_LABEL, confidence = ConfidenceLevel.HIGH,
         ),
         ApplianceCatalogItem(
-            "model_xbox_series_s", "Xbox Series S", ApplianceCategory.ENTERTAINMENT, 61, 14,
-            brand = "Microsoft", model = "Xbox Series S", sourceLabel = "Promedio global de juego medido por telemetría Xbox",
-            sourceUrl = "https://learn.microsoft.com/en-us/xbox/sustainability/global-platform-baselines",
+            "model_xbox_series_s", "Xbox Series S", ApplianceCategory.ENTERTAINMENT, 71, 14, standbyWatts = 10,
+            brand = "Microsoft", model = "Xbox Series S", sourceLabel = "Promedio oficial de juego activo en perfiles comunes",
+            sourceUrl = "https://learn.microsoft.com/en-us/gaming/sustainability/lab-platform-baselines",
             dataSource = ApplianceDataSource.MANUFACTURER_LABEL, confidence = ConfidenceLevel.HIGH,
         ),
         ApplianceCatalogItem(
-            "model_xbox_one_launch", "Xbox One", ApplianceCategory.ENTERTAINMENT, 112, 14,
+            "model_xbox_one_launch", "Xbox One", ApplianceCategory.ENTERTAINMENT, 112, 14, standbyWatts = 12,
             brand = "Microsoft", model = "Xbox One (2013)", sourceLabel = "Promedio activo de laboratorio NRDC/ENERGY STAR",
             sourceUrl = "https://www.tomsguide.com/us/xbox-one-ps4-power-consumption,news-18882.html",
             dataSource = ApplianceDataSource.CATALOG, confidence = ConfidenceLevel.MEDIUM,
         ),
         ApplianceCatalogItem(
-            "model_xbox_360_jasper", "Xbox 360 Jasper", ApplianceCategory.ENTERTAINMENT, 102, 14,
+            "model_xbox_360_jasper", "Xbox 360 Jasper", ApplianceCategory.ENTERTAINMENT, 102, 14, standbyWatts = 1,
             brand = "Microsoft", model = "Xbox 360 Jasper", sourceLabel = "Promedio activo medido con wattímetro",
             sourceUrl = "https://at-web1.www.anandtech.com/show/2682/5",
             dataSource = ApplianceDataSource.CATALOG, confidence = ConfidenceLevel.HIGH,
         ),
         ApplianceCatalogItem(
-            "model_ps4_launch", "PlayStation 4", ApplianceCategory.ENTERTAINMENT, 140, 14,
+            "model_xbox_360_xenon", "Xbox 360 original", ApplianceCategory.ENTERTAINMENT, 170, 14, standbyWatts = 1,
+            brand = "Microsoft", model = "Xbox 360 Xenon", sourceLabel = "Promedio activo medido para la revisión original",
+            sourceUrl = "https://at-web1.www.anandtech.com/show/2682/5",
+            dataSource = ApplianceDataSource.CATALOG, confidence = ConfidenceLevel.HIGH,
+        ),
+        ApplianceCatalogItem(
+            "model_ps4_launch", "PlayStation 4", ApplianceCategory.ENTERTAINMENT, 140, 14, standbyWatts = 3,
             brand = "Sony", model = "CUH-1000/1100", sourceLabel = "Promedio de juego medido con monitor de energía",
             sourceUrl = "https://ecocostsavings.com/how-many-watts-does-a-ps4-use/",
             dataSource = ApplianceDataSource.CATALOG, confidence = ConfidenceLevel.MEDIUM,
         ),
         ApplianceCatalogItem(
-            "model_ps4_slim", "PlayStation 4 Slim", ApplianceCategory.ENTERTAINMENT, 110, 14,
+            "model_ps4_slim", "PlayStation 4 Slim", ApplianceCategory.ENTERTAINMENT, 110, 14, standbyWatts = 2,
             brand = "Sony", model = "CUH-2000/2100/2200", sourceLabel = "Promedio de juego estimado y contrastado con Sony",
             sourceUrl = "https://www.playstation.com/en-us/ps4/tech-specs/",
             dataSource = ApplianceDataSource.CATALOG, confidence = ConfidenceLevel.MEDIUM,
         ),
         ApplianceCatalogItem(
-            "model_ps4_pro", "PlayStation 4 Pro", ApplianceCategory.ENTERTAINMENT, 155, 14,
+            "model_ps4_pro", "PlayStation 4 Pro", ApplianceCategory.ENTERTAINMENT, 155, 14, standbyWatts = 4,
             brand = "Sony", model = "CUH-7000/7100/7200", sourceLabel = "Promedio de juego medido por Digital Foundry",
             sourceUrl = "https://nerdburglars.net/playstation-4-pro-power-consumption-measured/",
             dataSource = ApplianceDataSource.CATALOG, confidence = ConfidenceLevel.MEDIUM,
@@ -309,7 +329,7 @@ object ApplianceCatalog {
         ApplianceCatalogItem("decodificador", "Decodificador de TV", ApplianceCategory.ENTERTAINMENT, 15, 35, standbyWatts = 8),
         ApplianceCatalogItem(
             "consola_actual", "Consola de videojuegos actual", ApplianceCategory.ENTERTAINMENT, 150, 14,
-            standbyWatts = 2, sourceLabel = "Promedio orientativo durante juego; no es la potencia máxima",
+            standbyWatts = 10, sourceLabel = "Promedio orientativo durante juego; no es la potencia máxima",
             dataSource = ApplianceDataSource.CATALOG, confidence = ConfidenceLevel.LOW,
         ),
         ApplianceCatalogItem("consola_portatil", "Consola portátil cargando", ApplianceCategory.ENTERTAINMENT, 25, 7),
@@ -408,6 +428,7 @@ object ApplianceCatalog {
         brand: String? = item.brand,
         model: String? = item.model,
         periodKwhPerUnit: Double? = null,
+        standbyEnabled: Boolean = false,
     ): Appliance {
         val safeQuantity = quantity.coerceIn(1, 999)
         val estimate = ApplianceCalculator.fromCatalog(
@@ -417,6 +438,7 @@ object ApplianceCatalog {
             effectiveRateMxnPerKwh = effectiveRateMxnPerKwh,
             quantity = safeQuantity,
             periodKwhPerUnit = periodKwhPerUnit,
+            includeStandby = standbyEnabled,
         )
         val usesPeriodKwh = periodKwhPerUnit != null || item.annualKwh != null || item.typicalKwhPer30Days != null
         val exactUnitKwh = (estimate.activeKwh + estimate.standbyKwh) / safeQuantity
@@ -444,6 +466,7 @@ object ApplianceCatalog {
             category = item.category,
             powerWatts = item.typicalWatts,
             standbyWatts = item.standbyWatts.takeIf { it > 0 },
+            standbyEnabled = standbyEnabled && item.standbyWatts > 0,
             dataSource = item.dataSource
                 ?: if (item.annualKwh != null) ApplianceDataSource.MANUFACTURER_LABEL else ApplianceDataSource.CATALOG,
             quantity = safeQuantity,

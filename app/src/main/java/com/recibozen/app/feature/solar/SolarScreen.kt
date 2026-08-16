@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -38,6 +40,7 @@ import com.recibozen.app.core.components.RzDashedCard
 import com.recibozen.app.core.components.RzDualBarChart
 import com.recibozen.app.core.components.RzDualBarEntry
 import com.recibozen.app.core.components.RzFlowTopBar
+import com.recibozen.app.core.components.RzFilterChip
 import com.recibozen.app.core.components.RzPrimaryButton
 import com.recibozen.app.core.components.RzSegmentedTabs
 import com.recibozen.app.core.designsystem.ReciboZenTheme
@@ -67,7 +70,13 @@ data class SolarUiState(
     val selectedIndex: Int = 1,
     val monthlyEnergy: List<MonthlyEnergyPoint> = emptyList(),
     val annualConsumptionKwh: Int = 0,
+    val rollingAnnualConsumptionKwh: Int = 0,
+    val historicalPeakAnnualConsumptionKwh: Int = 0,
+    val demandGrowthPercent: Int = 0,
+    val plannedLoadsKwh: Map<String, Int> = emptyMap(),
     val coveredDays: Int = 0,
+    val historySpanDays: Int = 0,
+    val manualEvidenceDays: Int = 0,
     val annualYieldKwhPerKwp: Int = 0,
     val location: String = "",
     val resourceSource: String = "",
@@ -95,13 +104,27 @@ class SolarViewModel(
         repository.importedBillHistory,
         resourceState,
     ) { state, history, resource ->
-        val estimate = resource.resource?.let { SolarEstimator.estimate(history, it.monthlyDailyAverage) }
+        val estimate = resource.resource?.let {
+            SolarEstimator.estimate(
+                history = history,
+                monthlyDailyIrradiance = it.monthlyDailyAverage,
+                readings = state.readings,
+                demandGrowthPercent = state.solarDemandGrowthPercent,
+                plannedAnnualKwh = state.solarPlannedLoadsKwh.values.sum(),
+            )
+        }
         SolarUiState(
             scenarios = estimate?.scenarios.orEmpty(),
             selectedIndex = state.solarScenarioIndex.coerceIn(0, 2),
             monthlyEnergy = estimate?.monthlyEnergy.orEmpty(),
             annualConsumptionKwh = estimate?.annualConsumptionKwh ?: 0,
+            rollingAnnualConsumptionKwh = estimate?.rollingAnnualConsumptionKwh ?: 0,
+            historicalPeakAnnualConsumptionKwh = estimate?.historicalPeakAnnualConsumptionKwh ?: 0,
+            demandGrowthPercent = state.solarDemandGrowthPercent,
+            plannedLoadsKwh = state.solarPlannedLoadsKwh,
             coveredDays = estimate?.coveredDays ?: 0,
+            historySpanDays = estimate?.historySpanDays ?: 0,
+            manualEvidenceDays = estimate?.manualEvidenceDays ?: 0,
             annualYieldKwhPerKwp = estimate?.annualYieldKwhPerKwp ?: 0,
             location = state.location,
             resourceSource = resource.resource?.sourceName.orEmpty(),
@@ -132,6 +155,23 @@ class SolarViewModel(
     fun selectScenario(index: Int) {
         repository.setSolarScenarioIndex(index.coerceIn(0, 2))
     }
+
+    fun selectDemandGrowth(percent: Int) {
+        repository.setSolarDemandGrowthPercent(percent)
+    }
+
+    fun togglePlannedLoad(loadId: String) {
+        val option = SOLAR_PLANNED_LOADS.firstOrNull { it.id == loadId } ?: return
+        val enabled = repository.session.value.solarPlannedLoadsKwh.containsKey(loadId)
+        repository.setSolarPlannedLoad(loadId, if (enabled) null else option.annualKwh)
+    }
+
+    fun changePlannedLoadQuantity(loadId: String, delta: Int) {
+        val option = SOLAR_PLANNED_LOADS.firstOrNull { it.id == loadId } ?: return
+        val current = repository.session.value.solarPlannedLoadsKwh[loadId] ?: 0
+        val next = current + delta.coerceIn(-1, 1) * option.annualKwh
+        repository.setSolarPlannedLoad(loadId, next.takeIf { it > 0 })
+    }
 }
 
 @Composable
@@ -144,6 +184,9 @@ fun SolarRoute(navController: NavHostController, repository: ReciboZenRepository
         uiState = uiState,
         onBack = { navController.popBackStack() },
         onScenarioSelected = viewModel::selectScenario,
+        onDemandGrowthSelected = viewModel::selectDemandGrowth,
+        onPlannedLoadToggle = viewModel::togglePlannedLoad,
+        onPlannedLoadQuantityChange = viewModel::changePlannedLoadQuantity,
         onDownloadClick = {
             uiState.selectedScenario?.let { scenario -> SolarReportExporter.createAndShare(
                 context = context,
@@ -162,6 +205,9 @@ fun SolarScreen(
     uiState: SolarUiState,
     onBack: () -> Unit,
     onScenarioSelected: (Int) -> Unit,
+    onDemandGrowthSelected: (Int) -> Unit,
+    onPlannedLoadToggle: (String) -> Unit,
+    onPlannedLoadQuantityChange: (String, Int) -> Unit,
     onDownloadClick: () -> Unit,
     onRetryClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -234,6 +280,97 @@ fun SolarScreen(
                     Text(stringResource(R.string.solar_disclaimer), style = MaterialTheme.typography.bodySmall)
                 }
                 return@Column
+            }
+
+            RzCard(modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.solar_design_demand_title), style = MaterialTheme.typography.titleMedium)
+                Text(
+                    stringResource(
+                        R.string.solar_design_history_summary,
+                        uiState.rollingAnnualConsumptionKwh,
+                        uiState.historicalPeakAnnualConsumptionKwh,
+                        uiState.historySpanDays,
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = RzSpacing.sm),
+                )
+                if (uiState.manualEvidenceDays > 0) {
+                    Text(
+                        stringResource(R.string.solar_manual_evidence, uiState.manualEvidenceDays),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = RzSpacing.xs),
+                    )
+                }
+                Text(
+                    stringResource(R.string.solar_growth_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(top = RzSpacing.lg),
+                )
+                RzSegmentedTabs(
+                    options = SOLAR_GROWTH_OPTIONS.map { if (it == 0) stringResource(R.string.solar_growth_current) else "+$it%" },
+                    selectedIndex = SOLAR_GROWTH_OPTIONS.indexOf(uiState.demandGrowthPercent).coerceAtLeast(0),
+                    onSelectedChange = { onDemandGrowthSelected(SOLAR_GROWTH_OPTIONS[it]) },
+                    modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.sm),
+                )
+                Text(
+                    stringResource(R.string.solar_planned_loads_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(top = RzSpacing.lg),
+                )
+                Text(
+                    stringResource(R.string.solar_planned_loads_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = RzSpacing.xs),
+                )
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.sm),
+                    horizontalArrangement = Arrangement.spacedBy(RzSpacing.xs),
+                    verticalArrangement = Arrangement.spacedBy(RzSpacing.xs),
+                ) {
+                    SOLAR_PLANNED_LOADS.forEach { load ->
+                        val selectedAnnualKwh = uiState.plannedLoadsKwh[load.id]
+                        Column {
+                            RzFilterChip(
+                                text = if (selectedAnnualKwh == null) {
+                                    "${load.label} · +${load.annualKwh} kWh/año"
+                                } else {
+                                    "${load.label} · $selectedAnnualKwh kWh/año"
+                                },
+                                selected = selectedAnnualKwh != null,
+                                onClick = { onPlannedLoadToggle(load.id) },
+                            )
+                            if (selectedAnnualKwh != null) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(RzSpacing.xs),
+                                ) {
+                                    TextButton(onClick = { onPlannedLoadQuantityChange(load.id, -1) }) {
+                                        Text("−")
+                                    }
+                                    Text(
+                                        stringResource(
+                                            R.string.solar_planned_load_quantity,
+                                            (selectedAnnualKwh / load.annualKwh).coerceAtLeast(1),
+                                        ),
+                                        style = MaterialTheme.typography.labelMedium,
+                                    )
+                                    TextButton(onClick = { onPlannedLoadQuantityChange(load.id, 1) }) {
+                                        Text("+")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Text(
+                    stringResource(R.string.solar_design_target, uiState.annualConsumptionKwh),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = RzSpacing.lg),
+                )
             }
 
             RzSegmentedTabs(
@@ -356,6 +493,17 @@ fun SolarScreen(
     }
 }
 
+private data class SolarPlannedLoad(val id: String, val label: String, val annualKwh: Int)
+
+private val SOLAR_GROWTH_OPTIONS = listOf(0, 20, 40, 60)
+private val SOLAR_PLANNED_LOADS = listOf(
+    SolarPlannedLoad("electric_car", "Auto eléctrico", 2_500),
+    SolarPlannedLoad("extra_inverter_ac", "Minisplit inverter", 1_000),
+    SolarPlannedLoad("electric_heating", "Calefacción eléctrica", 700),
+    SolarPlannedLoad("heat_pump", "Bomba de calor", 1_200),
+    SolarPlannedLoad("electric_water_heater", "Boiler eléctrico", 1_800),
+)
+
 @Composable
 private fun SolarSpecRow(label: String, value: String, valueColor: Color = MaterialTheme.colorScheme.onSurface) {
     Row(modifier = Modifier.fillMaxWidth()) {
@@ -389,6 +537,9 @@ private fun SolarScreenPreview() {
             uiState = SolarUiState(),
             onBack = {},
             onScenarioSelected = {},
+            onDemandGrowthSelected = {},
+            onPlannedLoadToggle = {},
+            onPlannedLoadQuantityChange = { _, _ -> },
             onDownloadClick = {},
             onRetryClick = {},
         )

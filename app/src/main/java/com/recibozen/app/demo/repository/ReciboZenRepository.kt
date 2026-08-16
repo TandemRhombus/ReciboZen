@@ -63,6 +63,8 @@ interface ReciboZenRepository {
         powerWatts: Int? = null,
         unitKwh: Double?,
         dataSource: ApplianceDataSource,
+        standbyEnabled: Boolean = false,
+        standbyWatts: Int? = null,
     )
     fun addAppliance(appliance: Appliance)
     fun removeAppliance(applianceId: String)
@@ -78,6 +80,8 @@ interface ReciboZenRepository {
     fun toggleDialUnsure()
     fun resetDial()
     fun setSolarScenarioIndex(index: Int)
+    fun setSolarDemandGrowthPercent(percent: Int)
+    fun setSolarPlannedLoad(loadId: String, annualKwh: Int?)
     fun setHistoryUnit(unit: HistoryUnit)
     fun setOnboardingStep(step: Int)
     fun completeOnboarding()

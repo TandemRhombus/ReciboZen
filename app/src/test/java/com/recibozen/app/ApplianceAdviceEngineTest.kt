@@ -132,6 +132,7 @@ class ApplianceAdviceEngineTest {
         category = category,
         brand = brand,
         standbyWatts = standbyWatts,
+        standbyEnabled = standbyWatts != null,
         isEssential = isEssential,
         referencePeriodDays = 60,
     )

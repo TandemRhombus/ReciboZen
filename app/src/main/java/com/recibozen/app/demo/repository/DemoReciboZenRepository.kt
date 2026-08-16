@@ -137,7 +137,7 @@ open class DemoReciboZenRepository : ReciboZenRepository {
                 val unitStandbyKwh: Double
                 if (isScheduled && appliance.powerWatts?.let { it > 0 } == true) {
                     unitActiveKwh = appliance.powerWatts / 1_000.0 * hours * referenceDays / 7.0
-                    unitStandbyKwh = appliance.standbyWatts?.let { standbyWatts ->
+                    unitStandbyKwh = appliance.standbyWatts?.takeIf { appliance.standbyEnabled }?.let { standbyWatts ->
                         standbyWatts / 1_000.0 * (168 - hours).coerceAtLeast(0) * referenceDays / 7.0
                     } ?: 0.0
                 } else if (isScheduled && appliance.hoursPerWeek?.let { it > 0 } == true) {
@@ -389,12 +389,15 @@ open class DemoReciboZenRepository : ReciboZenRepository {
         powerWatts: Int?,
         unitKwh: Double?,
         dataSource: ApplianceDataSource,
+        standbyEnabled: Boolean,
+        standbyWatts: Int?,
     ) {
         _session.update { state ->
             val safeQuantity = quantity.coerceIn(1, 999)
             val safeHours = hoursPerWeek?.coerceIn(0, 168)
             val safePowerWatts = powerWatts?.coerceIn(1, 100_000)
             val safeUnitKwh = unitKwh?.coerceIn(0.0, 100_000.0)
+            val safeStandbyWatts = standbyWatts?.coerceIn(1, 10_000)
             val safeRoom = room.trim().take(40).ifEmpty { "Toda la casa" }
             val updated = state.customAppliances.map { appliance ->
                 if (appliance.id != applianceId) return@map appliance
@@ -404,8 +407,10 @@ open class DemoReciboZenRepository : ReciboZenRepository {
                     usageModel == ApplianceUsageModel.POWER_SCHEDULE && safeHours != null && effectivePower != null
                 ) {
                     val active = effectivePower / 1_000.0 * safeHours * referenceDays / 7.0
-                    val standby = appliance.standbyWatts?.let { standbyWatts ->
-                        standbyWatts / 1_000.0 * (168 - safeHours).coerceAtLeast(0) * referenceDays / 7.0
+                    val standby = (safeStandbyWatts ?: appliance.standbyWatts)
+                        ?.takeIf { standbyEnabled }
+                        ?.let { standbyPower ->
+                        standbyPower / 1_000.0 * (168 - safeHours).coerceAtLeast(0) * referenceDays / 7.0
                     } ?: 0.0
                     active + standby
                 } else null
@@ -419,11 +424,18 @@ open class DemoReciboZenRepository : ReciboZenRepository {
                     usageModel = usageModel,
                     hoursPerWeek = if (usageModel == ApplianceUsageModel.POWER_SCHEDULE) safeHours else null,
                     powerWatts = effectivePower,
+                    standbyWatts = safeStandbyWatts ?: appliance.standbyWatts,
+                    standbyEnabled = standbyEnabled && (safeStandbyWatts ?: appliance.standbyWatts) != null,
                     unitKwh = effectiveUnitKwh,
                     kwh = effectiveUnitKwh?.let { (it * safeQuantity).roundToInt() } ?: appliance.kwh,
                     calculationNote = when {
                         usageModel == ApplianceUsageModel.POWER_SCHEDULE && effectivePower != null && safeHours != null ->
-                            "$effectivePower W promedio × $safeHours h/semana × $referenceDays días ÷ 7 ÷ 1,000"
+                            buildString {
+                                append("$effectivePower W promedio × $safeHours h/semana × $referenceDays días ÷ 7 ÷ 1,000")
+                                (safeStandbyWatts ?: appliance.standbyWatts)?.takeIf { standbyEnabled }?.let {
+                                    append(" + $it W en espera")
+                                }
+                            }
                         usageModel == ApplianceUsageModel.PERIOD_KWH && safeUnitKwh != null ->
                             "$safeUnitKwh kWh por unidad en $referenceDays días"
                         else -> appliance.calculationNote
@@ -615,6 +627,24 @@ open class DemoReciboZenRepository : ReciboZenRepository {
 
     override fun setSolarScenarioIndex(index: Int) {
         _session.update { it.copy(solarScenarioIndex = index) }
+    }
+
+    override fun setSolarDemandGrowthPercent(percent: Int) {
+        _session.update { it.copy(solarDemandGrowthPercent = percent.coerceIn(0, 100)) }
+    }
+
+    override fun setSolarPlannedLoad(loadId: String, annualKwh: Int?) {
+        val safeId = loadId.trim().take(40)
+        if (safeId.isEmpty()) return
+        _session.update { state ->
+            state.copy(
+                solarPlannedLoadsKwh = if (annualKwh == null || annualKwh <= 0) {
+                    state.solarPlannedLoadsKwh - safeId
+                } else {
+                    state.solarPlannedLoadsKwh + (safeId to annualKwh.coerceIn(1, 50_000))
+                },
+            )
+        }
     }
 
     override fun setHistoryUnit(unit: HistoryUnit) {

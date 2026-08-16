@@ -34,7 +34,8 @@ test("solar resource normalizes official NASA POWER monthly values and caches th
       calls++;
       return new Response(JSON.stringify({
         properties: { parameter: { ALLSKY_SFC_SW_DWN: Object.fromEntries(
-          Array.from({ length: 12 }, (_, index) => [String(index + 1).padStart(2, "0"), 5 + index / 10]),
+          ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
+            .map((month, index) => [month, 5 + index / 10]),
         ) } },
       }), { status: 200, headers: { "content-type": "application/json" } });
     },
@@ -50,12 +51,16 @@ test("solar resource normalizes official NASA POWER monthly values and caches th
 
 test("public tariff and solar endpoints expose only normalized data", async () => {
   const logs = [];
+  const requestedPoints = [];
   const logger = { info(entry) { logs.push(entry); }, error() {} };
   const catalog = { schemaVersion: 1, effectiveYearMonth: "2026-08", domestic: [], dac: [] };
   const handler = buildRequestHandler({
     logger,
     tariffCatalog: { current: () => catalog },
-    solarResource: { forPoint: async () => ({ schemaVersion: 1, monthlyDailyAverage: Array(12).fill(5) }) },
+    solarResource: { forPoint: async (latitude, longitude) => {
+      requestedPoints.push([latitude, longitude]);
+      return { schemaVersion: 1, monthlyDailyAverage: Array(12).fill(5) };
+    } },
   });
   const server = createServer(handler);
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -68,6 +73,11 @@ test("public tariff and solar endpoints expose only normalized data", async () =
     assert.equal(solarResponse.status, 200);
     assert.equal((await solarResponse.json()).monthlyDailyAverage.length, 12);
     assert.equal(logs.at(-1).path, "/v1/solar/resource/:latitude/:longitude");
+
+    const localizedSolarResponse = await fetch(`${base}/v1/solar/resource/19,43/-99,13`);
+    assert.equal(localizedSolarResponse.status, 200);
+    await localizedSolarResponse.json();
+    assert.deepEqual(requestedPoints.at(-1), [19.43, -99.13]);
   } finally {
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }

@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -28,6 +29,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
@@ -95,6 +97,8 @@ data class CatalogApplianceDraft(
     val model: String?,
     val usageModel: ApplianceUsageModel,
     val activeWatts: Int?,
+    val standbyEnabled: Boolean,
+    val standbyWatts: Int?,
 )
 
 data class CustomApplianceDraft(
@@ -219,7 +223,9 @@ class AppliancesEmptyViewModel(
         val defaultPeriodKwh = item.annualKwh?.let { it * uiState.value.billingDays / 365.0 }
             ?: item.typicalKwhPer30Days?.let { it * uiState.value.billingDays / 30.0 }
         val consumptionWasCustomized = when (draft.usageModel) {
-            ApplianceUsageModel.POWER_SCHEDULE -> draft.activeWatts != null && draft.activeWatts != item.typicalWatts
+            ApplianceUsageModel.POWER_SCHEDULE ->
+                (draft.activeWatts != null && draft.activeWatts != item.typicalWatts) ||
+                    (draft.standbyWatts != null && draft.standbyWatts != item.standbyWatts)
             ApplianceUsageModel.PERIOD_KWH -> defaultPeriodKwh == null ||
                 kotlin.math.abs((draft.periodKwhPerUnit ?: 0.0) - defaultPeriodKwh) >= 0.05
         }
@@ -229,6 +235,7 @@ class AppliancesEmptyViewModel(
             typicalKwhPer30Days = item.typicalKwhPer30Days.takeIf {
                 draft.usageModel == ApplianceUsageModel.PERIOD_KWH
             },
+            standbyWatts = draft.standbyWatts ?: item.standbyWatts,
             dataSource = if (consumptionWasCustomized) ApplianceDataSource.USER_ESTIMATE else item.dataSource,
             confidence = if (consumptionWasCustomized) ConfidenceLevel.LOW else item.confidence,
             sourceLabel = if (consumptionWasCustomized) {
@@ -247,7 +254,8 @@ class AppliancesEmptyViewModel(
                 spaceId = draft.space.id,
                 brand = draft.brand,
                 model = draft.model,
-                periodKwhPerUnit = draft.periodKwhPerUnit.takeIf { draft.usageModel == ApplianceUsageModel.PERIOD_KWH },
+            periodKwhPerUnit = draft.periodKwhPerUnit.takeIf { draft.usageModel == ApplianceUsageModel.PERIOD_KWH },
+            standbyEnabled = draft.standbyEnabled,
             ),
         )
     }
@@ -627,6 +635,8 @@ private fun CatalogItemDialog(
     var model by remember(item.id) { mutableStateOf(item.model.orEmpty()) }
     var hours by remember(item.id) { mutableStateOf(item.defaultHoursPerWeek?.toString().orEmpty()) }
     var watts by remember(item.id) { mutableStateOf(item.typicalWatts.takeIf { it > 0 }?.toString().orEmpty()) }
+    var standbyEnabled by remember(item.id) { mutableStateOf(false) }
+    var standbyWatts by remember(item.id) { mutableStateOf(item.standbyWatts.takeIf { it > 0 }?.toString().orEmpty()) }
     val defaultPeriodKwh = item.annualKwh?.let { it * billingDays / 365.0 }
         ?: item.typicalKwhPer30Days?.let { it * billingDays / 30.0 }
     val schedulePeriodKwh = item.defaultHoursPerWeek?.let { defaultHours ->
@@ -642,17 +652,19 @@ private fun CatalogItemDialog(
     val parsedQuantity = quantity.toIntOrNull()?.takeIf { it in 1..999 }
     val parsedHours = hours.toIntOrNull()?.takeIf { it in 0..168 }
     val parsedWatts = watts.toIntOrNull()?.takeIf { it in 1..100_000 }
+    val parsedStandbyWatts = standbyWatts.toIntOrNull()?.takeIf { it in 1..10_000 }
     val parsedPeriodKwh = periodKwh.toDoubleOrNull()?.takeIf { it in 0.0..100_000.0 }
     val isPeriodBased = usageModel == ApplianceUsageModel.PERIOD_KWH
     val valid = parsedQuantity != null && if (isPeriodBased) {
         parsedPeriodKwh != null
     } else {
-        parsedHours != null && parsedWatts != null
+        parsedHours != null && parsedWatts != null && (!standbyEnabled || parsedStandbyWatts != null)
     }
     val calculationItem = item.copy(
         typicalWatts = parsedWatts ?: item.typicalWatts,
         annualKwh = item.annualKwh.takeIf { isPeriodBased },
         typicalKwhPer30Days = item.typicalKwhPer30Days.takeIf { isPeriodBased },
+        standbyWatts = parsedStandbyWatts ?: item.standbyWatts,
     )
     val estimate = ApplianceCalculator.fromCatalog(
         item = calculationItem,
@@ -661,6 +673,7 @@ private fun CatalogItemDialog(
         effectiveRateMxnPerKwh = effectiveRateMxnPerKwh,
         quantity = parsedQuantity ?: 1,
         periodKwhPerUnit = parsedPeriodKwh.takeIf { isPeriodBased },
+        includeStandby = standbyEnabled && !isPeriodBased,
     )
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -748,6 +761,30 @@ private fun CatalogItemDialog(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    if (item.standbyWatts > 0) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(stringResource(R.string.appliances_standby_question), style = MaterialTheme.typography.titleSmall)
+                                Text(stringResource(R.string.appliances_standby_hint), style = MaterialTheme.typography.bodySmall)
+                            }
+                            Switch(checked = standbyEnabled, onCheckedChange = { standbyEnabled = it })
+                        }
+                        if (standbyEnabled) {
+                            OutlinedTextField(
+                                standbyWatts,
+                                { standbyWatts = it.filter(Char::isDigit).take(5) },
+                                label = { Text(stringResource(R.string.appliances_standby_watts)) },
+                                supportingText = { Text(stringResource(R.string.appliances_standby_watts_hint)) },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
                 } else {
                     Text(stringResource(R.string.appliances_catalog_cycle_based_editable), style = MaterialTheme.typography.bodySmall)
                     OutlinedTextField(
@@ -808,6 +845,8 @@ private fun CatalogItemDialog(
                             model = model,
                             usageModel = usageModel,
                             activeWatts = parsedWatts.takeIf { !isPeriodBased },
+                            standbyEnabled = standbyEnabled && !isPeriodBased,
+                            standbyWatts = parsedStandbyWatts.takeIf { standbyEnabled && !isPeriodBased },
                         ),
                     )
                 },
@@ -845,7 +884,9 @@ private fun CustomApplianceDialog(
     val periodKwhValue = periodKwh.toDoubleOrNull()?.takeIf { it in 0.0..100_000.0 }
     val scheduleValid = wattsValue != null && wattsValue in 1..100_000 &&
         hoursValue != null && hoursValue in 0.0..24.0 && daysValue != null && daysValue in 1..7
-    val valid = name.isNotBlank() && quantityValue != null && if (usePeriodKwh) periodKwhValue != null else scheduleValid
+    val valid = name.isNotBlank() && quantityValue != null && if (usePeriodKwh) {
+        periodKwhValue != null
+    } else scheduleValid
     val estimate = when {
         !valid -> null
         usePeriodKwh -> {

@@ -86,13 +86,17 @@ class ApplianceInventoryTest {
             powerWatts = 800,
             unitKwh = null,
             dataSource = ApplianceDataSource.USER_ESTIMATE,
+            standbyEnabled = true,
+            standbyWatts = 12,
         )
 
         val updated = repository.appliance("gaming_pc")!!
         assertEquals(800, updated.powerWatts)
-        assertEquals(75, updated.kwh)
+        assertEquals(80, updated.kwh)
         assertEquals(ConfidenceLevel.LOW, updated.confidence)
         assertTrue(updated.calculationNote.orEmpty().contains("800 W promedio"))
+        assertTrue(updated.standbyEnabled)
+        assertEquals(12, updated.standbyWatts)
     }
 
     @Test
@@ -129,10 +133,12 @@ class ApplianceInventoryTest {
         val xbox = ApplianceCatalog.find("model_xbox_series_x")!!
         val ps5 = ApplianceCatalog.find("model_sony_ps5_cfi2016")!!
         val switch2 = ApplianceCatalog.find("model_nintendo_switch2")!!
-        assertEquals(122, xbox.typicalWatts)
+        assertEquals(150, xbox.typicalWatts)
         assertEquals(217, ps5.typicalWatts)
         assertEquals(19, switch2.typicalWatts)
         assertTrue(listOf(xbox, ps5, switch2).all { it.sourceLabel?.contains("promedio", ignoreCase = true) == true })
+        assertEquals(170, ApplianceCatalog.find("model_xbox_360_xenon")?.typicalWatts)
+        assertEquals(102, ApplianceCatalog.find("model_xbox_360_jasper")?.typicalWatts)
         assertTrue(
             ApplianceCatalog.find("pc_gaming_entusiasta")?.sourceLabel
                 ?.contains("no es potencia máxima", ignoreCase = true) == true,
@@ -143,6 +149,8 @@ class ApplianceInventoryTest {
     fun persistenceRoundTripKeepsSpacesQuantityAndProvenance() {
         val state = ReciboZenSessionState(
             houseSpaces = listOf(HouseSpace("home", "Toda la casa"), HouseSpace("office", "Oficina")),
+            solarDemandGrowthPercent = 40,
+            solarPlannedLoadsKwh = mapOf("electric_car" to 2_500, "extra_inverter_ac" to 2_000),
             customAppliances = listOf(
                 fixedAppliance().copy(
                     quantity = 3,
@@ -158,6 +166,8 @@ class ApplianceInventoryTest {
                     isModelFamily = true,
                     sourceLabel = "Ficha oficial",
                     sourceUrl = "https://example.com/model",
+                    standbyWatts = 4,
+                    standbyEnabled = true,
                 ),
             ),
         )
@@ -174,6 +184,11 @@ class ApplianceInventoryTest {
         assertEquals(341.0, appliance.referenceAnnualKwhMax!!, 0.001)
         assertEquals(false, appliance.marketMexicoVerified)
         assertTrue(appliance.isModelFamily)
+        assertTrue(appliance.standbyEnabled)
+        assertEquals(4, appliance.standbyWatts)
+        assertEquals(40, decoded.solarDemandGrowthPercent)
+        assertEquals(2_500, decoded.solarPlannedLoadsKwh["electric_car"])
+        assertEquals(2_000, decoded.solarPlannedLoadsKwh["extra_inverter_ac"])
     }
 
     @Test

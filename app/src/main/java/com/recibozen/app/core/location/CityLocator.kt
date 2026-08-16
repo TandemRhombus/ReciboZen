@@ -7,6 +7,7 @@ import android.location.Address
 import android.location.Geocoder
 import android.location.LocationManager
 import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import java.util.Locale
 import kotlin.coroutines.resume
@@ -114,6 +115,7 @@ class CityLocator(private val context: Context) {
         .setRegion("MX")
         .build()
 
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private fun singleAddressListener(onResult: (Address?) -> Unit): Geocoder.GeocodeListener =
         object : Geocoder.GeocodeListener {
             override fun onGeocode(addresses: MutableList<Address>) = onResult(addresses.firstOrNull())

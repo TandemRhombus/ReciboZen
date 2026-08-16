@@ -163,11 +163,16 @@ export function buildRequestHandler({
         return;
       }
 
-      const solarMatch = /^\/v1\/solar\/resource\/(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)$/.exec(pathname);
+      // Accept decimal commas as well as decimal points. Older Android builds
+      // formatted coordinates with the device locale (for example 19,4326),
+      // which made an otherwise valid Mexican location miss this route and
+      // later caused NASA POWER to answer 422 in the direct fallback.
+      const solarMatch = /^\/v1\/solar\/resource\/(-?\d+(?:[.,]\d+)?)\/(-?\d+(?:[.,]\d+)?)$/.exec(pathname);
       if (request.method === "GET" && solarMatch) {
         if (!solarResource) throw new HttpError(503, "solar_resource_unavailable", "Solar resource provider is unavailable");
         try {
-          const resource = await solarResource.forPoint(Number(solarMatch[1]), Number(solarMatch[2]));
+          const coordinate = (value) => Number(value.replace(",", "."));
+          const resource = await solarResource.forPoint(coordinate(solarMatch[1]), coordinate(solarMatch[2]));
           status = 200;
           sendJson(response, status, resource, requestId);
         } catch (error) {

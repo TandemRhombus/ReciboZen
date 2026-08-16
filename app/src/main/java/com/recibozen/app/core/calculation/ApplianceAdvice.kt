@@ -128,6 +128,7 @@ object ApplianceAdviceEngine {
         billingDays: Int,
         effectiveRateMxnPerKwh: Double,
     ): ApplianceAdvice? {
+        if (!appliance.standbyEnabled) return null
         val standbyWatts = appliance.standbyWatts?.takeIf { it >= 2 } ?: return null
         val activeHours = appliance.hoursPerWeek ?: return null
         if (appliance.isContinuousOrEssential()) return null

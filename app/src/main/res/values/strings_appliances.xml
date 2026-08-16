@@ -125,6 +125,10 @@
     <string name="appliances_consumption_variable_hint">Para PC, consolas y otros equipos variables, los kWh medidos son más precisos. La potencia máxima no suele mantenerse todo el tiempo.</string>
     <string name="appliances_average_active_watts">Potencia promedio mientras se usa (W)</string>
     <string name="appliances_average_active_watts_hint">Usa el promedio real, no la capacidad de la fuente ni un pico momentáneo. Si tienes un medidor, elige kWh del periodo.</string>
+    <string name="appliances_standby_question">¿Lo dejas conectado en espera?</string>
+    <string name="appliances_standby_hint">Actívalo si usa inicio rápido, descarga actualizaciones, responde al control remoto o permanece listo aunque no lo estés usando.</string>
+    <string name="appliances_standby_watts">Consumo en espera (W)</string>
+    <string name="appliances_standby_watts_hint">Es un promedio editable. Como referencia, algunas consolas antiguas con inicio inmediato rondan 10–15 W; los modos de bajo consumo modernos pueden usar bastante menos.</string>
     <string name="appliances_custom_title">No encuentro mi aparato</string>
     <string name="appliances_custom_description">Agrégalo manualmente con los watts de su etiqueta y cuánto lo usas. ReciboZen calcula los kWh.</string>
     <string name="appliances_custom_quick_add">Agregar un aparato manualmente</string>

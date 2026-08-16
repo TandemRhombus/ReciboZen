@@ -1,15 +1,18 @@
 FROM node:22.17.0-alpine3.22@sha256:fc3e945f920b7e3000cd1af86c4ae406ec70c72f328b667baf0f3a8910d69eed
 
 RUN addgroup -S -g 10001 recibozen \
-    && adduser -S -D -H -u 10001 -G recibozen recibozen
+    && adduser -S -D -H -u 10001 -G recibozen recibozen \
+    && mkdir -p /var/lib/recibozen \
+    && chown -R 10001:10001 /var/lib/recibozen
 
 WORKDIR /app
 COPY --chown=10001:10001 package.json ./
 COPY --chown=10001:10001 src ./src
+COPY --chown=10001:10001 certs ./certs
 
 ENV NODE_ENV=production \
     PORT=8080 \
-    NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
+    NODE_EXTRA_CA_CERTS=/app/certs/cfe-intermediate.pem
 
 USER 10001:10001
 EXPOSE 8080

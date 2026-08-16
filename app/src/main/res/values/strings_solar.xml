@@ -7,12 +7,21 @@
     <string name="solar_eyebrow">PREESTUDIO ORIENTATIVO</string>
     <string name="solar_intro_headline">Cuántos paneles podrían reducir la energía que compras de la red</string>
     <string name="solar_intro_body">Calculado con 9 recibos, tu ubicación y un techo inclinado sin sombras mayores. Consumo anual del hogar: %1$d kWh.</string>
-    <string name="solar_intro_body_real">Se prorratearon %1$d días de recibos reales y el recurso solar de %2$s. Consumo anual comparable: %3$d kWh.</string>
+    <string name="solar_intro_body_real">Se analizaron %1$d días del año móvil y el recurso solar de %2$s. Demanda anual usada para el diseño: %3$d kWh.</string>
     <string name="solar_intro_body_pending">Necesitamos recibos con fechas y una ubicación válida antes de dimensionar paneles.</string>
     <string name="solar_loading">Consultando el recurso solar oficial de tu ubicación…</string>
     <string name="solar_retry_action">Volver a consultar</string>
     <string name="solar_need_data">Importa recibos con fechas que cubran tu consumo y configura una ciudad para generar el preestudio.</string>
     <string name="solar_resource_basis">Producción basada en %1$s: rendimiento anual aproximado de %2$d kWh por kWp, aplicando un factor de desempeño del %3$d%%. Orientación, inclinación y sombras requieren visita técnica.</string>
+    <string name="solar_design_demand_title">Diseña para la vida que quieres tener</string>
+    <string name="solar_design_history_summary">Último año móvil: %1$d kWh · mayor año móvil confiable: %2$d kWh · historial observado: %3$d días.</string>
+    <string name="solar_manual_evidence">También se incorporaron %1$d días útiles entre lecturas manuales que no duplican recibos.</string>
+    <string name="solar_growth_title">Margen para consumir sin limitarte</string>
+    <string name="solar_growth_current">Actual</string>
+    <string name="solar_planned_loads_title">Equipos o cargas que piensas agregar</string>
+    <string name="solar_planned_loads_hint">Selecciona únicamente cargas que todavía no aparezcan en tus recibos o lecturas para evitar contarlas dos veces. Usa + y − para indicar cuántos equipos planeas agregar. Son perfiles iniciales orientativos.</string>
+    <string name="solar_planned_load_quantity">%1$d equipo(s)</string>
+    <string name="solar_design_target">El sistema se dimensionará contra una demanda objetivo de %1$d kWh al año.</string>
 
     <string name="solar_coverage_caption">de tu energía anual, aproximadamente</string>
     <string name="solar_spec_panels">Paneles de 550 W</string>

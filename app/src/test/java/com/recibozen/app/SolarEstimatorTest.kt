@@ -2,10 +2,14 @@ package com.recibozen.app
 
 import com.recibozen.app.core.calculation.SolarEstimator
 import com.recibozen.app.core.model.BillPeriod
+import com.recibozen.app.core.model.HistoryReadingEntry
+import com.recibozen.app.core.model.ReadingMethod
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.roundToInt
 
 class SolarEstimatorTest {
     @Test
@@ -33,4 +37,64 @@ class SolarEstimatorTest {
         assertEquals("4", estimate.scenarios[1].panels)
         assertEquals(12, estimate.monthlyEnergy.size)
     }
+
+    @Test
+    fun usesHistoricalPeakThenAddsGrowthAndPlannedLoads() {
+        val start = LocalDate.of(2024, 1, 1)
+        val history = (0 until 24).map { index ->
+            val from = start.plusMonths(index.toLong())
+            BillPeriod(
+                monthLabel = "",
+                amountMxn = 0,
+                consumptionKwh = if (index < 12) 400 else 300,
+                periodStartEpochDay = from.toEpochDay(),
+                periodEndEpochDay = from.plusMonths(1).toEpochDay(),
+            )
+        }
+
+        val estimate = SolarEstimator.estimate(
+            history = history,
+            monthlyDailyIrradiance = List(12) { 5.0 },
+            demandGrowthPercent = 20,
+            plannedAnnualKwh = 2_500,
+        )!!
+
+        assertEquals(3_600, estimate.rollingAnnualConsumptionKwh)
+        assertTrue(estimate.historicalPeakAnnualConsumptionKwh > estimate.rollingAnnualConsumptionKwh)
+        assertEquals(
+            (estimate.historicalPeakAnnualConsumptionKwh * 1.20).roundToInt() + 2_500,
+            estimate.annualConsumptionKwh,
+        )
+        assertEquals(20, estimate.designGrowthPercent)
+        assertEquals(2_500, estimate.plannedAnnualKwh)
+    }
+
+    @Test
+    fun extendsBillEvidenceWithNonOverlappingManualReadings() {
+        val billStart = LocalDate.of(2025, 1, 1)
+        val billEnd = LocalDate.of(2025, 2, 1)
+        val readingEnd = billEnd.plusDays(30)
+        val history = listOf(
+            BillPeriod(
+                monthLabel = "",
+                amountMxn = 0,
+                consumptionKwh = 100,
+                periodStartEpochDay = billStart.toEpochDay(),
+                periodEndEpochDay = billEnd.toEpochDay(),
+            ),
+        )
+        val readings = listOf(
+            HistoryReadingEntry(1_000, "", ReadingMethod.PDF, "", billEnd.toEpochMillis()),
+            HistoryReadingEntry(1_300, "", ReadingMethod.PDF, "", readingEnd.toEpochMillis()),
+        )
+
+        val estimate = SolarEstimator.estimate(history, List(12) { 5.0 }, readings = readings)!!
+
+        assertEquals(61, estimate.coveredDays)
+        assertEquals(30, estimate.manualEvidenceDays)
+        assertEquals(61, estimate.historySpanDays)
+        assertTrue(estimate.rollingAnnualConsumptionKwh > 2_300)
+    }
+
+    private fun LocalDate.toEpochMillis(): Long = toEpochDay() * 86_400_000L
 }
