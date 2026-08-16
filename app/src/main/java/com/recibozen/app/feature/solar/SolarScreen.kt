@@ -12,11 +12,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -41,56 +41,96 @@ import com.recibozen.app.core.components.RzFlowTopBar
 import com.recibozen.app.core.components.RzPrimaryButton
 import com.recibozen.app.core.components.RzSegmentedTabs
 import com.recibozen.app.core.designsystem.ReciboZenTheme
-import com.recibozen.app.core.designsystem.RzIcons
 import com.recibozen.app.core.designsystem.RzSpacing
 import com.recibozen.app.core.designsystem.RzTheme
 import com.recibozen.app.core.model.MonthlyEnergyPoint
 import com.recibozen.app.core.model.SolarScenario
 import com.recibozen.app.core.export.SolarReportExporter
-import com.recibozen.app.demo.data.DemoReciboZenData
+import com.recibozen.app.core.calculation.SolarEstimator
+import com.recibozen.app.core.location.CityLocator
+import com.recibozen.app.core.solar.SolarResource
+import com.recibozen.app.core.solar.SolarResourceClient
 import com.recibozen.app.demo.repository.ReciboZenRepository
-import com.recibozen.app.demo.repository.ReciboZenSessionState
 import com.recibozen.app.navigation.rzViewModel
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /** Pushed flow screen "Preestudio solar": scenarios, chart and native PDF export. */
 data class SolarUiState(
-    val scenarios: List<SolarScenario> = DemoReciboZenData.solarScenarios,
-    val selectedIndex: Int = DemoReciboZenData.DEFAULT_SOLAR_SCENARIO_INDEX,
-    val monthlyEnergy: List<MonthlyEnergyPoint> = DemoReciboZenData.monthlyEnergy,
-    val annualConsumptionKwh: Int = DemoReciboZenData.ANNUAL_CONSUMPTION_KWH,
-    val location: String = DemoReciboZenData.LOCATION,
-    val currentKwp: String = DemoReciboZenData.SOLAR_CURRENT_KWP,
-    val currentPanels: String = DemoReciboZenData.SOLAR_CURRENT_PANELS,
-    val withPlanKwp: String = DemoReciboZenData.SOLAR_WITH_PLAN_KWP,
-    val withPlanPanels: String = DemoReciboZenData.SOLAR_WITH_PLAN_PANELS,
+    val scenarios: List<SolarScenario> = emptyList(),
+    val selectedIndex: Int = 1,
+    val monthlyEnergy: List<MonthlyEnergyPoint> = emptyList(),
+    val annualConsumptionKwh: Int = 0,
+    val coveredDays: Int = 0,
+    val annualYieldKwhPerKwp: Int = 0,
+    val location: String = "",
+    val resourceSource: String = "",
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null,
 ) {
-    val selectedScenario: SolarScenario get() = scenarios[selectedIndex.coerceIn(0, scenarios.lastIndex)]
+    val selectedScenario: SolarScenario? get() = scenarios.getOrNull(selectedIndex.coerceIn(0, scenarios.lastIndex.coerceAtLeast(0)))
 }
 
-class SolarViewModel(private val repository: ReciboZenRepository) : ViewModel() {
-    val uiState: StateFlow<SolarUiState> = repository.session
-        .map { toUiState(it) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), toUiState(repository.session.value))
-
-    private fun toUiState(state: ReciboZenSessionState) = SolarUiState(
-        selectedIndex = state.solarScenarioIndex,
-        location = state.location,
-        annualConsumptionKwh = repository.billHistory(state)
-            .filterNot { it.isProjected }
-            .map { it.consumptionKwh }
-            .filter { it > 0 }
-            .average()
-            .takeIf { !it.isNaN() }
-            ?.let { average -> (average * if (state.billingCycle.contains("bi", ignoreCase = true)) 6 else 12).toInt() }
-            ?: DemoReciboZenData.ANNUAL_CONSUMPTION_KWH,
+class SolarViewModel(
+    private val repository: ReciboZenRepository,
+    private val client: SolarResourceClient = SolarResourceClient(),
+) : ViewModel() {
+    private data class ResourceState(
+        val locationKey: String = "",
+        val resource: SolarResource? = null,
+        val loading: Boolean = false,
+        val error: String? = null,
     )
 
+    private val resourceState = MutableStateFlow(ResourceState())
+
+    val uiState: StateFlow<SolarUiState> = combine(
+        repository.session,
+        repository.importedBillHistory,
+        resourceState,
+    ) { state, history, resource ->
+        val estimate = resource.resource?.let { SolarEstimator.estimate(history, it.monthlyDailyAverage) }
+        SolarUiState(
+            scenarios = estimate?.scenarios.orEmpty(),
+            selectedIndex = state.solarScenarioIndex.coerceIn(0, 2),
+            monthlyEnergy = estimate?.monthlyEnergy.orEmpty(),
+            annualConsumptionKwh = estimate?.annualConsumptionKwh ?: 0,
+            coveredDays = estimate?.coveredDays ?: 0,
+            annualYieldKwhPerKwp = estimate?.annualYieldKwhPerKwp ?: 0,
+            location = state.location,
+            resourceSource = resource.resource?.sourceName.orEmpty(),
+            isLoading = resource.loading,
+            errorMessage = resource.error,
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SolarUiState())
+
+    fun load(context: android.content.Context, location: String, force: Boolean = false) {
+        val key = location.trim()
+        if (key.isBlank() || (!force && resourceState.value.locationKey == key)) return
+        resourceState.value = ResourceState(locationKey = key, loading = true)
+        viewModelScope.launch {
+            val result = runCatching {
+                val coordinates = CityLocator(context.applicationContext).coordinatesFor(key)
+                    ?: error("No pudimos ubicar esa ciudad.")
+                client.load(coordinates.first, coordinates.second)
+            }
+            resourceState.update {
+                result.fold(
+                    onSuccess = { value -> ResourceState(locationKey = key, resource = value) },
+                    onFailure = { error -> ResourceState(locationKey = key, error = error.message ?: "No se pudo consultar el recurso solar.") },
+                )
+            }
+        }
+    }
+
     fun selectScenario(index: Int) {
-        repository.setSolarScenarioIndex(index)
+        repository.setSolarScenarioIndex(index.coerceIn(0, 2))
     }
 }
 
@@ -99,19 +139,21 @@ fun SolarRoute(navController: NavHostController, repository: ReciboZenRepository
     val viewModel = rzViewModel { SolarViewModel(repository) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    LaunchedEffect(uiState.location) { viewModel.load(context, uiState.location) }
     SolarScreen(
         uiState = uiState,
         onBack = { navController.popBackStack() },
         onScenarioSelected = viewModel::selectScenario,
         onDownloadClick = {
-            SolarReportExporter.createAndShare(
+            uiState.selectedScenario?.let { scenario -> SolarReportExporter.createAndShare(
                 context = context,
                 householdName = repository.session.value.householdName,
                 location = uiState.location,
                 annualConsumptionKwh = uiState.annualConsumptionKwh,
-                scenario = uiState.selectedScenario,
-            )
+                scenario = scenario,
+            ) }
         },
+        onRetryClick = { viewModel.load(context, uiState.location, force = true) },
     )
 }
 
@@ -121,6 +163,7 @@ fun SolarScreen(
     onBack: () -> Unit,
     onScenarioSelected: (Int) -> Unit,
     onDownloadClick: () -> Unit,
+    onRetryClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val scenario = uiState.selectedScenario
@@ -157,11 +200,40 @@ fun SolarScreen(
                     modifier = Modifier.padding(top = RzSpacing.sm),
                 )
                 Text(
-                    stringResource(R.string.solar_intro_body, uiState.annualConsumptionKwh),
+                    if (uiState.annualConsumptionKwh > 0) {
+                        stringResource(
+                            R.string.solar_intro_body_real,
+                            uiState.coveredDays,
+                            uiState.location,
+                            uiState.annualConsumptionKwh,
+                        )
+                    } else stringResource(R.string.solar_intro_body_pending),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = RzSpacing.sm),
                 )
+            }
+
+            if (scenario == null) {
+                RzCard(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        if (uiState.isLoading) stringResource(R.string.solar_loading)
+                        else uiState.errorMessage ?: stringResource(R.string.solar_need_data),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (!uiState.isLoading && uiState.errorMessage != null) {
+                        RzPrimaryButton(
+                            text = stringResource(R.string.solar_retry_action),
+                            onClick = onRetryClick,
+                            modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.md),
+                        )
+                    }
+                }
+                RzDashedCard(modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.solar_disclaimer), style = MaterialTheme.typography.bodySmall)
+                }
+                return@Column
             }
 
             RzSegmentedTabs(
@@ -229,8 +301,8 @@ fun SolarScreen(
                         stringResource(
                             R.string.solar_chart_selected,
                             selected.monthLabel,
-                            (selected.consumptionFraction * 100).toInt(),
-                            (selected.productionFraction * 100).toInt(),
+                            selected.consumptionKwh,
+                            selected.productionKwh,
                         ),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -247,7 +319,12 @@ fun SolarScreen(
                     LegendDot(color = RzTheme.extendedColors.chartSolarProduction, label = stringResource(R.string.solar_legend_production))
                 }
                 Text(
-                    stringResource(R.string.solar_monthly_caption),
+                    stringResource(
+                        R.string.solar_resource_basis,
+                        uiState.resourceSource,
+                        uiState.annualYieldKwhPerKwp,
+                        (SolarEstimator.PERFORMANCE_RATIO * 100).roundToInt(),
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.padding(top = RzSpacing.sm),
@@ -258,84 +335,6 @@ fun SolarScreen(
                     color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.padding(top = RzSpacing.xs),
                 )
-            }
-
-            RzCard(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    stringResource(R.string.solar_reduce_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = RzSpacing.md),
-                    horizontalArrangement = Arrangement.spacedBy(RzSpacing.md),
-                ) {
-                    ReduceCompareCard(
-                        modifier = Modifier.weight(1f),
-                        label = stringResource(R.string.solar_reduce_current_label),
-                        kwp = uiState.currentKwp,
-                        panels = uiState.currentPanels,
-                        containerColor = MaterialTheme.colorScheme.background,
-                        labelColor = MaterialTheme.colorScheme.outline,
-                    )
-                    ReduceCompareCard(
-                        modifier = Modifier.weight(1f),
-                        label = stringResource(R.string.solar_reduce_with_plan_label),
-                        kwp = uiState.withPlanKwp,
-                        panels = uiState.withPlanPanels,
-                        containerColor = RzTheme.extendedColors.successContainer,
-                        labelColor = RzTheme.extendedColors.success,
-                    )
-                }
-                Text(
-                    stringResource(R.string.solar_reduce_caption),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = RzSpacing.md),
-                )
-            }
-
-            RzCard(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    stringResource(R.string.solar_refine_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    stringResource(R.string.solar_refine_subtitle),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.outline,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = RzSpacing.md),
-                    verticalArrangement = Arrangement.spacedBy(RzSpacing.sm),
-                ) {
-                    RefineRow(
-                        answered = true,
-                        label = stringResource(R.string.solar_refine_location),
-                        value = uiState.location,
-                    )
-                    RefineRow(
-                        answered = true,
-                        label = stringResource(R.string.solar_refine_roof_type),
-                        value = stringResource(R.string.solar_refine_roof_type_value),
-                    )
-                    RefineRow(
-                        answered = false,
-                        label = stringResource(R.string.solar_refine_shading),
-                        onAnswerClick = {},
-                    )
-                    RefineRow(
-                        answered = false,
-                        label = stringResource(R.string.solar_refine_available_space),
-                        onAnswerClick = {},
-                    )
-                }
             }
 
             RzDashedCard(modifier = Modifier.fillMaxWidth()) {
@@ -382,66 +381,6 @@ private fun LegendDot(color: Color, label: String) {
     }
 }
 
-@Composable
-private fun ReduceCompareCard(
-    label: String,
-    kwp: String,
-    panels: String,
-    containerColor: Color,
-    labelColor: Color,
-    modifier: Modifier = Modifier,
-) {
-    RzCard(modifier = modifier, containerColor = containerColor, borderColor = null) {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = labelColor)
-        Text(
-            kwp,
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(top = 2.dp),
-        )
-        Text(panels, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-@Composable
-private fun RefineRow(
-    answered: Boolean,
-    label: String,
-    modifier: Modifier = Modifier,
-    value: String? = null,
-    onAnswerClick: (() -> Unit)? = null,
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(RzSpacing.sm),
-    ) {
-        Icon(
-            if (answered) RzIcons.CheckCircle else RzIcons.RadioButtonUnchecked,
-            contentDescription = null,
-            tint = if (answered) RzTheme.extendedColors.success else MaterialTheme.colorScheme.outline,
-        )
-        Text(
-            label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f),
-        )
-        if (answered && value != null) {
-            Text(value, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
-        } else if (onAnswerClick != null) {
-            Text(
-                stringResource(R.string.solar_refine_answer_action),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(4.dp),
-            )
-        }
-    }
-}
-
 @Preview(showBackground = true)
 @Composable
 private fun SolarScreenPreview() {
@@ -451,6 +390,7 @@ private fun SolarScreenPreview() {
             onBack = {},
             onScenarioSelected = {},
             onDownloadClick = {},
+            onRetryClick = {},
         )
     }
 }

@@ -40,6 +40,8 @@ docker compose logs --tail=100 api
 docker compose logs --tail=100 tunnel
 curl --fail --silent --show-error http://127.0.0.1:8787/healthz
 curl --fail --silent --show-error http://127.0.0.1:8787/readyz
+curl --fail --silent --show-error http://127.0.0.1:8787/v1/tariffs/current
+curl --fail --silent --show-error http://127.0.0.1:8787/v1/solar/resource/19.4326/-99.1332
 curl --fail --silent --show-error https://api-recibozen.simapp.uk/healthz
 ```
 
@@ -47,8 +49,11 @@ Resultados esperados:
 
 ```json
 {"status":"ok","service":"recibozen-api","version":"0.1.0"}
-{"status":"ready","entitlementKeyConfigured":true,"playBillingConfigured":false}
+{"status":"not_ready","entitlementKeyConfigured":true,"playBillingConfigured":false}
 ```
+
+Mientras Play Billing no esté configurado, `/readyz` responde HTTP `503` de
+forma intencional aunque `/healthz`, tarifas y recurso solar estén operativos.
 
 `POST /v1/entitlements/exchange` debe responder HTTP `503` con
 `play_verification_not_configured` hasta completar Google Play. Si comienza a

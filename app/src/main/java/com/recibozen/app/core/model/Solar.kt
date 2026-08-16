@@ -16,4 +16,6 @@ data class MonthlyEnergyPoint(
     val monthLabel: String,
     val consumptionFraction: Float,
     val productionFraction: Float,
+    val consumptionKwh: Int = 0,
+    val productionKwh: Int = 0,
 )

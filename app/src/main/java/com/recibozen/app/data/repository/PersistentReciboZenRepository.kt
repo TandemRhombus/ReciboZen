@@ -141,6 +141,7 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
                                     consumptionKwh = bill.consumptionKwh,
                                     periodStartEpochDay = bill.periodStartEpochDay,
                                     periodEndEpochDay = bill.periodEndEpochDay,
+                                    tariffCode = bill.tariffCode,
                                 )
                             }
                             (summaries.associate { summary ->

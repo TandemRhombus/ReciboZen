@@ -1,12 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="solar_chart_selected">%1$s · consumo %2$d%% · producción %3$d%% respecto al mes más alto</string>
+    <string name="solar_chart_selected">%1$s · consumo facturado aprox. %2$d kWh · producción estimada %3$d kWh</string>
     <string name="solar_chart_tap_hint">Toca un par de barras para identificar el mes y comparar sus niveles.</string>
     <!-- ═══════ Preestudio solar ═══════ -->
     <string name="solar_title">Preestudio solar</string>
     <string name="solar_eyebrow">PREESTUDIO ORIENTATIVO</string>
     <string name="solar_intro_headline">Cuántos paneles podrían reducir la energía que compras de la red</string>
     <string name="solar_intro_body">Calculado con 9 recibos, tu ubicación y un techo inclinado sin sombras mayores. Consumo anual del hogar: %1$d kWh.</string>
+    <string name="solar_intro_body_real">Se prorratearon %1$d días de recibos reales y el recurso solar de %2$s. Consumo anual comparable: %3$d kWh.</string>
+    <string name="solar_intro_body_pending">Necesitamos recibos con fechas y una ubicación válida antes de dimensionar paneles.</string>
+    <string name="solar_loading">Consultando el recurso solar oficial de tu ubicación…</string>
+    <string name="solar_retry_action">Volver a consultar</string>
+    <string name="solar_need_data">Importa recibos con fechas que cubran tu consumo y configura una ciudad para generar el preestudio.</string>
+    <string name="solar_resource_basis">Producción basada en %1$s: rendimiento anual aproximado de %2$d kWh por kWp, aplicando un factor de desempeño del %3$d%%. Orientación, inclinación y sombras requieren visita técnica.</string>
 
     <string name="solar_coverage_caption">de tu energía anual, aproximadamente</string>
     <string name="solar_spec_panels">Paneles de 550 W</string>

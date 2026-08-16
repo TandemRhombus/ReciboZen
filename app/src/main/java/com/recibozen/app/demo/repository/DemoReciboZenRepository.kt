@@ -54,10 +54,15 @@ open class DemoReciboZenRepository : ReciboZenRepository {
      * tariff jump instead of silently reverting to subsidized domestic blocks.
      */
     protected fun activeTariffEngine(): TariffEngine {
+        val currentTariff = TariffCatalog.normalize(mutableSession.value.tariff)
         val calibration = mutableTariffCalibration.value
-        if (calibration?.isCalibrated == true) return calibration.snapshot.engine()
-        if (TariffCatalog.normalize(mutableSession.value.tariff) == "DAC") {
-            val latest = mutableImportedBillHistory.value.lastOrNull()
+        if (calibration?.isCalibrated == true &&
+            TariffCatalog.normalize(calibration.snapshot.tariffCode) == currentTariff
+        ) return calibration.snapshot.engine()
+        if (currentTariff == "DAC") {
+            val latest = mutableImportedBillHistory.value
+                .filter { TariffCatalog.normalize(it.tariffCode.orEmpty()) == "DAC" }
+                .maxByOrNull { it.periodEndEpochDay ?: Long.MIN_VALUE }
             val effectiveRate = latest
                 ?.takeIf { it.consumptionKwh > 0 && it.amountMxn > 0 }
                 ?.let { it.amountMxn.toDouble() / it.consumptionKwh }
@@ -464,7 +469,9 @@ open class DemoReciboZenRepository : ReciboZenRepository {
         activeTariffEngine().estimate(kwh.coerceAtLeast(0)).totalMxn
 
     override fun activeTariffBlocks() =
-        mutableTariffCalibration.value?.takeIf { it.isCalibrated }?.snapshot?.blocks
+        mutableTariffCalibration.value?.takeIf {
+            it.isCalibrated && TariffCatalog.normalize(it.snapshot.tariffCode) == TariffCatalog.normalize(mutableSession.value.tariff)
+        }?.snapshot?.blocks
             ?: if (TariffCatalog.normalize(mutableSession.value.tariff) == "DAC") emptyList()
             else TariffEngine.DEFAULT_1C_BIMONTHLY_BLOCKS
 
@@ -682,13 +689,19 @@ open class DemoReciboZenRepository : ReciboZenRepository {
     ) {
         val normalizedTariff = TariffCatalog.find(tariffCode)?.code ?: return
         if (!ElectricServiceValidator.isValidServiceNumber(serviceNumber)) return
-        _session.update {
-            it.copy(
-                serviceAlias = alias.trim().ifEmpty { it.serviceAlias },
+        _session.update { state ->
+            val previousDomestic = TariffCatalog.normalize(state.tariff)
+                .takeIf { TariffCatalog.find(it)?.highConsumptionLimitKwhPerMonth != null }
+            val references = if (normalizedTariff == "DAC" && previousDomestic != null && state.activeServiceId.isNotBlank()) {
+                state.dacReferenceTariffsByService + (state.activeServiceId to previousDomestic)
+            } else state.dacReferenceTariffsByService
+            state.copy(
+                serviceAlias = alias.trim().ifEmpty { state.serviceAlias },
                 serviceNumber = ElectricServiceValidator.normalizeServiceNumber(serviceNumber),
                 rmu = ElectricServiceValidator.normalizeRmu(rmu),
                 meterNumber = ElectricServiceValidator.normalizeMeterNumber(meterNumber),
                 tariff = normalizedTariff,
+                dacReferenceTariffsByService = references,
             )
         }
         mutableElectricServices.update { services ->

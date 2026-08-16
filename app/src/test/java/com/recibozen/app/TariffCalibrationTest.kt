@@ -120,4 +120,22 @@ class TariffCalibrationTest {
         assertEquals(TariffCalibration.Coverage.NONE, result.coverage)
         assertEquals(TariffEngine.DEFAULT_1C_BIMONTHLY_BLOCKS, result.snapshot.blocks)
     }
+
+    @Test
+    fun dacBillBuildsItsOwnRateAndFixedChargeInsteadOfUsingDomesticBlocks() {
+        val result = TariffCalibration.fromCharges(
+            tariffCode = "DAC",
+            effectivePeriod = "2026-07/2026-08",
+            charges = listOf(
+                CalibrationCharge("FIXED", "NONE", null, null, amountMxn = 120.0),
+                CalibrationCharge("ENERGY", "NONE", 500.0, 6.0, amountMxn = 3_000.0),
+            ),
+        )
+
+        assertEquals(TariffCalibration.Coverage.FULL, result.coverage)
+        assertEquals(1, result.snapshot.blocks.size)
+        assertNull(result.snapshot.blocks.single().limitKwh)
+        assertEquals(6.0, result.snapshot.blocks.single().rateMxnPerKwh, 0.0001)
+        assertEquals(120.0, result.snapshot.fixedChargeMxn, 0.0001)
+    }
 }

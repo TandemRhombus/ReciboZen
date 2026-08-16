@@ -64,8 +64,8 @@ interface ReciboZenDao {
     @Query("SELECT EXISTS(SELECT 1 FROM bills WHERE sourceFileHash = :sha256)")
     suspend fun hasImportedFile(sha256: String): Boolean
 
-    @Insert(onConflict = OnConflictStrategy.ABORT)
-    suspend fun insertDataset(dataset: ReferenceDatasetEntity)
+    @Upsert
+    suspend fun upsertDataset(dataset: ReferenceDatasetEntity)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertApplianceReferences(items: List<ApplianceReferenceEntity>)

@@ -35,12 +35,17 @@ class CityLocator(private val context: Context) {
         if (!Geocoder.isPresent()) return null
 
         val location = lastKnownLocation() ?: return null
-        val geocoder = Geocoder(context, Locale("es", "MX"))
+        val geocoder = Geocoder(context, mexicoSpanishLocale())
         val address = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             suspendCancellableCoroutine { continuation ->
-                geocoder.getFromLocation(location.first, location.second, 1) { addresses ->
-                    if (continuation.isActive) continuation.resume(addresses.firstOrNull())
-                }
+                geocoder.getFromLocation(
+                    location.first,
+                    location.second,
+                    1,
+                    singleAddressListener { address ->
+                        if (continuation.isActive) continuation.resume(address)
+                    },
+                )
             }
         } else {
             withContext(Dispatchers.IO) {
@@ -49,6 +54,29 @@ class CityLocator(private val context: Context) {
             }
         }
         address?.cityName()
+    }.getOrNull()
+
+    /** Forward-geocodes the editable city/state text for solar-resource lookup. */
+    suspend fun coordinatesFor(place: String): Pair<Double, Double>? = runCatching {
+        if (place.isBlank() || !Geocoder.isPresent()) return null
+        val geocoder = Geocoder(context, mexicoSpanishLocale())
+        val address = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            suspendCancellableCoroutine { continuation ->
+                geocoder.getFromLocationName(
+                    "$place, México",
+                    1,
+                    singleAddressListener { address ->
+                        if (continuation.isActive) continuation.resume(address)
+                    },
+                )
+            }
+        } else {
+            withContext(Dispatchers.IO) {
+                @Suppress("DEPRECATION")
+                geocoder.getFromLocationName("$place, México", 1)?.firstOrNull()
+            }
+        }
+        address?.let { it.latitude to it.longitude }
     }.getOrNull()
 
     /**
@@ -80,4 +108,16 @@ class CityLocator(private val context: Context) {
         locality?.takeIf { it.isNotBlank() }
             ?: subAdminArea?.takeIf { it.isNotBlank() }
             ?: adminArea?.takeIf { it.isNotBlank() }
+
+    private fun mexicoSpanishLocale(): Locale = Locale.Builder()
+        .setLanguage("es")
+        .setRegion("MX")
+        .build()
+
+    private fun singleAddressListener(onResult: (Address?) -> Unit): Geocoder.GeocodeListener =
+        object : Geocoder.GeocodeListener {
+            override fun onGeocode(addresses: MutableList<Address>) = onResult(addresses.firstOrNull())
+
+            override fun onError(errorMessage: String?) = onResult(null)
+        }
 }

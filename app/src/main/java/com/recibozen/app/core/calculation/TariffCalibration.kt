@@ -4,12 +4,10 @@ package com.recibozen.app.core.calculation
  * Derives a real [TariffRateSnapshot] from the tier charges printed on the
  * user's own CFE bill.
  *
- * Why calibrate instead of shipping a rate table: CFE adjusts rates monthly and
- * the kWh thresholds of each tier depend on the locality's tariff code and on
- * the season, so any table bundled with the app is stale on arrival. The bill
- * the user already imported is the authoritative source for *their* locality
- * and *their* period, needs no network, and re-calibrates itself every time a
- * newer bill is imported.
+ * The backend now synchronizes CFE's dated reference catalog as well. A bill is
+ * still the authoritative pricing input for this household because seasonal
+ * tariffs depend on the locality's summer start and DAC depends on its region;
+ * the imported rows preserve that exact context and re-calibrate on every bill.
  */
 object TariffCalibration {
 
@@ -159,11 +157,15 @@ object TariffCalibration {
         fixedChargeMxn: Double,
         taxRate: Double,
     ): Result {
-        val energyRows = charges.filter { charge ->
+        val candidates = charges.filter { charge ->
             charge.type.uppercase() in setOf("ENERGY", "ENERGIA", "BASICO", "INTERMEDIO", "EXCEDENTE") &&
                 (charge.quantityKwh ?: 0.0) > 0.0 &&
                 ((charge.unitRateMxn ?: 0.0) > 0.0 || (charge.amountMxn ?: 0.0) > 0.0)
         }
+        // Prefer the explicit DAC energy rows if a future document contains
+        // both a summary and tier-like labels, so energy is never counted twice.
+        val explicitEnergy = candidates.filter { it.type.uppercase() in setOf("ENERGY", "ENERGIA") }
+        val energyRows = explicitEnergy.ifEmpty { candidates }
         if (energyRows.isEmpty()) {
             return Result(
                 TariffRateSnapshot(tariffCode, effectivePeriod, fallbackBlocks, fixedChargeMxn, taxRate, sourceBillId),

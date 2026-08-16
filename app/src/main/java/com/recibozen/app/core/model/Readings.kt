@@ -19,6 +19,8 @@ data class BillPeriod(
     val consumptionKwh: Int = 0,
     val periodStartEpochDay: Long? = null,
     val periodEndEpochDay: Long? = null,
+    /** Present for a detailed imported bill; historical summary rows may not carry it. */
+    val tariffCode: String? = null,
 )
 
 data class PastPeriodComparison(

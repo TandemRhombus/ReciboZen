@@ -12,6 +12,8 @@ import {
   GoogleServiceAccountTokenProvider,
   PurchaseVerificationError,
 } from "./google-play.mjs";
+import { SolarResourceService } from "./solar-resource.mjs";
+import { TariffCatalogService } from "./tariff-catalog.mjs";
 
 const SERVICE_NAME = "recibozen-api";
 const SERVICE_VERSION = "0.1.0";
@@ -100,7 +102,14 @@ function validateExchangeRequest(body) {
   }
 }
 
-export function buildRequestHandler({ entitlementKey = null, purchaseVerifier = null, leaseIssuer = null, logger = console } = {}) {
+export function buildRequestHandler({
+  entitlementKey = null,
+  purchaseVerifier = null,
+  leaseIssuer = null,
+  tariffCatalog = null,
+  solarResource = null,
+  logger = console,
+} = {}) {
   return async function requestHandler(request, response) {
     const requestId = randomUUID();
     let status = 500;
@@ -146,6 +155,28 @@ export function buildRequestHandler({ entitlementKey = null, purchaseVerifier = 
         return;
       }
 
+      if (request.method === "GET" && pathname === "/v1/tariffs/current") {
+        const catalog = tariffCatalog?.current();
+        if (!catalog) throw new HttpError(503, "tariff_catalog_unavailable", "The verified CFE tariff catalog is not available");
+        status = 200;
+        sendJson(response, status, catalog, requestId);
+        return;
+      }
+
+      const solarMatch = /^\/v1\/solar\/resource\/(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)$/.exec(pathname);
+      if (request.method === "GET" && solarMatch) {
+        if (!solarResource) throw new HttpError(503, "solar_resource_unavailable", "Solar resource provider is unavailable");
+        try {
+          const resource = await solarResource.forPoint(Number(solarMatch[1]), Number(solarMatch[2]));
+          status = 200;
+          sendJson(response, status, resource, requestId);
+        } catch (error) {
+          if (error.message === "invalid_coordinates") throw new HttpError(400, "invalid_coordinates", "Coordinates are invalid");
+          throw new HttpError(503, "solar_resource_upstream_unavailable", "NASA POWER data is temporarily unavailable");
+        }
+        return;
+      }
+
       if (request.method === "POST" && pathname === "/v1/entitlements/exchange") {
         const input = await readJson(request);
         validateExchangeRequest(input);
@@ -188,13 +219,26 @@ export function buildRequestHandler({ entitlementKey = null, purchaseVerifier = 
         logger.error({ requestId, error: error?.message ?? "unknown" });
       }
     } finally {
-      logger.info({ requestId, method: request.method, path: pathname, status });
+      const logPath = pathname.startsWith("/v1/solar/resource/")
+        ? "/v1/solar/resource/:latitude/:longitude"
+        : pathname;
+      logger.info({ requestId, method: request.method, path: logPath, status });
     }
   };
 }
 
-export function startServer({ port, entitlementKey, purchaseVerifier = null, leaseIssuer = null, logger = console }) {
-  const server = createServer(buildRequestHandler({ entitlementKey, purchaseVerifier, leaseIssuer, logger }));
+export function startServer({
+  port,
+  entitlementKey,
+  purchaseVerifier = null,
+  leaseIssuer = null,
+  tariffCatalog = null,
+  solarResource = null,
+  logger = console,
+}) {
+  const server = createServer(buildRequestHandler({
+    entitlementKey, purchaseVerifier, leaseIssuer, tariffCatalog, solarResource, logger,
+  }));
   server.headersTimeout = 5_000;
   server.requestTimeout = 10_000;
   server.keepAliveTimeout = 5_000;
@@ -203,7 +247,7 @@ export function startServer({ port, entitlementKey, purchaseVerifier = null, lea
   return server;
 }
 
-function run() {
+async function run() {
   const port = Number(process.env.PORT ?? "8080");
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("PORT must be a valid TCP port");
   const entitlementKey = loadEntitlementPublicKey(process.env.ENTITLEMENT_PUBLIC_KEY_FILE);
@@ -245,9 +289,15 @@ function run() {
   const leaseIssuer = billingConfigured
     ? new EntitlementLeaseIssuer({ privateKeyPem, audience: packageName })
     : null;
-  const server = startServer({ port, entitlementKey, purchaseVerifier, leaseIssuer });
+  const tariffCatalog = new TariffCatalogService({
+    storePath: process.env.TARIFF_CATALOG_FILE ?? "/var/lib/recibozen/tariff-catalog.json",
+  });
+  await tariffCatalog.initialize();
+  const solarResource = new SolarResourceService();
+  const server = startServer({ port, entitlementKey, purchaseVerifier, leaseIssuer, tariffCatalog, solarResource });
   const shutdown = (signal) => {
     console.info({ event: "shutdown", signal });
+    tariffCatalog.stop();
     server.close((error) => process.exit(error ? 1 : 0));
     setTimeout(() => process.exit(1), 8_000).unref();
   };
@@ -255,4 +305,9 @@ function run() {
   process.once("SIGTERM", () => shutdown("SIGTERM"));
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) run();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  run().catch((error) => {
+    console.error({ event: "startup_failed", error: error.message });
+    process.exit(1);
+  });
+}

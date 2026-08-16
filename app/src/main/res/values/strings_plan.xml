@@ -123,9 +123,21 @@
     <string name="dac_next_bill_limit">Con el historial disponible, procura que el siguiente recibo cierre en %1$d kWh o menos.</string>
     <string name="dac_next_bill_rolling_ok">Con esa proyección, la nueva ventana quedaría cerca de %1$d de %2$d kWh, con unos %3$d kWh de margen.</string>
     <string name="dac_next_bill_rolling_over">Con esa proyección, la nueva ventana quedaría cerca de %1$d de %2$d kWh: aproximadamente %3$d kWh por encima.</string>
+    <string name="dac_next_bill_expiring">Cuando cierre el próximo recibo, aproximadamente %1$d kWh antiguos saldrán del año móvil y permanecerán %2$d kWh antes de sumar el nuevo consumo.</string>
     <string name="dac_prediction_disclaimer">Es una prevención calculada con tus recibos. CFE determina la clasificación final con el historial facturado y la tarifa asignada a tu localidad.</string>
     <string name="dac_already_title">Tu recibo ya indica tarifa DAC</string>
-    <string name="dac_already_body">Para calcular una meta de salida necesitamos conocer la tarifa doméstica y el límite de tu localidad anteriores a DAC. Mientras tanto, importa el historial completo y evita presentar una cifra genérica como límite real.</string>
+    <string name="dac_already_body">La salida se evalúa con el promedio móvil de los últimos 12 meses y el límite doméstico de tu localidad. ReciboZen calcula la meta; CFE confirma la reclasificación final.</string>
+    <string name="dac_exit_reference_prompt">¿Qué tarifa doméstica tenía este suministro antes de DAC?</string>
+    <string name="dac_exit_need_history">La tarifa de referencia ya está configurada. Importa recibos que cubran aproximadamente 12 meses para calcular una meta de salida sin asumir que el consumo faltante fue cero.</string>
+    <string name="dac_exit_below_target">Tu promedio estimado es %1$d kWh/mes, por debajo del límite de %2$d de la tarifa %3$s. Mantén los siguientes cierres debajo de la meta y confirma la reclasificación con CFE.</string>
+    <string name="dac_exit_above_target">Aún necesitas bajar aproximadamente %1$d kWh/mes del promedio móvil para quedar debajo de %2$d, límite de la tarifa %3$s.</string>
+    <string name="dac_exit_next_bill_over">Proyectamos %1$d kWh. Para avanzar hacia la salida de DAC, este recibo debería cerrar en %2$d kWh o menos: reduce al menos %3$d kWh frente a la proyección.</string>
+    <string name="dac_exit_next_bill_ok">Proyectamos %1$d kWh, dentro de la meta de %2$d kWh para que la siguiente ventana móvil quede bajo el límite.</string>
+    <string name="dac_exit_next_bill_limit">Para que la siguiente ventana móvil quede bajo el límite, procura cerrar este recibo en %1$d kWh o menos.</string>
+    <string name="dac_exit_actions_title">Plan intensivo para salir de DAC</string>
+    <string name="dac_exit_actions_body">Prioriza primero las cargas con mayor impacto y recomendaciones respaldadas por los datos que registraste. No desconectes equipos esenciales ni comprometas refrigeración, salud o seguridad.</string>
+    <string name="dac_exit_device_load">%1$s · cerca de %2$d kWh/mes configurados</string>
+    <string name="dac_exit_measured_saving">Ahorro cuantificable estimado: %1$.1f kWh por periodo.</string>
     <string name="dac_missing_tariff_title">Configura tu tarifa doméstica</string>
     <string name="dac_missing_tariff_body">El límite DAC depende de la tarifa asignada a tu localidad. Selecciona 1, 1A, 1B, 1C, 1D, 1E o 1F desde tu suministro, o importa un recibo.</string>
     <string name="dac_opportunity_minisplit">· Reducir 35 minutos diarios el minisplit: −24 kWh al mes aproximadamente.</string>
@@ -134,6 +146,7 @@
 
     <string name="dac_tariff_title">Rango de este periodo · %1$s</string>
     <string name="dac_tariff_unavailable">Importa un recibo con su desglose legible para mostrar estos tramos con las cuotas reales. No usaremos una tarifa genérica como si fuera la tuya.</string>
+    <string name="dac_tariff_effective_bill">El importe proyectado usa el costo efectivo total por kWh del último recibo DAC porque su desglose no permite reconstruir todas las cuotas. Al importar un recibo DAC más reciente, esta referencia se actualiza automáticamente.</string>
     <string name="dac_tier_basic">Básico · %1$d kWh</string>
     <string name="dac_tier_intermediate">Intermedio · %1$d kWh</string>
     <string name="dac_tier_excess">Excedente · desde %1$d kWh</string>

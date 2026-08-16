@@ -44,6 +44,7 @@ import com.recibozen.app.core.designsystem.ReciboZenTheme
 import com.recibozen.app.core.model.Appliance
 import com.recibozen.app.core.model.ConfidenceLevel
 import com.recibozen.app.core.model.OpportunityLevel
+import com.recibozen.app.core.model.HouseSpace
 import com.recibozen.app.demo.data.DemoReciboZenData
 import com.recibozen.app.demo.repository.ReciboZenRepository
 import com.recibozen.app.demo.repository.ReciboZenSessionState
@@ -74,9 +75,28 @@ data class AppliancesUiState(
     val hasCurrentMeterProjection: Boolean = false,
     val inventoryCoveragePercent: Int = 0,
     val spaceCount: Int = 0,
+    val filterSpaces: List<HouseSpace> = emptyList(),
     val primaryAdviceByAppliance: Map<String, ApplianceAdvice> = emptyMap(),
     val topSavingsActions: List<InventoryApplianceAdvice> = emptyList(),
 )
+
+internal fun filterAppliances(
+    appliances: List<Appliance>,
+    filterIndex: Int,
+    spaces: List<HouseSpace>,
+): List<Appliance> {
+    val selectedSpace = spaces.getOrNull(filterIndex - 4)
+    return when {
+        selectedSpace != null -> appliances.filter { appliance ->
+            appliance.spaceId == selectedSpace.id ||
+                (appliance.spaceId == null && appliance.room.equals(selectedSpace.name, ignoreCase = true))
+        }.sortedByDescending { it.costMxn }
+        filterIndex == 1 -> appliances.sortedWith(compareBy(Appliance::room, Appliance::name))
+        filterIndex == 2 -> appliances.filter { it.standbyCostMxn != null }.sortedByDescending { it.standbyCostMxn }
+        filterIndex == 3 -> appliances.filter { it.confidence != ConfidenceLevel.HIGH }.sortedBy { it.name }
+        else -> appliances.sortedByDescending { it.costMxn }
+    }
+}
 
 class AppliancesViewModel(private val repository: ReciboZenRepository) : ViewModel() {
 
@@ -113,12 +133,7 @@ class AppliancesViewModel(private val repository: ReciboZenRepository) : ViewMod
         val unidentifiedCost = unidentifiedKwh?.let { missing ->
             if (energy.observedKwh > 0) (energy.costToDateMxn * missing.toDouble() / energy.observedKwh).toInt() else 0
         }
-        val visible = when (filterIndex) {
-            1 -> all.sortedWith(compareBy(Appliance::room, Appliance::name))
-            2 -> all.filter { it.standbyCostMxn != null }.sortedByDescending { it.standbyCostMxn }
-            3 -> all.filter { it.confidence != ConfidenceLevel.HIGH }.sortedBy { it.name }
-            else -> all.sortedByDescending { it.costMxn }
-        }
+        val visible = filterAppliances(all, filterIndex, houseSpaces)
         val adviceByAppliance = all.associate { appliance ->
             appliance.id to ApplianceAdviceEngine.recommendations(appliance, energy.billingDays)
                 .first()
@@ -144,6 +159,7 @@ class AppliancesViewModel(private val repository: ReciboZenRepository) : ViewMod
                 .coerceIn(0, 100)
         } else 0,
         spaceCount = houseSpaces.size,
+        filterSpaces = houseSpaces,
         primaryAdviceByAppliance = adviceByAppliance,
         topSavingsActions = ApplianceAdviceEngine.rankInventory(all, energy.billingDays),
     )
@@ -152,6 +168,7 @@ class AppliancesViewModel(private val repository: ReciboZenRepository) : ViewMod
     fun onFilterSelected(index: Int) {
         selectedFilterIndex.value = index
     }
+
 }
 
 @Composable
@@ -191,7 +208,7 @@ fun AppliancesScreen(
         stringResource(R.string.appliances_filter_room),
         stringResource(R.string.appliances_filter_standby),
         stringResource(R.string.appliances_filter_incomplete),
-    )
+    ) + uiState.filterSpaces.map { it.name }
 
     Column(
         modifier = Modifier

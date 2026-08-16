@@ -13,7 +13,7 @@ data class TariffDefinition(
     val calculationSupport: TariffCalculationSupport = TariffCalculationSupport.PROGRESSIVE_ENERGY,
 )
 
-/** Stable tariff identifiers. Rates deliberately live in dated receipt snapshots. */
+/** Stable tariff identifiers. Dated CFE reference rates are synced separately; receipts preserve locality context. */
 object TariffCatalog {
     val supported = listOf(
         TariffDefinition("1", "Doméstica", TariffAudience.HOME, seasonal = false, highConsumptionLimitKwhPerMonth = 250),

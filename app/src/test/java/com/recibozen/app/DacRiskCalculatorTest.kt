@@ -68,6 +68,35 @@ class DacRiskCalculatorTest {
     }
 
     @Test
+    fun nextBillExplainsHowMuchOldConsumptionLeavesTheWindow() {
+        val result = DacRiskCalculator.calculate(
+            history = yearOfMonthlyBills(200),
+            tariffCode = "1",
+            projectedNextBillKwh = 500,
+            projectedBillingDays = 31,
+        )
+
+        assertEquals(200.0, result.expiringBeforeNextBillKwh ?: 0.0, 1.0)
+        assertEquals(2_200.0, result.retainedBeforeNextBillKwh ?: 0.0, 1.0)
+    }
+
+    @Test
+    fun dacAccountUsesItsPreviousDomesticTariffForAnExitPlan() {
+        val result = DacRiskCalculator.calculate(
+            history = yearOfMonthlyBills(300),
+            tariffCode = "DAC",
+            projectedNextBillKwh = 100,
+            projectedBillingDays = 31,
+            domesticReferenceTariffCode = "1B",
+        )
+
+        assertEquals(DacRiskLevel.ALREADY_DAC, result.level)
+        assertEquals("1B", result.referenceDomesticTariffCode)
+        assertEquals(400, result.monthlyLimitKwh)
+        assertEquals(1_500, result.recommendedNextBillMaxKwh)
+    }
+
+    @Test
     fun duplicateImportedPeriodsDoNotDoubleTheRollingConsumption() {
         val history = yearOfMonthlyBills(200)
         val result = DacRiskCalculator.calculate(history + history, "1")

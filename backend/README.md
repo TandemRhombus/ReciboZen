@@ -15,8 +15,14 @@ validar Play Integrity, reconocer el producto y emitir un lease corto firmado.
   al `requestHash` de Play Integrity; consulta `subscriptionsv2`, comprueba
   vigencia y cuenta ofuscada, reconoce el pago si hace falta y devuelve un lease
   de máximo 24 horas firmado con ECDSA P-256.
+- `GET /v1/tariffs/current`: catálogo mensual normalizado desde las páginas
+  oficiales de CFE. Conserva el último catálogo válido en el volumen
+  `recibozen_tariff_data` y reintenta la actualización diariamente.
+- `GET /v1/solar/resource/{latitud}/{longitud}`: promedios mensuales de
+  irradiación `ALLSKY_SFC_SW_DWN` obtenidos de NASA POWER para el preestudio.
 
-El servicio nunca registra cuerpos, `purchaseToken` ni `integrityToken`.
+El servicio nunca registra cuerpos, `purchaseToken`, `integrityToken` ni las
+coordenadas del recurso solar; esa ruta se anonimiza en los logs.
 
 ## Despliegue Orange Pi
 

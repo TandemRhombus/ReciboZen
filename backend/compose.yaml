@@ -11,6 +11,7 @@ services:
     environment:
       PORT: "8080"
       ENTITLEMENT_PUBLIC_KEY_FILE: /run/recibozen-secrets/entitlement-public.pem
+      TARIFF_CATALOG_FILE: /var/lib/recibozen/tariff-catalog.json
     ports:
       - "127.0.0.1:8787:8080"
     volumes:
@@ -18,6 +19,9 @@ services:
         source: ./secrets/entitlement-public.pem
         target: /run/recibozen-secrets/entitlement-public.pem
         read_only: true
+      - type: volume
+        source: tariff-data
+        target: /var/lib/recibozen
     read_only: true
     tmpfs:
       - /tmp:size=16m,mode=1777
@@ -80,3 +84,7 @@ networks:
   backend:
     name: recibozen_backend
     driver: bridge
+
+volumes:
+  tariff-data:
+    name: recibozen_tariff_data

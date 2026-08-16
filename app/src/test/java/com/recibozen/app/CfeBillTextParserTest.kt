@@ -22,6 +22,9 @@ class CfeBillTextParserTest {
     @Test fun parsesPdbtReceiptAndItsHistory() = assertReceipt(
         pdbt, "PDBT", 858, 4_396.0, 2, LocalDate.of(2026, 4, 7), LocalDate.of(2026, 6, 8),
     )
+    @Test fun parsesDacEnergyRateWithoutConfusingTheMeterReadingRow() = assertReceipt(
+        dac, "DAC", 500, 3_619.0, 2, LocalDate.of(2026, 4, 7), LocalDate.of(2026, 6, 8),
+    )
 
     @Test fun ignoresLongIdentifiersAndDateLikeTriplesBetweenReadingColumns() {
         val reorderedText = domesticLow.replace(
@@ -81,6 +84,8 @@ class CfeBillTextParserTest {
         "\nBasico 57 1.119 64.34 157 1.004 157.89\nIntermedio 76 1.361 104.34 125 1.163 146.31\nExcedente 212 3.980 847.05 305 3.992 1,221.26\n" + history
     private val pdbt = base("000000000004", "PDBT", "MTR004", "1,632", "774", "858", "4,396", wires = 3) +
         "\nCargo Fijo((3)) 66.14\nEnergia 3,723.13\n" + history
+    private val dac = base("000000000005", "DAC", "MTR005", "5,500", "5,000", "500", "3,619") +
+        "\nCargo Fijo 120.00\nEnergia 500 6.000 3,000.00\n" + history
 
     private fun base(
         service: String,

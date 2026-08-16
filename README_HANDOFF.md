@@ -11,7 +11,7 @@ Este proyecto comenzó como la conversión visual del prototipo **ReciboZen V2**
 - El backend mínimo está en `backend/` y desplegado de forma aislada en la Orange Pi. Expone salud y la clave pública, pero rechaza la activación premium hasta integrar identidad y validación real de Google Play.
 - El arranque espera la hidratación de DataStore y abre Inicio si el onboarding ya fue completado.
 - `TariffEngine` aplica escalones progresivos configurables a los kWh observados/proyectados. La estimación se presenta como orientativa, no como cotización oficial de CFE.
-- **Las tarifas se auto-calibran con el recibo del usuario.** `TariffCalibration` reconstruye un `TariffRateSnapshot` a partir del `unitRateMxn` de cada tramo impreso en el último recibo importado, y `energySummary`/`billProjection` calculan con ese motor calibrado. Sin recibo se usan los escalones genéricos. Se decidió calibrar-desde-recibo en vez de empaquetar una tabla de tarifas porque CFE ajusta precios mensualmente y los umbrales por tramo dependen de la localidad: cualquier tabla nace vencida. `repository.tariffCalibration` expone `Coverage` (FULL/PARTIAL/NONE) para poder ser honestos sobre de dónde salió el número.
+- **Las tarifas se auto-calibran con el recibo del usuario y el catálogo oficial se sincroniza remotamente.** El backend consulta las páginas de tarifas domésticas y DAC de CFE, conserva el último catálogo válido y Android lo descarga diariamente con WorkManager a las tablas de referencia de Room. `TariffCalibration` sigue reconstruyendo el `TariffRateSnapshot` usado por la proyección desde el último recibo porque éste conserva la localidad, temporada y región exactas del suministro; el catálogo remoto no adivina esos datos. `repository.tariffCalibration` expone `Coverage` (FULL/PARTIAL/NONE) para indicar con honestidad de dónde salió el número.
 - Onboarding pide siempre meta de pago y tarifa (antes solo aparecían tras importar un PDF, dejando `goalMxn = 0` y el ritmo recomendado en cero para quien entraba sin recibo). El campo Ciudad puede autocompletarse con `CityLocator` (Geocoder on-device, permiso opcional, siempre editable). La **tarifa nunca se infiere de la ubicación**: SHCP la asigna por localidad según temperatura, así que adivinarla facturaría mal en silencio.
 - Las horas de todos los aparatos configurables recalculan kWh, costo, participación, balance y un **pronóstico inferior-arriba del inventario**. Inicio compara ese resultado con el ritmo del medidor: son dos estimaciones del mismo consumo y nunca se suman. Si todavía no hay lecturas, el inventario puede producir una proyección preliminar con un rango de incertidumbre mayor; cuando sí las hay, el medidor conserva la prioridad y los aparatos muestran qué porcentaje explican.
 - Aparatos admite 100+ referencias genéricas y un primer grupo de modelos LG, Samsung y Mabe con kWh/año y enlace de procedencia oficial. La UI distingue etiqueta/fabricante, medición del usuario y estimación para no presentar un promedio como consumo real.
@@ -21,7 +21,7 @@ Este proyecto comenzó como la conversión visual del prototipo **ReciboZen V2**
 - Los filtros de Aparatos ordenan/filtran realmente y las sugerencias/simulador pueden agregar aparatos persistentes.
 - Manual, manecillas y foto preparan el valor/método correcto antes de confirmar; las nuevas lecturas se fechan, aparecen en Historial y persisten.
 - Foto abre la cámara instalada mediante `TakePicture`, procesa la imagen en el dispositivo con ML Kit, permite reintentar/corregir y conservar o descartar el archivo.
-- Solar genera `preestudio_solar_recibozen.pdf` con `PdfDocument` y abre el selector nativo para guardarlo o compartirlo.
+- Solar calcula el consumo anual desde periodos reales fechados y consulta la irradiación mensual climatológica `ALLSKY_SFC_SW_DWN` de NASA POWER mediante el backend. Dimensiona escenarios con supuestos visibles (panel de 550 W y factor de desempeño de 80%), genera `preestudio_solar_recibozen.pdf` y abre el selector nativo para guardarlo o compartirlo.
 
 ## Cómo abrir y compilar
 
@@ -160,16 +160,16 @@ El estado de sesión vive en **`demo/repository/ReciboZenSessionState.kt`** por 
 - `Energy_Device_Dataset_Mexico_v1.zip` contiene 53,721 fichas, pero sólo 9,305 grupos marca/modelo tienen un valor anual aprovechable después de validar y deduplicar. Ninguna fila venía con mercado México verificado. Se excluyeron explícitamente 590 máquinas de hielo comercial porque la fuente mide kWh por 100 lb de hielo, aunque el master v1 las colocó en `annual_kwh`; usarlas como kWh/año habría subestimado gravemente el consumo.
 - No hay conexión ni descarga automática desde CFE; el usuario elige el PDF desde el selector del sistema.
 - OCR reconoce números impresos/digitales; un medidor analógico de carátulas puede requerir el flujo interactivo de manecillas.
-- Las tarifas embebidas son una configuración estimativa. Antes de publicar se debe conectar una fuente oficial/versionada o permitir captura completa de tarifa, temporada, región, subsidios y cargos del recibo.
-- Las proyecciones solares usan escenarios deterministas, no irradiancia, geometría de techo ni una cotización de instalador.
+- El catálogo CFE ya es remoto y versionado, pero para aplicar automáticamente una variante estacional o DAC sin un recibo todavía se necesita capturar explícitamente inicio de verano/región; subsidios y cargos locales adicionales siguen viniendo del recibo.
+- El preestudio solar ya usa irradiancia real por ubicación e historial de recibos. Aún no modela inclinación, orientación, sombras, geometría útil del techo, degradación ni una cotización de instalador.
 
 ## Integraciones necesarias antes de producción
 
-- Fuente oficial/versionada de tarifas y reglas DAC por región/temporada; las tablas de datasets ya están preparadas y el formato de entrega está en `docs/REFERENCE_DATA_FORMAT.md`.
+- Selector/configuración verificable de inicio de verano y región DAC para poder aplicar el catálogo remoto sin depender de un recibo reciente.
 - Google Play Billing, autenticación y validación de suscripción en el backend para habilitar realmente Plus/Familiar; la política, el paywall y la frontera fail-closed ya están separados del SKU.
 - Play Integrity y verificación de Billing deben cerrarse en backend antes de emitir los leases premium firmados. El verificador cliente y la comprobación de certificado/origen ya están implementados.
 - Cuenta, backend, sincronización, cifrado y políticas de retención/borrado.
-- Motor solar basado en irradiancia y validación profesional del techo.
+- Captura de inclinación, orientación, sombras y área útil para elevar el preestudio solar a un modelo de techo; la validación profesional sigue siendo externa.
 - Pruebas instrumentadas adicionales para permisos/cámaras de fabricantes y accesibilidad completa.
 
 ## Decisiones visuales importantes

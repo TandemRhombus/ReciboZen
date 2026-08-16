@@ -8,7 +8,8 @@ COPY --chown=10001:10001 package.json ./
 COPY --chown=10001:10001 src ./src
 
 ENV NODE_ENV=production \
-    PORT=8080
+    PORT=8080 \
+    NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
 
 USER 10001:10001
 EXPOSE 8080

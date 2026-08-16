@@ -122,7 +122,10 @@ class HomeViewModel(private val repository: ReciboZenRepository) : ViewModel() {
                     history = importedBills,
                     tariffCode = state.tariff,
                     projectedNextBillKwh = energy.projectedKwh.takeIf { hasReadingAfterBill && it > 0 },
-                    projectedBillingDays = energy.billingDays.takeIf { hasReadingAfterBill && it > 0 } ?: 0,
+                    projectedBillingDays = energy.billingDays.coerceAtLeast(0),
+                    domesticReferenceTariffCode = state.dacReferenceTariffsByService[
+                        state.activeServiceId.takeIf { it.isNotBlank() } ?: "current"
+                    ],
                 ),
             )
         }
