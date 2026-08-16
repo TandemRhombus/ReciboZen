@@ -643,6 +643,7 @@ internal object SessionJsonCodec {
         put("simulatorScenarioWatts", state.simulatorScenarioWatts)
         put("simulatorScenarioHoursPerWeek", state.simulatorScenarioHoursPerWeek)
         put("trackedActionIds", JSONArray(state.trackedActionIds.toList()))
+        put("goalsSchema", GOALS_SCHEMA)
         put("goalMxnByService", JSONObject(state.goalMxnByService))
         put("meterTypeByService", JSONObject(state.meterTypeByService))
         put("locationByService", JSONObject(state.locationByService))
@@ -681,7 +682,7 @@ internal object SessionJsonCodec {
             val migrateFixtureState = schemaVersion < 2
             val serviceNumber = json.optString("serviceNumber", defaults.serviceNumber)
             val hours = if (migrateFixtureState) emptyMap() else {
-                json.optJSONObject("applianceHours").toIntMap(defaults.applianceHoursPerWeek)
+                json.optJSONObject("applianceHours").toIntMap(defaults.applianceHoursPerWeek, HOURS_PER_WEEK_RANGE)
             }
             val readingsJson = json.optJSONArray("readings")
             val decodedReadings = readingsJson.toReadings(defaults.readings).filterNot { reading ->
@@ -735,7 +736,12 @@ internal object SessionJsonCodec {
                     "simulatorScenarioHoursPerWeek",
                     defaults.simulatorScenarioHoursPerWeek,
                 ).coerceIn(0.0, 168.0),
-                goalMxnByService = json.optJSONObject("goalMxnByService").toIntMap(defaults.goalMxnByService),
+                // Builds before the fix stored goals capped at 168. The scalar
+                // goalMxn was never capped, so discarding the map lets
+                // selectElectricService reseed it from the correct value.
+                goalMxnByService = if (json.optInt("goalsSchema", 1) >= GOALS_SCHEMA) {
+                    json.optJSONObject("goalMxnByService").toIntMap(defaults.goalMxnByService, GOAL_MXN_RANGE)
+                } else emptyMap(),
                 meterTypeByService = json.optJSONObject("meterTypeByService").toStringMap(),
                 locationByService = json.optJSONObject("locationByService").toStringMap(),
                 trackedActionIds = json.optJSONArray("trackedActionIds")
@@ -767,6 +773,14 @@ internal object SessionJsonCodec {
 
     private const val CURRENT_SCHEMA_VERSION = 4
 
+    /**
+     * Bumped when the per-service goals map became trustworthy. Anything older
+     * was written by the build that capped goals at 168, so it is discarded.
+     */
+    private const val GOALS_SCHEMA = 2
+    private val HOURS_PER_WEEK_RANGE = 0..168
+    private val GOAL_MXN_RANGE = 0..1_000_000
+
     private fun JSONObject?.toStringMap(): Map<String, String> {
         if (this == null) return emptyMap()
         return keys().asSequence().mapNotNull { key ->
@@ -777,9 +791,19 @@ internal object SessionJsonCodec {
     private inline fun <reified T : Enum<T>> enumValueOr(raw: String?, fallback: T): T =
         enumValues<T>().firstOrNull { it.name == raw?.uppercase(Locale.ROOT) } ?: fallback
 
-    private fun JSONObject?.toIntMap(fallback: Map<String, Int>): Map<String, Int> {
+    /**
+     * [range] is required on purpose. This helper used to hard-code 0..168
+     * because it was written for weekly hours, and reusing it for the spending
+     * goal silently capped every goal at $168.
+     */
+    private fun JSONObject?.toIntMap(
+        fallback: Map<String, Int>,
+        range: IntRange,
+    ): Map<String, Int> {
         if (this == null) return fallback
-        return keys().asSequence().associateWith { key -> optInt(key, fallback[key] ?: 0).coerceIn(0, 168) }
+        return keys().asSequence().associateWith { key ->
+            optInt(key, fallback[key] ?: 0).coerceIn(range.first, range.last)
+        }
     }
 
     private fun JSONObject?.toStringMap(fallback: Map<String, String>): Map<String, String> {
