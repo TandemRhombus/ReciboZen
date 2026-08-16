@@ -6,20 +6,19 @@
     <string name="solar_title">Preestudio solar</string>
     <string name="solar_eyebrow">PREESTUDIO ORIENTATIVO</string>
     <string name="solar_intro_headline">Cuántos paneles podrían reducir la energía que compras de la red</string>
-    <string name="solar_intro_body">Calculado con 9 recibos, tu ubicación y un techo inclinado sin sombras mayores. Consumo anual del hogar: %1$d kWh.</string>
     <string name="solar_intro_body_real">Se analizaron %1$d días del año móvil y el recurso solar de %2$s. Demanda anual usada para el diseño: %3$d kWh.</string>
     <string name="solar_intro_body_pending">Necesitamos recibos con fechas y una ubicación válida antes de dimensionar paneles.</string>
     <string name="solar_loading">Consultando el recurso solar oficial de tu ubicación…</string>
     <string name="solar_retry_action">Volver a consultar</string>
     <string name="solar_need_data">Importa recibos con fechas que cubran tu consumo y configura una ciudad para generar el preestudio.</string>
-    <string name="solar_resource_basis">Producción basada en %1$s: rendimiento anual aproximado de %2$d kWh por kWp, aplicando un factor de desempeño del %3$d%%. Orientación, inclinación y sombras requieren visita técnica.</string>
+    <string name="solar_resource_basis">Basado en %1$s: cerca de %2$d kWh al año por kWp, con %3$d%% de desempeño. Orientación y sombras requieren visita técnica.</string>
     <string name="solar_design_demand_title">Diseña para la vida que quieres tener</string>
     <string name="solar_design_history_summary">Último año móvil: %1$d kWh · mayor año móvil confiable: %2$d kWh · historial observado: %3$d días.</string>
-    <string name="solar_manual_evidence">También se incorporaron %1$d días útiles entre lecturas manuales que no duplican recibos.</string>
+    <string name="solar_manual_evidence">Incluye %1$d días medidos con tus lecturas.</string>
     <string name="solar_growth_title">Margen para consumir sin limitarte</string>
     <string name="solar_growth_current">Actual</string>
     <string name="solar_planned_loads_title">Equipos o cargas que piensas agregar</string>
-    <string name="solar_planned_loads_hint">Selecciona únicamente cargas que todavía no aparezcan en tus recibos o lecturas para evitar contarlas dos veces. Usa + y − para indicar cuántos equipos planeas agregar. Son perfiles iniciales orientativos.</string>
+    <string name="solar_planned_loads_hint">Marca solo lo que aún no aparece en tus recibos, para no contarlo dos veces. Son perfiles orientativos.</string>
     <string name="solar_planned_load_quantity">%1$d equipo(s)</string>
     <string name="solar_design_target">El sistema se dimensionará contra una demanda objetivo de %1$d kWh al año.</string>
 
@@ -35,22 +34,9 @@
     <string name="solar_monthly_title">Mes a mes: consumo y producción</string>
     <string name="solar_legend_consumption">Consumo del hogar</string>
     <string name="solar_legend_production">Producción estimada</string>
-    <string name="solar_monthly_caption">En mayo y junio tu consumo superaría la generación; en marzo y abril podrías tener excedentes.</string>
 
-    <string name="solar_reduce_title">Si reduces antes de instalar</string>
-    <string name="solar_reduce_current_label">Consumo actual</string>
-    <string name="solar_reduce_with_plan_label">Con tu plan aplicado</string>
-    <string name="solar_reduce_caption">Bajar tu consumo antes de instalar puede reducir el tamaño y el costo del sistema.</string>
 
-    <string name="solar_refine_title">Para afinar el preestudio</string>
-    <string name="solar_refine_subtitle">Opcional. Puedes responder solo lo que sepas.</string>
-    <string name="solar_refine_location">Ubicación general</string>
-    <string name="solar_refine_roof_type">Tipo de techo</string>
-    <string name="solar_refine_roof_type_value">Inclinado</string>
-    <string name="solar_refine_shading">Sombras cercanas</string>
-    <string name="solar_refine_available_space">Espacio disponible</string>
-    <string name="solar_refine_answer_action">Responder</string>
 
-    <string name="solar_disclaimer">Este es un preestudio orientativo. La generación real depende de la ubicación, orientación, sombras, clima, instalación, tarifa y condiciones del inmueble. No prometemos un recibo de cero pesos.</string>
+    <string name="solar_disclaimer">Preestudio orientativo. La generación real depende de orientación, sombras, clima e instalación. No prometemos recibo en cero.</string>
     <string name="solar_download_action">Descargar mi preestudio</string>
 </resources>

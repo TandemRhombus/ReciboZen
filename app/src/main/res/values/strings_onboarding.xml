@@ -7,18 +7,8 @@
     <string name="onboarding_profile_required">Nombre, hogar y ciudad son necesarios para continuar. Después de leer tu recibo podremos hablar de una meta con contexto real.</string>
 
     <!-- Step 0: Bienvenida -->
-    <string name="onboarding_step0_headline">Entiende tu consumo antes de que llegue el recibo.</string>
-    <string name="onboarding_step0_body">No necesitas conocimientos de electricidad. Nosotros traducimos las lecturas y los aparatos a pesos.</string>
-    <string name="onboarding_step0_bullets">· Sabrás cuánto podría llegar y si vas arriba de tu meta.\n· Verás qué aparatos influyen más.\n· Podrás registrar tu medidor aunque no sepas leerlo.</string>
 
     <!-- Step 1: Configuración del hogar -->
-    <string name="onboarding_step1_title">Cuéntanos de tu hogar</string>
-    <string name="onboarding_step1_subtitle">Puedes saltar lo que no sepas; lo completamos después.</string>
-    <string name="onboarding_row_household_name">Nombre del hogar</string>
-    <string name="onboarding_row_location">Ubicación</string>
-    <string name="onboarding_row_billing_cycle">Cada cuánto llega tu recibo</string>
-    <string name="onboarding_row_goal">Meta de pago</string>
-    <string name="onboarding_goal_value">$%1$d</string>
     <string name="onboarding_receipt_card_title">¿Tienes tu último recibo a la mano?</string>
     <string name="onboarding_receipt_card_body">Sube el PDF original de CFE para extraer tarifa, medidor, consumo, total e historial. Si no lo tienes, puedes continuar sin estimación.</string>
     <string name="onboarding_receipt_step_title">Agrega datos reales de tu suministro</string>
@@ -28,8 +18,6 @@
     <string name="onboarding_receipt_privacy">El PDF se procesa en el teléfono. Guardamos los datos confirmados, no el archivo original.</string>
     <string name="onboarding_action_upload_pdf">Subir recibo PDF</string>
     <string name="onboarding_action_change_pdf">Elegir otro PDF</string>
-    <string name="onboarding_action_take_photo">Tomar foto</string>
-    <string name="onboarding_action_type_manually">Escribir datos</string>
 
     <!-- Step 2: Tipo de medidor -->
     <string name="onboarding_step2_title">¿Cómo es tu medidor?</string>
@@ -46,16 +34,12 @@
     <string name="onboarding_step3_empty_eyebrow">TU PERFIL ESTÁ LISTO</string>
     <string name="onboarding_step3_bill_detail">Periodo %1$s · %2$d kWh</string>
     <string name="onboarding_step3_bill_explanation">Esto no es una estimación: proviene del PDF que confirmaste. Para proyectar el periodo actual necesitaremos una lectura posterior.</string>
-    <string name="onboarding_step3_empty_explanation">Aún no tenemos un recibo ni lecturas suficientes, así que no mostraremos una cifra inventada. Puedes importar el PDF desde Inicio o Historial.</string>
-    <string name="onboarding_step3_price">$%1$d</string>
-    <string name="onboarding_step3_range">Podría quedar entre $%1$d y $%2$d</string>
-    <string name="onboarding_step3_confidence_warning">Confianza baja por ahora: la calculamos con un solo recibo.</string>
+    <string name="onboarding_step3_empty_explanation">Todavía no hay recibo ni lecturas suficientes. Puedes importar el PDF desde Inicio o Historial.</string>
     <string name="onboarding_step3_body">Registra una lectura o agrega tus aparatos principales y la estimación mejorará en unos días.</string>
-    <string name="onboarding_step3_footnote">Todavía estamos aprendiendo sobre tu consumo. No te pediremos permisos que no necesites.</string>
     <string name="onboarding_goal_after_bill_title">Ahora sí, ¿quieres definir una meta?</string>
     <string name="onboarding_goal_after_bill_body">Tu último recibo real fue de $%1$d. Si quieres, usa ese contexto para elegir cuánto te gustaría pagar en el siguiente.</string>
     <string name="onboarding_goal_no_bill_title">¿Quieres definir una meta de pago?</string>
-    <string name="onboarding_goal_no_bill_body">Todavía no tenemos un recibo real, pero puedes fijar una meta orientativa. Sin ella no podemos calcular tu ritmo de consumo recomendado ni avisarte si vas arriba.</string>
+    <string name="onboarding_goal_no_bill_body">Sin recibo aún, pero puedes fijar una meta. La necesitamos para calcular tu ritmo recomendado.</string>
     <string name="onboarding_goal_after_bill_label">Meta para el próximo recibo en MXN (opcional)</string>
     <string name="onboarding_city_use_location">Usar mi ubicación</string>
     <string name="onboarding_city_detecting">Detectando…</string>
@@ -65,7 +49,6 @@
     <string name="onboarding_tariff_body">La usamos para el límite de referencia de tu promedio (DAC) y para estimar tu recibo. Está en la parte superior de tu recibo de CFE.</string>
 
     <!-- Bottom buttons -->
-    <string name="onboarding_action_skip">Saltar</string>
     <string name="onboarding_action_back">Atrás</string>
     <string name="onboarding_action_configure_later">Configurar después</string>
     <string name="onboarding_continue_without_bill">Continuar sin recibo</string>
@@ -73,5 +56,5 @@
     <string name="onboarding_primary_step1">Continuar</string>
     <string name="onboarding_primary_step2">Continuar</string>
     <string name="onboarding_primary_step3">Ir a Inicio</string>
-    <string name="onboarding_goal_tariff_required">La meta y la tarifa son necesarias para calcular ritmo, costo y prevención DAC. Puedes regresar y configurar después desde el primer paso.</string>
+    <string name="onboarding_goal_tariff_required">Meta y tarifa son necesarias para calcular ritmo, costo y riesgo DAC.</string>
 </resources>

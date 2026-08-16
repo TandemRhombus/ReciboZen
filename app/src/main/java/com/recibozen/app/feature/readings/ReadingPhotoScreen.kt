@@ -66,6 +66,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import java.util.Locale
+import androidx.core.net.toUri
 
 data class ReadingPhotoUiState(
     val detectedReadingKwh: Int? = null,
@@ -302,7 +303,7 @@ private fun CapturedPhotoOrViewfinder(uriString: String?, imageRevision: Int, mo
     val bitmap = remember(uriString, imageRevision) {
         uriString?.let { value ->
             runCatching {
-                context.contentResolver.openInputStream(Uri.parse(value))?.use(BitmapFactory::decodeStream)?.asImageBitmap()
+                context.contentResolver.openInputStream(value.toUri())?.use(BitmapFactory::decodeStream)?.asImageBitmap()
             }.getOrNull()
         }
     }

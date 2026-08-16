@@ -12,11 +12,14 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -49,7 +52,10 @@ import com.recibozen.app.demo.data.DemoReciboZenData
 import com.recibozen.app.demo.repository.ReciboZenRepository
 import com.recibozen.app.demo.repository.ReciboZenSessionState
 import com.recibozen.app.demo.repository.EnergyForecastBasis
+import com.recibozen.app.core.components.rzCoachAnchor
+import com.recibozen.app.navigation.RzTourAnchors
 import com.recibozen.app.navigation.Routes
+import com.recibozen.app.navigation.navigateToBottomTab
 import com.recibozen.app.navigation.rzViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.math.roundToInt
@@ -68,7 +74,8 @@ data class AppliancesUiState(
     val unidentifiedKwh: Int?,
     val billingDays: Int,
     val referencePeriodLabel: String,
-    val selectedFilterIndex: Int,
+    val selectedSpaceId: String?,
+    val selectedSort: ApplianceSort,
     val applianceProjectedKwh: Int = 0,
     val applianceProjectedMxn: Int = 0,
     val meterProjectedKwh: Int = 0,
@@ -80,45 +87,69 @@ data class AppliancesUiState(
     val topSavingsActions: List<InventoryApplianceAdvice> = emptyList(),
 )
 
+/** How the inventory is sorted or narrowed, independently of the space. */
+enum class ApplianceSort { COST, STANDBY, INCOMPLETE, NAME }
+
+/**
+ * Space and sort are separate questions: "the kitchen ones, by cost" has to be
+ * expressible. They used to share a single index, so choosing a room silently
+ * reset the ordering.
+ */
 internal fun filterAppliances(
     appliances: List<Appliance>,
-    filterIndex: Int,
+    spaceId: String?,
+    sort: ApplianceSort,
     spaces: List<HouseSpace>,
 ): List<Appliance> {
-    val selectedSpace = spaces.getOrNull(filterIndex - 4)
-    return when {
-        selectedSpace != null -> appliances.filter { appliance ->
-            appliance.spaceId == selectedSpace.id ||
-                (appliance.spaceId == null && appliance.room.equals(selectedSpace.name, ignoreCase = true))
-        }.sortedByDescending { it.costMxn }
-        filterIndex == 1 -> appliances.sortedWith(compareBy(Appliance::room, Appliance::name))
-        filterIndex == 2 -> appliances.filter { it.standbyCostMxn != null }.sortedByDescending { it.standbyCostMxn }
-        filterIndex == 3 -> appliances.filter { it.confidence != ConfidenceLevel.HIGH }.sortedBy { it.name }
-        else -> appliances.sortedByDescending { it.costMxn }
+    val space = spaces.firstOrNull { it.id == spaceId }
+    val inSpace = if (space == null) appliances else appliances.filter { appliance ->
+        appliance.spaceId == space.id ||
+            (appliance.spaceId == null && appliance.room.equals(space.name, ignoreCase = true))
+    }
+    return when (sort) {
+        ApplianceSort.COST -> inSpace.sortedByDescending { it.costMxn }
+        ApplianceSort.STANDBY -> inSpace.filter { it.standbyCostMxn != null }.sortedByDescending { it.standbyCostMxn }
+        ApplianceSort.INCOMPLETE -> inSpace.filter { it.confidence != ConfidenceLevel.HIGH }.sortedBy { it.name }
+        ApplianceSort.NAME -> inSpace.sortedWith(compareBy(Appliance::room, Appliance::name))
     }
 }
 
 class AppliancesViewModel(private val repository: ReciboZenRepository) : ViewModel() {
 
-    private val selectedFilterIndex = MutableStateFlow(0)
+    private val selectedSpaceId = MutableStateFlow<String?>(null)
+    private val selectedSort = MutableStateFlow(ApplianceSort.COST)
 
     val uiState: StateFlow<AppliancesUiState> = combine(
         repository.session,
         repository.importedBillHistory,
-        selectedFilterIndex,
+        selectedSpaceId,
+        selectedSort,
         repository.tariffCalibration,
-    ) { session, importedBills, filterIndex, _ ->
-        session.toUiState(filterIndex, importedBills.lastOrNull()?.monthLabel.orEmpty())
+    ) { values ->
+        @Suppress("UNCHECKED_CAST")
+        val session = values[0] as ReciboZenSessionState
+        @Suppress("UNCHECKED_CAST")
+        val importedBills = values[1] as List<com.recibozen.app.core.model.BillPeriod>
+        session.toUiState(
+            spaceId = values[2] as String?,
+            sort = values[3] as ApplianceSort,
+            referencePeriodLabel = importedBills.lastOrNull()?.monthLabel.orEmpty(),
+        )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = repository.session.value.toUiState(
-            selectedFilterIndex.value,
+            selectedSpaceId.value,
+            selectedSort.value,
             repository.importedBillHistory.value.lastOrNull()?.monthLabel.orEmpty(),
         ),
     )
 
-    private fun ReciboZenSessionState.toUiState(filterIndex: Int, referencePeriodLabel: String): AppliancesUiState {
+    private fun ReciboZenSessionState.toUiState(
+        spaceId: String?,
+        sort: ApplianceSort,
+        referencePeriodLabel: String,
+    ): AppliancesUiState {
         val all = repository.appliances(this)
         val energy = repository.energySummary(this)
         // Same prorating as Balance: appliance kWh covers a full period, the
@@ -133,7 +164,7 @@ class AppliancesViewModel(private val repository: ReciboZenRepository) : ViewMod
         val unidentifiedCost = unidentifiedKwh?.let { missing ->
             if (energy.observedKwh > 0) (energy.costToDateMxn * missing.toDouble() / energy.observedKwh).toInt() else 0
         }
-        val visible = filterAppliances(all, filterIndex, houseSpaces)
+        val visible = filterAppliances(all, spaceId, sort, houseSpaces)
         val adviceByAppliance = all.associate { appliance ->
             appliance.id to ApplianceAdviceEngine.recommendations(appliance, energy.billingDays)
                 .first()
@@ -148,7 +179,8 @@ class AppliancesViewModel(private val repository: ReciboZenRepository) : ViewMod
         billingDays = energy.billingDays.takeIf { it > 0 }
             ?: if (billingCycle.contains("bi", ignoreCase = true)) 61 else 30,
         referencePeriodLabel = referencePeriodLabel,
-        selectedFilterIndex = filterIndex,
+        selectedSpaceId = spaceId,
+        selectedSort = sort,
         applianceProjectedKwh = energy.applianceProjectedKwh,
         applianceProjectedMxn = energy.applianceProjectedCostMxn,
         meterProjectedKwh = energy.meterProjectedKwh,
@@ -165,8 +197,12 @@ class AppliancesViewModel(private val repository: ReciboZenRepository) : ViewMod
     )
     }
 
-    fun onFilterSelected(index: Int) {
-        selectedFilterIndex.value = index
+    fun onSpaceSelected(spaceId: String?) {
+        selectedSpaceId.value = spaceId
+    }
+
+    fun onSortSelected(sort: ApplianceSort) {
+        selectedSort.value = sort
     }
 
 }
@@ -180,8 +216,10 @@ fun AppliancesRoute(navController: NavHostController, repository: ReciboZenRepos
         uiState = uiState,
         onProfileClick = { navController.navigate(Routes.Profile) },
         onHouseholdClick = { navController.navigate(Routes.Services) },
-        onFilterSelected = viewModel::onFilterSelected,
+        onSpaceSelected = viewModel::onSpaceSelected,
+        onSortSelected = viewModel::onSortSelected,
         onApplianceClick = { id -> navController.navigate(Routes.applianceDetail(id)) },
+        onOpenPlan = { navController.navigateToBottomTab(Routes.Plan) },
         onEditUsageClick = { id -> navController.navigate(Routes.applianceUsage(id)) },
         onUnidentifiedClick = { navController.navigate(Routes.Balance) },
         onAddApplianceClick = { navController.navigate(Routes.ApplianceEmpty) },
@@ -194,8 +232,10 @@ fun AppliancesRoute(navController: NavHostController, repository: ReciboZenRepos
 fun AppliancesScreen(
     uiState: AppliancesUiState,
     onProfileClick: () -> Unit,
-    onFilterSelected: (Int) -> Unit,
+    onSpaceSelected: (String?) -> Unit,
+    onSortSelected: (ApplianceSort) -> Unit,
     onApplianceClick: (String) -> Unit,
+    onOpenPlan: () -> Unit = {},
     onEditUsageClick: (String) -> Unit,
     onUnidentifiedClick: () -> Unit,
     onAddApplianceClick: () -> Unit,
@@ -203,13 +243,6 @@ fun AppliancesScreen(
     onManageSpacesClick: () -> Unit,
     onHouseholdClick: () -> Unit = {},
 ) {
-    val filterLabels = listOf(
-        stringResource(R.string.appliances_filter_top_spend),
-        stringResource(R.string.appliances_filter_room),
-        stringResource(R.string.appliances_filter_standby),
-        stringResource(R.string.appliances_filter_incomplete),
-    ) + uiState.filterSpaces.map { it.name }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -221,6 +254,14 @@ fun AppliancesScreen(
             userInitial = uiState.userInitial,
             onHouseholdClick = onHouseholdClick,
             onProfileClick = onProfileClick,
+        )
+
+        ApplianceFilterBar(
+            spaces = uiState.filterSpaces,
+            selectedSpaceId = uiState.selectedSpaceId,
+            selectedSort = uiState.selectedSort,
+            onSpaceSelected = onSpaceSelected,
+            onSortSelected = onSortSelected,
         )
 
         Column(
@@ -253,20 +294,7 @@ fun AppliancesScreen(
 
             if (uiState.appliances.isNotEmpty()) {
                 ApplianceForecastSummary(uiState)
-                InventoryAdviceSummary(uiState.topSavingsActions, onApplianceClick)
-            }
-
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(RzSpacing.sm),
-            ) {
-                filterLabels.forEachIndexed { index, label ->
-                    RzFilterChip(
-                        text = label,
-                        selected = index == uiState.selectedFilterIndex,
-                        onClick = { onFilterSelected(index) },
-                    )
-                }
+                InventoryAdviceSummary(uiState.topSavingsActions, onOpenPlan)
             }
 
             if (uiState.appliances.isEmpty()) {
@@ -335,7 +363,7 @@ fun AppliancesScreen(
                 RzPrimaryButton(
                     text = stringResource(R.string.appliances_add_cta),
                     onClick = onAddApplianceClick,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.rzCoachAnchor(RzTourAnchors.APPLIANCES_ADD).weight(1f),
                 )
                 RzSecondaryButton(
                     text = stringResource(R.string.appliances_simulate_cta),
@@ -353,6 +381,70 @@ fun AppliancesScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
             )
+        }
+    }
+}
+
+/**
+ * Two independent rows, pinned above the list.
+ *
+ * They stay outside the vertical scroll on purpose: filtering changes the
+ * height of the content below, and when the chips scrolled with it the page
+ * jumped under the finger every time one was tapped. Space comes first because
+ * "which room" is the question people actually ask.
+ */
+@Composable
+private fun ApplianceFilterBar(
+    spaces: List<HouseSpace>,
+    selectedSpaceId: String?,
+    selectedSort: ApplianceSort,
+    onSpaceSelected: (String?) -> Unit,
+    onSortSelected: (ApplianceSort) -> Unit,
+) {
+    val sorts = listOf(
+        ApplianceSort.COST to stringResource(R.string.appliances_filter_top_spend),
+        ApplianceSort.STANDBY to stringResource(R.string.appliances_filter_standby),
+        ApplianceSort.INCOMPLETE to stringResource(R.string.appliances_filter_incomplete),
+        ApplianceSort.NAME to stringResource(R.string.appliances_filter_room),
+    )
+    Column(
+        verticalArrangement = Arrangement.spacedBy(RzSpacing.xs),
+        modifier = Modifier.padding(bottom = RzSpacing.sm),
+    ) {
+        if (spaces.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = RzSpacing.screenHorizontal),
+                horizontalArrangement = Arrangement.spacedBy(RzSpacing.sm),
+            ) {
+                RzFilterChip(
+                    text = stringResource(R.string.appliances_filter_all_spaces),
+                    selected = selectedSpaceId == null,
+                    onClick = { onSpaceSelected(null) },
+                )
+                spaces.forEach { space ->
+                    RzFilterChip(
+                        text = space.name,
+                        selected = selectedSpaceId == space.id,
+                        onClick = { onSpaceSelected(space.id.takeIf { it != selectedSpaceId }) },
+                    )
+                }
+            }
+        }
+        Row(
+            modifier = Modifier
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = RzSpacing.screenHorizontal),
+            horizontalArrangement = Arrangement.spacedBy(RzSpacing.sm),
+        ) {
+            sorts.forEach { (sort, label) ->
+                RzFilterChip(
+                    text = label,
+                    selected = sort == selectedSort,
+                    onClick = { onSortSelected(sort) },
+                )
+            }
         }
     }
 }
@@ -412,48 +504,28 @@ private fun ApplianceForecastSummary(uiState: AppliancesUiState) {
 }
 
 @Composable
-private fun InventoryAdviceSummary(
-    actions: List<InventoryApplianceAdvice>,
-    onApplianceClick: (String) -> Unit,
-) {
+private fun InventoryAdviceSummary(actions: List<InventoryApplianceAdvice>, onOpenPlan: () -> Unit) {
     if (actions.isEmpty()) return
-    RzCard(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            stringResource(R.string.appliances_advice_summary_title),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            stringResource(R.string.appliances_advice_summary_description),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.outline,
-            modifier = Modifier.padding(top = RzSpacing.xs),
-        )
-        actions.forEach { action ->
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = RzSpacing.md)
-                    .clickable { onApplianceClick(action.applianceId) },
-            ) {
+    // The full list lives in Plan. Repeating it here would mean two places to
+    // keep in sync and two answers to the same question.
+    RzCard(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenPlan),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(RzSpacing.sm)) {
+            Icon(RzIcons.Lightbulb, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    action.applianceName,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    action.advice.title,
+                    pluralStringResource(R.plurals.appliances_advice_summary_count, actions.size, actions.size),
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                action.advice.estimatedSavingsKwh?.let { savings ->
-                    Text(
-                        stringResource(R.string.appliances_advice_summary_savings, savings),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = RzTheme.extendedColors.success,
-                    )
-                }
+                Text(
+                    actions.first().let { "${it.applianceName} · ${it.advice.title}" },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
+            Icon(RzIcons.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.outline)
         }
     }
 }
@@ -619,10 +691,12 @@ private fun AppliancesScreenPreview() {
                 unidentifiedKwh = DemoReciboZenData.UNEXPLAINED_KWH,
                 billingDays = 61,
                 referencePeriodLabel = DemoReciboZenData.PERIOD_LABEL,
-                selectedFilterIndex = 0,
+                selectedSpaceId = null,
+                selectedSort = ApplianceSort.COST,
             ),
             onProfileClick = {},
-            onFilterSelected = {},
+            onSpaceSelected = {},
+            onSortSelected = {},
             onApplianceClick = {},
             onEditUsageClick = {},
             onUnidentifiedClick = {},

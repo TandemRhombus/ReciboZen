@@ -2,9 +2,11 @@
 <resources>
     <!-- ═══════ Plan (bottom-nav tab root) ═══════ -->
     <string name="plan_headline">Plan</string>
-    <string name="plan_subtitle">Sugerencias, lo que ya estás siguiendo y lo que ya se comprobó</string>
+    <string name="plan_subtitle">Qué hacer para gastar menos, con tus propios aparatos</string>
     <string name="plan_empty_title">Aún no podemos crear un plan</string>
-    <string name="plan_empty_body">Necesitamos un recibo real y al menos una lectura posterior, además de los aparatos que tú agregues. No mostraremos recomendaciones precargadas como si fueran tuyas.</string>
+    <string name="plan_empty_body">Agrega los aparatos de tu casa y aquí te decimos por dónde empezar.</string>
+    <string name="plan_empty_no_actions_body">Con lo que registraste no encontramos ahorros claros. Agrega más aparatos o revisa sus horas de uso.</string>
+    <string name="plan_empty_add_appliances">Agregar mis aparatos</string>
 
     <string name="plan_summary_eyebrow">Con lo que llevas en tu plan cerrarías cerca de</string>
     <string name="plan_summary_amount">$%1$d</string>
@@ -18,13 +20,17 @@
     <string name="plan_summary_goal_label">Meta $%1$d</string>
     <string name="plan_summary_no_change_label">Sin cambios $%1$d</string>
 
-    <string name="plan_suggestions_title">Sugerencias para ti</string>
+    <string name="plan_suggestions_title">Qué puedes hacer</string>
+    <string name="plan_suggestions_subtitle">%1$d acciones · %2$d en seguimiento · $%3$d menos en la proyección</string>
+    <string name="plan_action_no_projection_effect">Esta no cambia el pronóstico todavía: el efecto aparecerá en tus próximas lecturas.</string>
+    <string name="plan_action_follow">Darle seguimiento</string>
     <string name="plan_chip_suggested">Sugerencia</string>
     <string name="plan_chip_tracking">En seguimiento</string>
-    <string name="plan_chip_verified">Resultado comprobado</string>
-    <string name="plan_action_meta">Ahorro estimado: %1$s · Esfuerzo %2$s · Confianza %3$s</string>
+    <string name="plan_action_meta">Ahorro estimado %1$s · Esfuerzo %2$s · Confianza %3$s</string>
+    <string name="plan_action_meta_no_savings">Esfuerzo %1$s · Confianza %2$s</string>
+    <string name="plan_action_source">Guía oficial: %1$s</string>
+    <string name="plan_action_open_appliance">Ver el aparato</string>
     <string name="plan_tracking_since">En seguimiento desde %1$s</string>
-    <string name="plan_verified_since">En seguimiento desde el %1$s.</string>
     <string name="plan_action_add">Agregar a mi plan</string>
     <string name="plan_action_manage">Administrar</string>
     <string name="plan_manage_dialog_title">Administrar sugerencia</string>
@@ -43,7 +49,7 @@
     <string name="plan_dac_link_action">Ver el detalle →</string>
 
     <string name="plan_solar_link_title">Preestudio solar</string>
-    <string name="plan_solar_link_description">Explora escenarios solares basados en tu historial real. Los resultados se marcarán como preliminares hasta contar con datos suficientes.</string>
+    <string name="plan_solar_link_description">Escenarios solares con tu historial real. Se marcan como preliminares si faltan datos.</string>
     <string name="plan_solar_link_action">Ver escenarios →</string>
 
     <string name="plan_balance_link_title">Balance de consumo</string>
@@ -56,7 +62,7 @@
     <string name="balance_explained_label">Explicado %1$d kWh</string>
     <string name="balance_unidentified_label">Sin identificar %1$d kWh</string>
     <string name="balance_explained_body">El %1$d%% restante podría venir de aparatos todavía no registrados, variaciones de uso o estimaciones incompletas. Tu medidor observó %2$d kWh en el periodo.</string>
-    <string name="balance_partial_window_note">Estas cifras corresponden a los %1$d días medidos hasta hoy, no al recibo completo de %2$d días. El consumo de tus aparatos se ajustó proporcionalmente a esos días.</string>
+    <string name="balance_partial_window_note">Son los %1$d días medidos hasta hoy, no el recibo completo de %2$d días.</string>
     <string name="balance_appliances_over_explain">Tus aparatos declaran más consumo del que midió el medidor en estos días. Revisa las horas de uso: probablemente estén sobreestimadas.</string>
     <string name="balance_explained_body_pending">Importa un recibo o registra dos lecturas para comparar el consumo total contra los aparatos agregados.</string>
     <string name="balance_review_remaining_action">Revisar consumo restante</string>
@@ -66,12 +72,13 @@
 
     <string name="balance_overnight_title">Prueba de una noche</string>
     <string name="balance_overnight_body">Registra una lectura antes de dormir y otra al despertar. Comparamos lo observado con lo esperado.</string>
-    <string name="balance_overnight_observed">Última prueba: tu hogar consumió %1$.1f kWh durante la noche.</string>
-    <string name="balance_overnight_expected">Esperábamos %1$.1f kWh de los aparatos registrados.</string>
-    <string name="balance_overnight_unexplained">Quedan cerca de %1$.1f kWh sin explicar.</string>
+    <string name="balance_overnight_observed">Anoche tu casa gastó %1$.1f kWh en %2$d horas: unos %3$d W constantes.</string>
+    <string name="balance_overnight_expected">Tus aparatos registrados justifican %1$.1f kWh (%2$d W).</string>
+    <string name="balance_overnight_unexplained">Sobran %1$.1f kWh sin explicar. Busca algo encendido que no tengas registrado.</string>
+    <string name="balance_overnight_matches">Cuadra con lo registrado. No hay consumo fantasma a la vista.</string>
     <string name="balance_overnight_footnote">Puede ser un aparato que no tenemos registrado. Si la diferencia continúa, puedes consultar a un electricista.</string>
     <string name="balance_overnight_action">Iniciar la prueba</string>
-    <string name="balance_overnight_no_result">Todavía no existe una prueba nocturna guardada; no mostraremos resultados de ejemplo.</string>
+    <string name="balance_overnight_no_result">Registra una lectura antes de dormir y otra al despertar para medirlo.</string>
 
     <!-- ═══════ Promedio de consumo (DAC) ═══════ -->
     <string name="dac_title">Prevención DAC</string>
@@ -82,15 +89,9 @@
     <string name="dac_headline_normal">Tu promedio tiene un margen saludable</string>
     <string name="dac_headline_watch">Tu promedio comienza a acercarse al límite DAC</string>
     <string name="dac_headline_risk">Tu promedio está cerca del límite DAC</string>
-    <string name="dac_headline_near">Tu promedio está cerca del límite de referencia</string>
-    <string name="dac_headline_under">Tu promedio está por debajo del límite de referencia</string>
     <string name="dac_rolling_average_label">Promedio móvil</string>
     <string name="dac_reference_limit_label">Límite de referencia</string>
     <string name="dac_kwh_per_month">%1$d kWh/mes</string>
-    <string name="dac_over_limit_prefix">Estás unos </string>
-    <string name="dac_over_limit_bold">%1$d kWh/mes por encima</string>
-    <string name="dac_over_limit_suffix">. Bajar cerca de %1$d kWh este periodo te regresaría debajo de la referencia.</string>
-    <string name="dac_under_limit">Vas %1$d kWh/mes por debajo de la referencia de tu tarifa.</string>
     <string name="dac_margin_below">Tu margen estimado es de %1$d kWh por mes antes del límite.</string>
     <string name="dac_margin_above">La tendencia estimada está %1$d kWh por mes por encima del límite.</string>
     <string name="dac_annual_equivalent">En tarifa %2$s, el límite equivale a %1$d kWh en 12 meses. No es un año calendario fijo: CFE usa una ventana móvil.</string>
@@ -108,15 +109,14 @@
     <string name="dac_tariff_selected">Tarifa %1$s · tu suministro</string>
     <string name="dac_tariff_plain">Tarifa %1$s</string>
     <string name="dac_tariff_limit_pair">%1$s kWh/mes · %2$s kWh/12 meses</string>
-    <string name="dac_limits_strictly_above">La reclasificación corresponde cuando el promedio mensual móvil es superior al límite; estar exactamente en el límite no significa estar por encima.</string>
+    <string name="dac_limits_strictly_above">Solo te reclasifican si el promedio pasa el límite. Estar justo en el límite todavía no cuenta.</string>
     <string name="dac_history_complete">Historial cubierto: aproximadamente %1$d de 12 meses. Ya podemos evaluar la tendencia anual.</string>
     <string name="dac_history_incomplete">Historial cubierto: aproximadamente %1$d de 12 meses. Por ahora es una tendencia, no una predicción de reclasificación.</string>
-    <string name="dac_footnote">Periodos considerados: %1$s · confianza media. Esta es una orientación: la clasificación final depende de las reglas aplicables y de la información de tu recibo.</string>
 
     <string name="dac_opportunities_title">Lo que más podría ayudarte</string>
     <string name="dac_opportunity_dynamic">• %1$s: alrededor de %2$d kWh/mes configurados. Revisa sus horas antes de recortar.</string>
     <string name="dac_next_bill_title">Tu próximo recibo</string>
-    <string name="dac_next_bill_need_history">Importa recibos que cubran cerca de 12 meses para calcular cuánto puedes consumir en el siguiente periodo sin rebasar el promedio móvil.</string>
+    <string name="dac_next_bill_need_history">Importa recibos de cerca de 12 meses para saber cuánto puedes consumir sin pasar el límite.</string>
     <string name="dac_next_bill_need_reading">Registra una lectura posterior al último recibo para comparar tu ritmo actual con el máximo recomendado.</string>
     <string name="dac_next_bill_risk">A este ritmo proyectamos %1$d kWh. Si el recibo cierra así, tu promedio podría superar el límite. Para mantenerte debajo, procura cerrar en %2$d kWh o menos.</string>
     <string name="dac_next_bill_ok">Tu proyección es de %1$d kWh y el máximo recomendado es %2$d kWh para este siguiente periodo.</string>
@@ -124,29 +124,26 @@
     <string name="dac_next_bill_rolling_ok">Con esa proyección, la nueva ventana quedaría cerca de %1$d de %2$d kWh, con unos %3$d kWh de margen.</string>
     <string name="dac_next_bill_rolling_over">Con esa proyección, la nueva ventana quedaría cerca de %1$d de %2$d kWh: aproximadamente %3$d kWh por encima.</string>
     <string name="dac_next_bill_expiring">Cuando cierre el próximo recibo, aproximadamente %1$d kWh antiguos saldrán del año móvil y permanecerán %2$d kWh antes de sumar el nuevo consumo.</string>
-    <string name="dac_prediction_disclaimer">Es una prevención calculada con tus recibos. CFE determina la clasificación final con el historial facturado y la tarifa asignada a tu localidad.</string>
+    <string name="dac_prediction_disclaimer">Es una prevención con tus recibos. La clasificación final la determina CFE.</string>
     <string name="dac_already_title">Tu recibo ya indica tarifa DAC</string>
-    <string name="dac_already_body">La salida se evalúa con el promedio móvil de los últimos 12 meses y el límite doméstico de tu localidad. ReciboZen calcula la meta; CFE confirma la reclasificación final.</string>
+    <string name="dac_already_body">La salida se mide con tu promedio de los últimos 12 meses. Nosotros calculamos la meta; CFE confirma.</string>
     <string name="dac_exit_reference_prompt">¿Qué tarifa doméstica tenía este suministro antes de DAC?</string>
-    <string name="dac_exit_need_history">La tarifa de referencia ya está configurada. Importa recibos que cubran aproximadamente 12 meses para calcular una meta de salida sin asumir que el consumo faltante fue cero.</string>
-    <string name="dac_exit_below_target">Tu promedio estimado es %1$d kWh/mes, por debajo del límite de %2$d de la tarifa %3$s. Mantén los siguientes cierres debajo de la meta y confirma la reclasificación con CFE.</string>
+    <string name="dac_exit_need_history">Importa recibos de cerca de 12 meses para calcular tu meta de salida sin suponer los meses que faltan.</string>
+    <string name="dac_exit_below_target">Vas en %1$d kWh/mes, debajo del límite de %2$d de la tarifa %3$s. Mantén el ritmo y confirma con CFE.</string>
     <string name="dac_exit_above_target">Aún necesitas bajar aproximadamente %1$d kWh/mes del promedio móvil para quedar debajo de %2$d, límite de la tarifa %3$s.</string>
     <string name="dac_exit_next_bill_over">Proyectamos %1$d kWh. Para avanzar hacia la salida de DAC, este recibo debería cerrar en %2$d kWh o menos: reduce al menos %3$d kWh frente a la proyección.</string>
     <string name="dac_exit_next_bill_ok">Proyectamos %1$d kWh, dentro de la meta de %2$d kWh para que la siguiente ventana móvil quede bajo el límite.</string>
     <string name="dac_exit_next_bill_limit">Para que la siguiente ventana móvil quede bajo el límite, procura cerrar este recibo en %1$d kWh o menos.</string>
     <string name="dac_exit_actions_title">Plan intensivo para salir de DAC</string>
-    <string name="dac_exit_actions_body">Prioriza primero las cargas con mayor impacto y recomendaciones respaldadas por los datos que registraste. No desconectes equipos esenciales ni comprometas refrigeración, salud o seguridad.</string>
+    <string name="dac_exit_actions_body">Empieza por las cargas de mayor impacto. No desconectes refrigeración, salud ni seguridad.</string>
     <string name="dac_exit_device_load">%1$s · cerca de %2$d kWh/mes configurados</string>
     <string name="dac_exit_measured_saving">Ahorro cuantificable estimado: %1$.1f kWh por periodo.</string>
     <string name="dac_missing_tariff_title">Configura tu tarifa doméstica</string>
-    <string name="dac_missing_tariff_body">El límite DAC depende de la tarifa asignada a tu localidad. Selecciona 1, 1A, 1B, 1C, 1D, 1E o 1F desde tu suministro, o importa un recibo.</string>
-    <string name="dac_opportunity_minisplit">· Reducir 35 minutos diarios el minisplit: −24 kWh al mes aproximadamente.</string>
-    <string name="dac_opportunity_ps5">· Configurar el reposo de la consola: −6 kWh al mes.</string>
-    <string name="dac_opportunity_unidentified">· Revisar el consumo sin identificar: hasta −30 kWh si aparece un aparato olvidado.</string>
+    <string name="dac_missing_tariff_body">El límite depende de tu tarifa. Elígela en tu suministro (1, 1A, 1B, 1C, 1D, 1E o 1F) o importa un recibo.</string>
 
     <string name="dac_tariff_title">Rango de este periodo · %1$s</string>
-    <string name="dac_tariff_unavailable">Importa un recibo con su desglose legible para mostrar estos tramos con las cuotas reales. No usaremos una tarifa genérica como si fuera la tuya.</string>
-    <string name="dac_tariff_effective_bill">El importe proyectado usa el costo efectivo total por kWh del último recibo DAC porque su desglose no permite reconstruir todas las cuotas. Al importar un recibo DAC más reciente, esta referencia se actualiza automáticamente.</string>
+    <string name="dac_tariff_unavailable">Importa un recibo con el desglose legible para ver estos tramos con tus cuotas reales.</string>
+    <string name="dac_tariff_effective_bill">El costo por kWh viene de tu último recibo DAC. Se actualiza cuando importes uno más reciente.</string>
     <string name="dac_tier_basic">Básico · %1$d kWh</string>
     <string name="dac_tier_intermediate">Intermedio · %1$d kWh</string>
     <string name="dac_tier_excess">Excedente · desde %1$d kWh</string>

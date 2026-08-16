@@ -28,6 +28,7 @@ import com.recibozen.app.data.local.ReciboZenDatabase
 import com.recibozen.app.data.local.BillEntity
 import com.recibozen.app.data.local.BillChargeEntity
 import com.recibozen.app.data.local.BillHistorySummaryEntity
+import com.recibozen.app.data.local.TariffRateReferenceEntity
 import com.recibozen.app.core.importer.ParsedCfeBill
 import com.recibozen.app.core.importer.BillImportResult
 import com.recibozen.app.core.model.EntitlementPolicy
@@ -35,10 +36,12 @@ import com.recibozen.app.core.security.PremiumAccessStore
 import com.recibozen.app.core.notifications.ReadingReminderScheduler
 import com.recibozen.app.core.notifications.ReadingReminderStore
 import com.recibozen.app.demo.data.DemoReciboZenData
+import com.recibozen.app.core.calculation.TariffBlock
 import com.recibozen.app.core.calculation.TariffCalibration
 import com.recibozen.app.core.calculation.TariffCatalog
 import com.recibozen.app.demo.repository.DemoReciboZenRepository
 import com.recibozen.app.demo.repository.ReciboZenSessionState
+import com.recibozen.app.demo.repository.RemoteTariffReference
 import com.recibozen.app.demo.repository.TariffCalibrationState
 import java.util.Locale
 import java.util.UUID
@@ -175,6 +178,23 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
                     }
             }
 
+            // CFE's published catalog, synced daily by TariffSyncWorker. It is
+            // the fallback when no bill has been imported yet, so a household
+            // without a PDF is not priced with the built-in generic blocks.
+            launch {
+                mutableSession
+                    .map { TariffCatalog.normalize(it.tariff) }
+                    .distinctUntilChanged()
+                    .flatMapLatest { tariffCode ->
+                        if (tariffCode.isBlank()) {
+                            kotlinx.coroutines.flow.flowOf(emptyList())
+                        } else {
+                            dao.observeTariffReference(tariffCode)
+                        }
+                    }
+                    .collect { rows -> mutableRemoteTariffReference.value = remoteReferenceFrom(rows) }
+            }
+
             // Start after hydration so merely opening the app never overwrites
             // a durable state with defaults.
             mutableSession.drop(1).collect { state ->
@@ -194,6 +214,45 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
         }
         val projection = if (hasReadingAfterLatestBill) super.billHistory(state).lastOrNull { it.isProjected } else null
         return imported + listOfNotNull(projection)
+    }
+
+    /**
+     * Turns the synced CFE rows into progressive blocks.
+     *
+     * Rows arrive grouped by season. A seasonal tariff therefore carries two
+     * sets and the applicable one depends on the locality's summer start, which
+     * only the bill states; [RemoteTariffReference.isSeasonAmbiguous] lets the
+     * estimate refuse to pick one instead of billing the wrong season silently.
+     */
+    private fun remoteReferenceFrom(rows: List<TariffRateReferenceEntity>): RemoteTariffReference? {
+        if (rows.isEmpty()) return null
+        val seasons = rows.map { it.season }.distinct()
+        val season = seasons.singleOrNull() ?: return RemoteTariffReference(
+            tariffCode = rows.first().tariffCode,
+            effectiveYearMonth = rows.first().effectiveYearMonth,
+            season = seasons.first { it != "NONE" },
+            blocks = emptyList(),
+            fixedChargeMxn = null,
+            sourceUrl = rows.first().sourceUrl,
+        )
+        val blocks = rows
+            .sortedBy { it.blockOrder }
+            .mapNotNull { row -> row.rateMxnPerKwh?.let { rate -> TariffBlock(limitKwh = row.limitKwh, rateMxnPerKwh = rate) } }
+        // A progressive table whose thresholds do not grow is corrupt: pricing
+        // with it would silently charge the wrong tier.
+        val ascending = blocks
+            .mapNotNull { it.limitKwh }
+            .let { limits -> limits == limits.sorted() && limits.distinct().size == limits.size }
+        val openEnded = blocks.lastOrNull()?.limitKwh == null
+        if (blocks.isEmpty() || !ascending || !openEnded) return null
+        return RemoteTariffReference(
+            tariffCode = rows.first().tariffCode,
+            effectiveYearMonth = rows.first().effectiveYearMonth,
+            season = season,
+            blocks = blocks,
+            fixedChargeMxn = rows.firstNotNullOfOrNull { it.fixedChargeMxn },
+            sourceUrl = rows.firstNotNullOfOrNull { it.sourceUrl },
+        )
     }
 
     /**
@@ -521,6 +580,7 @@ internal object SessionJsonCodec {
     fun encode(state: ReciboZenSessionState): String = JSONObject().apply {
         put("schemaVersion", CURRENT_SCHEMA_VERSION)
         put("onboardingCompleted", state.onboardingCompleted)
+        put("tutorialCompleted", state.tutorialCompleted)
         put("themeMode", state.themeMode.name)
         put("userName", state.userName)
         put("householdName", state.householdName)
@@ -582,7 +642,10 @@ internal object SessionJsonCodec {
         put("simulatorScenarioName", state.simulatorScenarioName)
         put("simulatorScenarioWatts", state.simulatorScenarioWatts)
         put("simulatorScenarioHoursPerWeek", state.simulatorScenarioHoursPerWeek)
-        put("planStatuses", JSONObject(state.planActions.associate { it.id to it.status.name }))
+        put("trackedActionIds", JSONArray(state.trackedActionIds.toList()))
+        put("goalMxnByService", JSONObject(state.goalMxnByService))
+        put("meterTypeByService", JSONObject(state.meterTypeByService))
+        put("locationByService", JSONObject(state.locationByService))
         put("dialAngles", JSONArray(state.dialAngles))
         put("dialSelectedIndex", state.dialSelectedIndex)
         put("dialVisitedFaces", JSONArray(state.dialVisitedFaces.sorted()))
@@ -620,7 +683,6 @@ internal object SessionJsonCodec {
             val hours = if (migrateFixtureState) emptyMap() else {
                 json.optJSONObject("applianceHours").toIntMap(defaults.applianceHoursPerWeek)
             }
-            val statuses = json.optJSONObject("planStatuses")
             val readingsJson = json.optJSONArray("readings")
             val decodedReadings = readingsJson.toReadings(defaults.readings).filterNot { reading ->
                 migrateFixtureState && reading.timestampEpochMillis == null
@@ -637,6 +699,7 @@ internal object SessionJsonCodec {
                 // Version 1 never collected a real profile and silently injected
                 // design fixtures. Run the honest onboarding once after migration.
                 onboardingCompleted = if (migrateFixtureState) false else json.optBoolean("onboardingCompleted", false),
+                tutorialCompleted = if (migrateFixtureState) false else json.optBoolean("tutorialCompleted", false),
                 themeMode = enumValueOr(json.optString("themeMode"), defaults.themeMode),
                 userName = fixtureOrEmpty("userName", DemoReciboZenData.USER_NAME),
                 householdName = fixtureOrEmpty("householdName", DemoReciboZenData.HOUSEHOLD_NAME),
@@ -672,9 +735,13 @@ internal object SessionJsonCodec {
                     "simulatorScenarioHoursPerWeek",
                     defaults.simulatorScenarioHoursPerWeek,
                 ).coerceIn(0.0, 168.0),
-                planActions = defaults.planActions.map { action ->
-                    action.copy(status = enumValueOr(statuses?.optString(action.id), action.status))
-                },
+                goalMxnByService = json.optJSONObject("goalMxnByService").toIntMap(defaults.goalMxnByService),
+                meterTypeByService = json.optJSONObject("meterTypeByService").toStringMap(),
+                locationByService = json.optJSONObject("locationByService").toStringMap(),
+                trackedActionIds = json.optJSONArray("trackedActionIds")
+                    ?.let { array -> (0 until array.length()).mapNotNull { array.optString(it).takeIf(String::isNotBlank) } }
+                    ?.toSet()
+                    ?: defaults.trackedActionIds,
                 dialAngles = json.optJSONArray("dialAngles").toFloatList(defaults.dialAngles),
                 dialSelectedIndex = json.optInt("dialSelectedIndex", defaults.dialSelectedIndex).coerceIn(0, 4),
                 dialVisitedFaces = json.optJSONArray("dialVisitedFaces").toIntList(defaults.dialVisitedFaces.toList()).toSet(),
@@ -699,6 +766,13 @@ internal object SessionJsonCodec {
     }
 
     private const val CURRENT_SCHEMA_VERSION = 4
+
+    private fun JSONObject?.toStringMap(): Map<String, String> {
+        if (this == null) return emptyMap()
+        return keys().asSequence().mapNotNull { key ->
+            optString(key).takeIf { it.isNotBlank() }?.let { key to it }
+        }.toMap()
+    }
 
     private inline fun <reified T : Enum<T>> enumValueOr(raw: String?, fallback: T): T =
         enumValues<T>().firstOrNull { it.name == raw?.uppercase(Locale.ROOT) } ?: fallback

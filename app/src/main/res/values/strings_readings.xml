@@ -54,7 +54,6 @@
 
     <!-- Ajustar manecillas (16) -->
     <string name="reading_dial_headline">Copia la posición de cada manecilla</string>
-    <string name="reading_dial_subtitle">No necesitas saber interpretar el medidor. Solo coloca cada manecilla como la ves.</string>
     <string name="reading_dial_subtitle_dynamic">Tu medidor tiene %1$d carátulas. Coloca cada manecilla como la ves; mostraremos exactamente esa cantidad.</string>
     <string name="reading_dial_previous">Anterior</string>
     <string name="reading_dial_next">Siguiente</string>
@@ -66,10 +65,8 @@
     <string name="reading_dial_unsure_high">Ya pasó el número</string>
     <string name="reading_dial_unsure_reads_as">se lee %1$d</string>
     <string name="reading_dial_interpreted_label">Lectura interpretada</string>
-    <string name="reading_dial_interpreted_hint">Comprueba que las cinco manecillas se parezcan a las de tu medidor.</string>
     <string name="reading_dial_interpreted_hint_dynamic">Comprueba que las %1$d manecillas se parezcan a las de tu medidor.</string>
     <string name="reading_dial_save">Guardar lectura</string>
-    <string name="reading_dial_save_helper">Revisa las 5 carátulas para guardar.</string>
     <string name="reading_dial_save_helper_dynamic">Revisa las %1$d carátulas para guardar.</string>
 
     <!-- Confirmar (17) -->
@@ -113,9 +110,13 @@
     <string name="how_we_calculate_pending_label">Datos pendientes.</string>
     <string name="how_we_calculate_pending_body">Agrega aparatos, importa un recibo o registra dos lecturas para crear una estimación.</string>
     <string name="how_we_calculate_two_forecasts_title">Por qué aparecen dos estimaciones</string>
-    <string name="how_we_calculate_two_forecasts_body">El medidor proyecta %1$d kWh y los aparatos registrados %2$d kWh. No se suman: el medidor ya incluye todos los equipos. La comparación revela cuánto consumo falta por identificar o qué horarios conviene revisar.</string>
+    <string name="how_we_calculate_two_forecasts_body">Tu medidor apunta a %1$d kWh y tus aparatos explican %2$d kWh. No se suman: el medidor ya los incluye. La diferencia es lo que falta por identificar.</string>
+    <string name="how_we_calculate_rates_title">De dónde salen las tarifas</string>
+    <string name="how_we_calculate_rates_bill">De tu último recibo. Es lo más cercano a lo que te cobran, porque conserva tu localidad y temporada.</string>
+    <string name="how_we_calculate_rates_catalog">Del catálogo publicado por CFE. Es oficial, pero no incluye ajustes propios de tu localidad.</string>
+    <string name="how_we_calculate_rates_generic">Todavía no tenemos tus tarifas, así que el monto es un orden de magnitud. Importa un recibo para afinarlo.</string>
     <string name="how_we_calculate_assumptions_title">Qué supone y qué no</string>
-    <string name="how_we_calculate_assumptions_body">• Con lecturas suficientes, el ritmo del medidor es la referencia principal.\n• El inventario genera una segunda estimación con potencia, horario y reposo; nunca se suma encima del medidor.\n• Cuando no confirmas el modelo de un aparato usamos una potencia típica de su categoría.\n• El motor usa las tarifas extraídas de tu recibo cuando están disponibles y una referencia genérica en caso contrario.\n• No es una cifra oficial y puede diferir de tu recibo.</string>
+    <string name="how_we_calculate_assumptions_body">• Si hay lecturas, mandan tus lecturas.\n• Tus aparatos dan una segunda cuenta aparte, nunca sumada a la anterior.\n• Si no eliges modelo, usamos un consumo típico de esa categoría.\n• Las tarifas salen de tu recibo; si no hay recibo, del catálogo de CFE.\n• Es una estimación y puede diferir de tu recibo.</string>
     <string name="how_we_calculate_glossary_kwh_body">mide cuánta energía usaste.</string>
     <string name="how_we_calculate_glossary_kw_body">es la potencia de un aparato.</string>
     <string name="how_we_calculate_glossary_kwp_body">es la potencia de un sistema solar.</string>

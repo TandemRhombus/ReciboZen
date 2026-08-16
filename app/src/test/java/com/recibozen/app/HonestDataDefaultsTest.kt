@@ -92,4 +92,20 @@ class HonestDataDefaultsTest {
         assertEquals(ReadingMethod.PDF, decoded.readings.single().method)
         assertEquals(12_345, decoded.lastConfirmedReadingKwh)
     }
+
+    @Test
+    fun theGuidedTourIsPendingOnAFreshInstallAndSurvivesARestart() {
+        val repository = DemoReciboZenRepository()
+        assertFalse(repository.session.value.tutorialCompleted)
+
+        repository.setTutorialCompleted(true)
+        assertTrue(repository.session.value.tutorialCompleted)
+
+        val decoded = SessionJsonCodec.decode(SessionJsonCodec.encode(repository.session.value))
+        assertTrue("el tutorial no debe repetirse tras reiniciar", decoded.tutorialCompleted)
+
+        // Replayed from Perfil.
+        repository.setTutorialCompleted(false)
+        assertFalse(repository.session.value.tutorialCompleted)
+    }
 }

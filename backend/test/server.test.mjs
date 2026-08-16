@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
-import { buildRequestHandler } from "../src/server.mjs";
+import { buildRequestHandler, RateLimiter } from "../src/server.mjs";
 import { createServer } from "node:http";
 
 const entitlementKey = {
@@ -34,14 +34,59 @@ test("health endpoint exposes no operational secrets", async () => {
   assert.ok(response.headers.get("x-request-id"));
 });
 
-test("readiness distinguishes process health from billing configuration", async () => {
+test("readiness reports not_ready when no data service can answer", async () => {
   const response = await fetch(`${baseUrl}/readyz`);
   assert.equal(response.status, 503);
   assert.deepEqual(await response.json(), {
     status: "not_ready",
     entitlementKeyConfigured: true,
     playBillingConfigured: false,
+    tariffCatalogAvailable: false,
+    solarResourceConfigured: false,
   });
+});
+
+test("readiness stays ready when only premium activation is unconfigured", async () => {
+  const readyHandler = buildRequestHandler({
+    entitlementKey,
+    logger,
+    tariffCatalog: { current: () => ({ schemaVersion: 1 }) },
+  });
+  const readyServer = createServer(readyHandler);
+  await new Promise((resolve) => readyServer.listen(0, "127.0.0.1", resolve));
+  try {
+    const url = `http://127.0.0.1:${readyServer.address().port}/readyz`;
+    const response = await fetch(url);
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.status, "ready");
+    assert.equal(body.playBillingConfigured, false);
+    assert.equal(body.tariffCatalogAvailable, true);
+  } finally {
+    await new Promise((resolve, reject) => readyServer.close((error) => error ? reject(error) : resolve()));
+  }
+});
+
+test("public solar route refuses a client that exceeds its per-minute budget", async () => {
+  const solarResource = { forPoint: async () => ({ schemaVersion: 1, monthlyDailyAverage: new Array(12).fill(5) }) };
+  const limitedServer = createServer(buildRequestHandler({
+    entitlementKey,
+    logger,
+    solarResource,
+    rateLimiter: new RateLimiter({ windowMs: 60_000 }),
+  }));
+  await new Promise((resolve) => limitedServer.listen(0, "127.0.0.1", resolve));
+  try {
+    const url = `http://127.0.0.1:${limitedServer.address().port}/v1/solar/resource/20.97/-89.62`;
+    const statuses = [];
+    for (let attempt = 0; attempt < 22; attempt += 1) {
+      statuses.push((await fetch(url)).status);
+    }
+    assert.equal(statuses.filter((value) => value === 200).length, 20);
+    assert.ok(statuses.includes(429));
+  } finally {
+    await new Promise((resolve, reject) => limitedServer.close((error) => error ? reject(error) : resolve()));
+  }
 });
 
 test("well-known endpoint publishes only the public trust anchor", async () => {

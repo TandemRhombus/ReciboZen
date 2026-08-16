@@ -1,6 +1,10 @@
 package com.recibozen.app.demo.repository
 
 import com.recibozen.app.core.designsystem.AppThemeMode
+import com.recibozen.app.core.calculation.ApplianceAdviceEngine
+import com.recibozen.app.core.calculation.ApplianceAdviceEvidence
+import com.recibozen.app.core.calculation.ApplianceAdvicePriority
+import com.recibozen.app.core.calculation.BillingPeriodTimeline
 import com.recibozen.app.core.calculation.TariffEngine
 import com.recibozen.app.core.model.Appliance
 import com.recibozen.app.core.model.ApplianceDataSource
@@ -8,6 +12,9 @@ import com.recibozen.app.core.model.ApplianceUsageModel
 import com.recibozen.app.core.model.BillPeriod
 import com.recibozen.app.core.model.HistoryReadingEntry
 import com.recibozen.app.core.model.HistoryUnit
+import com.recibozen.app.core.model.ConfidenceLevel
+import com.recibozen.app.core.model.EffortLevel
+import com.recibozen.app.core.model.PlanAction
 import com.recibozen.app.core.model.PlanActionStatus
 import com.recibozen.app.core.model.ReadingMethod
 import com.recibozen.app.core.model.ElectricServiceValidator
@@ -20,6 +27,7 @@ import com.recibozen.app.core.model.HouseSpaceDefaults
 import com.recibozen.app.core.importer.ParsedCfeBill
 import com.recibozen.app.core.importer.BillImportResult
 import com.recibozen.app.core.components.MeterDialMath
+import com.recibozen.app.core.calculation.TariffCalibration
 import com.recibozen.app.core.calculation.TariffCatalog
 import com.recibozen.app.demo.data.DemoReciboZenData
 import kotlin.math.roundToInt
@@ -48,6 +56,39 @@ open class DemoReciboZenRepository : ReciboZenRepository {
     override val tariffCalibration: StateFlow<TariffCalibrationState?> = mutableTariffCalibration.asStateFlow()
 
     /**
+     * CFE's published rates for the active tariff, synced by the backend and
+     * stored locally. Empty until the first successful sync; the app keeps
+     * working from the bill or the generic blocks meanwhile.
+     */
+    protected val mutableRemoteTariffReference = MutableStateFlow<RemoteTariffReference?>(null)
+
+    /**
+     * Which of the three sources priced the current estimate. Screens read it
+     * so a generic order of magnitude is never presented like a real rate.
+     */
+    override fun tariffRateOrigin(): TariffRateOrigin {
+        val currentTariff = TariffCatalog.normalize(mutableSession.value.tariff)
+        val calibration = mutableTariffCalibration.value
+        return when {
+            calibration?.isCalibrated == true &&
+                TariffCatalog.normalize(calibration.snapshot.tariffCode) == currentTariff -> TariffRateOrigin.BILL
+            usableRemoteReference(currentTariff) != null -> TariffRateOrigin.REMOTE_CATALOG
+            else -> TariffRateOrigin.GENERIC
+        }
+    }
+
+    /**
+     * The synced catalog is only usable when it matches the active tariff and
+     * the season is unambiguous. A seasonal tariff needs the locality's summer
+     * start, which only the bill carries, so guessing a season here would bill
+     * the wrong rate in silence.
+     */
+    private fun usableRemoteReference(currentTariff: String): RemoteTariffReference? =
+        mutableRemoteTariffReference.value
+            ?.takeIf { TariffCatalog.normalize(it.tariffCode) == currentTariff }
+            ?.takeIf { it.blocks.isNotEmpty() && !it.isSeasonAmbiguous }
+
+    /**
      * Never price DAC with the generic 1C blocks. A legible DAC breakdown wins;
      * otherwise the latest DAC bill supplies an all-in effective rate that is
      * refreshed at every import. It is an estimate, but it preserves the actual
@@ -59,6 +100,13 @@ open class DemoReciboZenRepository : ReciboZenRepository {
         if (calibration?.isCalibrated == true &&
             TariffCatalog.normalize(calibration.snapshot.tariffCode) == currentTariff
         ) return calibration.snapshot.engine()
+        usableRemoteReference(currentTariff)?.let { reference ->
+            return TariffEngine(
+                blocks = reference.blocks,
+                fixedChargeMxn = reference.fixedChargeMxn ?: TariffCalibration.DEFAULT_FIXED_CHARGE_MXN,
+                taxRate = TariffCalibration.DEFAULT_TAX_RATE,
+            )
+        }
         if (currentTariff == "DAC") {
             val latest = mutableImportedBillHistory.value
                 .filter { TariffCatalog.normalize(it.tariffCode.orEmpty()) == "DAC" }
@@ -143,7 +191,12 @@ open class DemoReciboZenRepository : ReciboZenRepository {
                 } else if (isScheduled && appliance.hoursPerWeek?.let { it > 0 } == true) {
                     val ratio = hours.toDouble() / appliance.hoursPerWeek.coerceAtLeast(1)
                     unitActiveKwh = storedUnitKwh * periodScale * ratio
-                    unitStandbyKwh = 0.0
+                    // Standby was being dropped whenever the entry had a
+                    // schedule but no rated power, so a TV or console with idle
+                    // watts configured lost that consumption without saying so.
+                    unitStandbyKwh = appliance.standbyWatts?.takeIf { appliance.standbyEnabled }?.let { standbyWatts ->
+                        standbyWatts / 1_000.0 * (168 - hours).coerceAtLeast(0) * referenceDays / 7.0
+                    } ?: 0.0
                 } else {
                     unitActiveKwh = (storedUnitKwh * periodScale).coerceAtLeast(0.0)
                     unitStandbyKwh = 0.0
@@ -170,7 +223,7 @@ open class DemoReciboZenRepository : ReciboZenRepository {
         if (!energy.hasUsageEvidence) {
             return BillProjection(0, 0, 0, false, 0f, hasUsageEvidence = false)
         }
-        val cuts = state.planActions
+        val cuts = planActions(state)
             .filter { it.status == PlanActionStatus.TRACKING }
             .sumOf { it.estimatedCutMxn }
         val projected = (energy.projectedCostMxn - cuts).coerceAtLeast(0)
@@ -221,12 +274,26 @@ open class DemoReciboZenRepository : ReciboZenRepository {
             newest.timestampEpochMillis - baseline.timestampEpochMillis
         } else 0L
         val newestEpochDay = newest?.localEpochDay()
-        val measuredDays = when {
-            latestBillEndEpochDay != null && newestEpochDay != null ->
-                (newestEpochDay - latestBillEndEpochDay).toDouble().coerceAtLeast(0.0)
+        val baselineEpochDay = baseline?.localEpochDay()
+        // The rate must be divided by the days the two readings actually cover.
+        // Using the days since the bill closed while the numerator starts at an
+        // earlier reading inflates the daily average and triggers a false
+        // "you are consuming more than recommended".
+        val intervalDays = when {
+            newestEpochDay != null && baselineEpochDay != null ->
+                (newestEpochDay - baselineEpochDay).toDouble().coerceAtLeast(0.0)
             else -> (elapsedMillis / MILLIS_PER_DAY.toDouble()).coerceAtLeast(0.0)
         }
+        // Days of the current period the newest reading already covers. When the
+        // baseline sits before the bill closed, only the part after it counts.
+        val measuredDays = when {
+            latestBillEndEpochDay != null && newestEpochDay != null ->
+                (newestEpochDay - maxOf(latestBillEndEpochDay, baselineEpochDay ?: latestBillEndEpochDay))
+                    .toDouble().coerceAtLeast(0.0)
+            else -> intervalDays
+        }
         val measuredKwh = (newest?.kwh ?: 0) - (baseline?.kwh ?: 0)
+        val measuredDailyKwh = if (intervalDays > 0.0) measuredKwh / intervalDays else 0.0
         // The two endpoints imported from a PDF describe a bill that already
         // closed; they must not be mistaken for a live reading pair. Once the
         // user records a new reading, comparing it with the PDF endpoint is
@@ -248,11 +315,17 @@ open class DemoReciboZenRepository : ReciboZenRepository {
             else -> 0
         }
         val observedKwh = when {
-            hasReliablePair -> measuredKwh
+            // Only the share of the interval that falls inside the current
+            // period. Identical to measuredKwh whenever the baseline reading
+            // sits exactly on the bill's closing date, which is the usual case.
+            hasReliablePair -> (measuredDailyKwh * observedDays).roundToInt().coerceAtLeast(0)
             latestBill != null -> latestBill.consumptionKwh
             else -> 0
         }
-        val dailyAverage = observedKwh.toDouble() / observedDays.coerceAtLeast(1)
+        val dailyAverage = when {
+            hasReliablePair -> measuredDailyKwh
+            else -> observedKwh.toDouble() / observedDays.coerceAtLeast(1)
+        }
         val meterProjectedKwh = if (hasReliablePair && billingDays > 0) {
             (dailyAverage * billingDays).roundToInt().coerceAtLeast(observedKwh)
         } else 0
@@ -290,18 +363,21 @@ open class DemoReciboZenRepository : ReciboZenRepository {
             !hasReliablePair && latestBill != null -> latestBill.amountMxn
             else -> engine.estimate(projectedKwh).totalMxn
         }
+        val asOfEpochDay = maxOf(currentEpochDay(), newestEpochDay ?: Long.MIN_VALUE)
+        // One timeline for every screen. It chains whole periods forward from
+        // the latest bill, so a bill imported months ago is never displayed as
+        // the period in progress.
+        val currentPeriod = BillingPeriodTimeline.after(
+            latestBill = latestBill,
+            fallbackBillingDays = billingDays,
+            asOfEpochDay = asOfEpochDay,
+        )
         return EnergySummary(
             observedKwh = observedKwh,
             observedDays = observedDays,
             billingDays = billingDays,
             daysRemaining = if (hasReliablePair) {
-                val estimatedEndEpochDay = latestBillEndEpochDay?.plus(billingDays)
-                if (estimatedEndEpochDay != null && newestEpochDay != null) {
-                    val asOfEpochDay = maxOf(currentEpochDay(), newestEpochDay)
-                    (estimatedEndEpochDay - asOfEpochDay).toInt().coerceAtLeast(0)
-                } else {
-                    (billingDays - observedDays).coerceAtLeast(0)
-                }
+                currentPeriod?.daysRemaining(asOfEpochDay) ?: (billingDays - observedDays).coerceAtLeast(0)
             } else 0,
             dailyAverageKwh = dailyAverage,
             projectedKwh = projectedKwh,
@@ -312,11 +388,21 @@ open class DemoReciboZenRepository : ReciboZenRepository {
             applianceProjectedKwh = applianceProjectedKwh,
             applianceProjectedCostMxn = applianceProjectedCost,
             forecastBasis = forecastBasis,
+            currentPeriod = currentPeriod,
         )
     }
 
     private companion object {
         const val MILLIS_PER_DAY = 86_400_000L
+
+        /** Enough to act on without turning the plan into a wall of cards. */
+        const val MAX_PLAN_ACTIONS = 8
+
+        /**
+         * Advice ids repeat across appliances (two TVs share the same standby
+         * tip), so the tracked id has to carry the appliance too.
+         */
+        fun planActionId(applianceId: String, adviceId: String): String = "$applianceId::$adviceId"
     }
 
     private fun HistoryReadingEntry.localEpochDay(): Long? {
@@ -480,12 +566,14 @@ open class DemoReciboZenRepository : ReciboZenRepository {
     override fun estimateCostMxn(kwh: Int): Int =
         activeTariffEngine().estimate(kwh.coerceAtLeast(0)).totalMxn
 
-    override fun activeTariffBlocks() =
-        mutableTariffCalibration.value?.takeIf {
-            it.isCalibrated && TariffCatalog.normalize(it.snapshot.tariffCode) == TariffCatalog.normalize(mutableSession.value.tariff)
-        }?.snapshot?.blocks
-            ?: if (TariffCatalog.normalize(mutableSession.value.tariff) == "DAC") emptyList()
-            else TariffEngine.DEFAULT_1C_BIMONTHLY_BLOCKS
+    override fun activeTariffBlocks(): List<com.recibozen.app.core.calculation.TariffBlock> {
+        val currentTariff = TariffCatalog.normalize(mutableSession.value.tariff)
+        mutableTariffCalibration.value
+            ?.takeIf { it.isCalibrated && TariffCatalog.normalize(it.snapshot.tariffCode) == currentTariff }
+            ?.let { return it.snapshot.blocks }
+        usableRemoteReference(currentTariff)?.let { return it.blocks }
+        return if (currentTariff == "DAC") emptyList() else TariffEngine.DEFAULT_1C_BIMONTHLY_BLOCKS
+    }
 
     override fun premiumSubject(): String = "demo-install"
 
@@ -498,7 +586,9 @@ open class DemoReciboZenRepository : ReciboZenRepository {
                 // Drop the override too, so re-adding the same appliance later
                 // starts from its own defaults instead of a stale edit.
                 applianceHoursPerWeek = state.applianceHoursPerWeek - applianceId,
-                planActions = state.planActions.filterNot { it.id.startsWith(applianceId) },
+                // Its tracked actions go with it; keeping them would subtract a
+                // saving from an appliance that no longer exists.
+                trackedActionIds = state.trackedActionIds.filterNot { it.startsWith("$applianceId::") }.toSet(),
             )
         }
     }
@@ -563,19 +653,64 @@ open class DemoReciboZenRepository : ReciboZenRepository {
     override fun togglePlanAction(id: String) {
         _session.update { state ->
             state.copy(
-                planActions = state.planActions.map { action ->
-                    if (action.id == id && action.status != PlanActionStatus.VERIFIED) {
-                        action.copy(
-                            status = if (action.status == PlanActionStatus.TRACKING) {
-                                PlanActionStatus.SUGGESTED
-                            } else {
-                                PlanActionStatus.TRACKING
-                            },
-                        )
-                    } else action
+                trackedActionIds = if (id in state.trackedActionIds) {
+                    state.trackedActionIds - id
+                } else {
+                    state.trackedActionIds + id
                 },
             )
         }
+    }
+
+    /**
+     * The savings plan, derived from the household's own inventory on every
+     * read. Persisting the generated list would freeze advice that must change
+     * when an appliance, its hours or the tariff change; only the user's
+     * decision to follow an action is durable.
+     */
+    override fun planActions(state: ReciboZenSessionState): List<PlanAction> {
+        val energy = energySummary(state)
+        val billingDays = energy.billingDays.coerceAtLeast(30)
+        val inventory = appliances(state)
+        if (inventory.isEmpty()) return emptyList()
+        val effectiveRate = if (energy.projectedKwh > 0 && energy.projectedCostMxn > 0) {
+            energy.projectedCostMxn.toDouble() / energy.projectedKwh
+        } else 0.0
+        return ApplianceAdviceEngine.rankInventory(inventory, billingDays, limit = MAX_PLAN_ACTIONS)
+            .map { ranked ->
+                val advice = ranked.advice
+                val id = planActionId(ranked.applianceId, advice.id)
+                val savingsMxn = advice.estimatedSavingsMxn
+                    ?: advice.estimatedSavingsKwh?.let { (it * effectiveRate).roundToInt() }
+                PlanAction(
+                    id = id,
+                    title = "${ranked.applianceName} · ${advice.title}",
+                    savingsRangeLabel = savingsMxn?.takeIf { it > 0 }?.let { "$$it" }.orEmpty(),
+                    effort = when (advice.priority) {
+                        ApplianceAdvicePriority.HIGH -> EffortLevel.LOW
+                        ApplianceAdvicePriority.MEDIUM -> EffortLevel.MEDIUM
+                        ApplianceAdvicePriority.LOW -> EffortLevel.HIGH
+                    },
+                    // How solid the advice is: an official model guide is not the
+                    // same thing as a generic tip for the category.
+                    confidence = when (advice.evidence) {
+                        ApplianceAdviceEvidence.MODEL -> ConfidenceLevel.HIGH
+                        ApplianceAdviceEvidence.BRAND -> ConfidenceLevel.HIGH
+                        ApplianceAdviceEvidence.DEVICE_DATA -> ConfidenceLevel.MEDIUM
+                        ApplianceAdviceEvidence.CATEGORY -> ConfidenceLevel.LOW
+                    },
+                    status = if (id in state.trackedActionIds) {
+                        PlanActionStatus.TRACKING
+                    } else {
+                        PlanActionStatus.SUGGESTED
+                    },
+                    estimatedCutMxn = savingsMxn?.coerceAtLeast(0) ?: 0,
+                    applianceId = ranked.applianceId,
+                    description = advice.description,
+                    sourceLabel = advice.sourceLabel,
+                    sourceUrl = advice.sourceUrl,
+                )
+            }
     }
 
     override fun setDialAngle(index: Int, angleDegrees: Float) {
@@ -659,12 +794,17 @@ open class DemoReciboZenRepository : ReciboZenRepository {
         _session.update { it.copy(onboardingCompleted = true, onboardingStep = 3) }
     }
 
+    override fun setTutorialCompleted(completed: Boolean) {
+        mutableSession.update { it.copy(tutorialCompleted = completed) }
+    }
+
     override fun setMeterType(meterType: String) {
         _session.update { state ->
             if (state.meterType == meterType) state else {
                 val firstFace = if (meterType.contains("4")) 1 else 0
                 state.copy(
                     meterType = meterType,
+                    meterTypeByService = state.withActiveService(state.meterTypeByService, meterType),
                     dialSelectedIndex = firstFace,
                     dialVisitedFaces = setOf(firstFace),
                     dialUnsure = false,
@@ -673,13 +813,23 @@ open class DemoReciboZenRepository : ReciboZenRepository {
         }
     }
 
+    /** Stores [value] for the active supply, or leaves the map alone if there is none yet. */
+    private fun <T> ReciboZenSessionState.withActiveService(map: Map<String, T>, value: T): Map<String, T> =
+        activeServiceId.takeIf { it.isNotBlank() }?.let { map + (it to value) } ?: map
+
     override fun updateProfile(userName: String, householdName: String, location: String, goalMxn: Int) {
-        _session.update {
-            it.copy(
+        _session.update { state ->
+            val cleanLocation = location.trim()
+            val safeGoal = goalMxn.coerceAtLeast(0)
+            state.copy(
                 userName = userName.trim(),
                 householdName = householdName.trim(),
-                location = location.trim(),
-                goalMxn = goalMxn.coerceAtLeast(0),
+                location = cleanLocation,
+                goalMxn = safeGoal,
+                // Goal and city follow the supply: switching services must not
+                // carry over the goal of the other house.
+                goalMxnByService = state.withActiveService(state.goalMxnByService, safeGoal),
+                locationByService = state.withActiveService(state.locationByService, cleanLocation),
             )
         }
     }
@@ -786,8 +936,13 @@ open class DemoReciboZenRepository : ReciboZenRepository {
 
     override fun selectElectricService(serviceId: String) {
         val service = electricServices.value.firstOrNull { it.id == serviceId && it.isActive } ?: return
-        _session.update {
-            it.copy(
+        _session.update { state ->
+            // The first switch adopts whatever was configured before the supply
+            // existed, so an upgrade to Plus never wipes the original setup.
+            val goal = state.goalMxnByService[service.id] ?: state.goalMxn
+            val meterType = state.meterTypeByService[service.id] ?: state.meterType
+            val location = state.locationByService[service.id] ?: state.location
+            state.copy(
                 activeServiceId = service.id,
                 serviceAlias = service.alias,
                 serviceNumber = service.serviceNumber,
@@ -795,6 +950,12 @@ open class DemoReciboZenRepository : ReciboZenRepository {
                 meterNumber = service.meterNumber,
                 tariff = service.tariffCode,
                 billingCycle = service.billingCycle,
+                goalMxn = goal,
+                meterType = meterType,
+                location = location,
+                goalMxnByService = state.goalMxnByService + (service.id to goal),
+                meterTypeByService = state.meterTypeByService + (service.id to meterType),
+                locationByService = state.locationByService + (service.id to location),
             )
         }
     }

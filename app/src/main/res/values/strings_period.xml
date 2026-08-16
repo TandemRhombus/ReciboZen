@@ -22,33 +22,16 @@
     <string name="period_evidence_cost">Costo estimado del consumo medido hasta hoy: $%1$d.</string>
 
     <!-- Consumo acumulado chart card -->
-    <string name="period_chart_title">Consumo acumulado del periodo</string>
-    <string name="period_chart_axis_label">%1$d kWh</string>
-    <string name="period_info_box_title">%1$s · última lectura</string>
-    <string name="period_info_observed_reading">Lectura observada: %1$s kWh</string>
-    <string name="period_info_accumulated">Consumo acumulado: %1$d kWh</string>
-    <string name="period_info_cost_to_date">Costo estimado hasta hoy: $%1$d</string>
-    <string name="period_legend_observed">Observado</string>
-    <string name="period_legend_projected">Proyectado</string>
-    <string name="period_legend_goal">Trayectoria de la meta</string>
-    <string name="period_chart_start_label">inicio</string>
-    <string name="period_chart_end_label">cierre</string>
-    <string name="period_chart_today_label">hoy</string>
-    <string name="period_selected_observed">Día %1$d · %2$d kWh observados</string>
-    <string name="period_selected_projected">Día %1$d · %2$d kWh proyectados</string>
-    <string name="period_chart_tap_hint">Toca la gráfica para revisar cualquier punto del periodo.</string>
 
     <!-- Dónde vas contra tu meta card -->
-    <string name="period_goal_progress_title">Dónde vas contra tu meta</string>
-    <string name="period_goal_label_today">Hoy %1$d</string>
-    <string name="period_goal_label_goal">Meta %1$d</string>
-    <string name="period_goal_label_projection">Proyección %1$d</string>
-    <string name="period_goal_label_surplus">Excedente %1$d</string>
-    <string name="period_goal_screen_reader_summary">Resumen para lectores de pantalla: consumo observado %1$d kWh, meta del periodo %2$d kWh, proyección al cierre %3$d kWh, inicio del rango excedente %4$d kWh.</string>
 
     <!-- Footer -->
     <string name="period_how_we_calculate">Cómo lo calculamos</string>
     <string name="period_empty_title">Aún no hay un periodo que analizar</string>
     <string name="period_empty_body">Importa un recibo o registra lecturas reales. Esta pantalla ya no rellena gráficas con datos de demostración.</string>
-    <string name="period_no_goal">Agrega una meta en tu perfil para comparar la proyección contra ella.</string>
+    <string name="period_curve_title">Cómo va tu consumo</string>
+    <string name="period_curve_subtitle">Llevas %1$d kWh en %2$d días</string>
+    <string name="period_curve_legend_real">Real</string>
+    <string name="period_curve_legend_projection">Proyección</string>
+    <string name="period_curve_legend_goal">Meta</string>
 </resources>

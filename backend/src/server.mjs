@@ -20,6 +20,62 @@ const SERVICE_VERSION = "0.1.0";
 const MAX_JSON_BYTES = 64 * 1024;
 const PRODUCT_ID_PATTERN = /^[a-z0-9._-]{1,128}$/;
 const SUBJECT_PATTERN = /^[a-zA-Z0-9._:-]{8,128}$/;
+// Both public routes reach a third party (NASA POWER) or Google Play. Without a
+// ceiling a single client can burn the upstream quota for every user.
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMITS = {
+  "/v1/solar/resource": 20,
+  "/v1/entitlements/exchange": 10,
+};
+const MAX_RATE_LIMIT_CLIENTS = 4_096;
+
+/** Fixed-window counter per client and route. Bounded on purpose. */
+export class RateLimiter {
+  constructor({ now = () => Date.now(), windowMs = RATE_LIMIT_WINDOW_MS, maxClients = MAX_RATE_LIMIT_CLIENTS } = {}) {
+    this.now = now;
+    this.windowMs = windowMs;
+    this.maxClients = maxClients;
+    this.counters = new Map();
+  }
+
+  /** True when the call is allowed. */
+  check(clientKey, route, limit) {
+    if (!limit) return true;
+    const key = `${clientKey}|${route}`;
+    const current = this.now();
+    const entry = this.counters.get(key);
+    if (!entry || current - entry.windowStart >= this.windowMs) {
+      if (this.counters.size >= this.maxClients) this.#prune(current);
+      this.counters.set(key, { windowStart: current, count: 1 });
+      return true;
+    }
+    entry.count += 1;
+    return entry.count <= limit;
+  }
+
+  #prune(current) {
+    for (const [key, entry] of this.counters) {
+      if (current - entry.windowStart >= this.windowMs) this.counters.delete(key);
+    }
+    while (this.counters.size >= this.maxClients) {
+      const oldest = this.counters.keys().next();
+      if (oldest.done) break;
+      this.counters.delete(oldest.value);
+    }
+  }
+}
+
+/**
+ * The service sits behind a Cloudflare tunnel, so the socket address is always
+ * the tunnel. Trust the forwarded address only when it is a single well-formed
+ * value; anything else falls back to the socket so a spoofed header cannot
+ * mint an unlimited number of buckets.
+ */
+function clientKeyFor(request) {
+  const forwarded = request.headers["cf-connecting-ip"];
+  if (typeof forwarded === "string" && /^[0-9a-fA-F:.]{3,45}$/.test(forwarded)) return forwarded;
+  return request.socket?.remoteAddress ?? "unknown";
+}
 
 class HttpError extends Error {
   constructor(status, code, message) {
@@ -49,6 +105,9 @@ function sendJson(response, status, body, requestId) {
     "Content-Type": "application/json; charset=utf-8",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
     "Referrer-Policy": "no-referrer",
+    // TLS terminates at the tunnel, but the header still protects any client
+    // that reaches the origin directly or through another proxy.
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
     "X-Content-Type-Options": "nosniff",
     "X-Request-Id": requestId,
   });
@@ -109,6 +168,7 @@ export function buildRequestHandler({
   tariffCatalog = null,
   solarResource = null,
   logger = console,
+  rateLimiter = new RateLimiter(),
 } = {}) {
   return async function requestHandler(request, response) {
     const requestId = randomUUID();
@@ -129,13 +189,20 @@ export function buildRequestHandler({
         return;
       }
 
+      // Readiness is about serving traffic. Premium activation is an optional
+      // capability: reporting the whole service as not_ready because Google
+      // Play is unconfigured would keep a healthy tariff/solar API out of
+      // rotation forever.
       if (request.method === "GET" && pathname === "/readyz") {
         const billingReady = Boolean(purchaseVerifier && leaseIssuer);
-        status = entitlementKey && billingReady ? 200 : 503;
+        const serving = Boolean(tariffCatalog?.current()) || Boolean(solarResource);
+        status = serving ? 200 : 503;
         sendJson(response, status, {
-          status: entitlementKey && billingReady ? "ready" : "not_ready",
+          status: serving ? "ready" : "not_ready",
           entitlementKeyConfigured: Boolean(entitlementKey),
           playBillingConfigured: billingReady,
+          tariffCatalogAvailable: Boolean(tariffCatalog?.current()),
+          solarResourceConfigured: Boolean(solarResource),
         }, requestId);
         return;
       }
@@ -170,6 +237,9 @@ export function buildRequestHandler({
       const solarMatch = /^\/v1\/solar\/resource\/(-?\d+(?:[.,]\d+)?)\/(-?\d+(?:[.,]\d+)?)$/.exec(pathname);
       if (request.method === "GET" && solarMatch) {
         if (!solarResource) throw new HttpError(503, "solar_resource_unavailable", "Solar resource provider is unavailable");
+        if (!rateLimiter.check(clientKeyFor(request), "/v1/solar/resource", RATE_LIMITS["/v1/solar/resource"])) {
+          throw new HttpError(429, "rate_limited", "Too many solar resource requests");
+        }
         try {
           const coordinate = (value) => Number(value.replace(",", "."));
           const resource = await solarResource.forPoint(coordinate(solarMatch[1]), coordinate(solarMatch[2]));
@@ -183,6 +253,9 @@ export function buildRequestHandler({
       }
 
       if (request.method === "POST" && pathname === "/v1/entitlements/exchange") {
+        if (!rateLimiter.check(clientKeyFor(request), pathname, RATE_LIMITS[pathname])) {
+          throw new HttpError(429, "rate_limited", "Too many activation attempts");
+        }
         const input = await readJson(request);
         validateExchangeRequest(input);
         if (!purchaseVerifier || !leaseIssuer) {
@@ -240,9 +313,10 @@ export function startServer({
   tariffCatalog = null,
   solarResource = null,
   logger = console,
+  rateLimiter = new RateLimiter(),
 }) {
   const server = createServer(buildRequestHandler({
-    entitlementKey, purchaseVerifier, leaseIssuer, tariffCatalog, solarResource, logger,
+    entitlementKey, purchaseVerifier, leaseIssuer, tariffCatalog, solarResource, logger, rateLimiter,
   }));
   server.headersTimeout = 5_000;
   server.requestTimeout = 10_000;

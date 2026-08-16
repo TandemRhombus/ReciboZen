@@ -82,3 +82,44 @@ test("public tariff and solar endpoints expose only normalized data", async () =
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }
 });
+
+test("solar cache stays bounded and keeps the most recently used point", async () => {
+  let upstreamCalls = 0;
+  const fetchImpl = async () => {
+    upstreamCalls += 1;
+    return {
+      ok: true,
+      json: async () => ({
+        properties: {
+          parameter: {
+            ALLSKY_SFC_SW_DWN: Object.fromEntries(
+              ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
+                .map((month) => [month, 5.5]),
+            ),
+          },
+        },
+      }),
+    };
+  };
+  const service = new SolarResourceService({ fetchImpl, maxEntries: 4 });
+
+  await service.forPoint(20.0, -89.0);
+  for (let index = 1; index <= 8; index += 1) {
+    await service.forPoint(20.0 + index, -89.0);
+    // Keep the first point warm so it is not the least recently used one.
+    await service.forPoint(20.0, -89.0);
+  }
+
+  assert.ok(service.cache.size <= 4, `cache grew to ${service.cache.size}`);
+  // The repeatedly requested point was served from cache after its first fetch.
+  assert.equal(upstreamCalls, 9);
+});
+
+test("invalid coordinates never reach the upstream provider", async () => {
+  let called = false;
+  const service = new SolarResourceService({ fetchImpl: async () => { called = true; } });
+  await assert.rejects(() => service.forPoint(95, 0), /invalid_coordinates/);
+  await assert.rejects(() => service.forPoint(0, 200), /invalid_coordinates/);
+  await assert.rejects(() => service.forPoint(Number.NaN, 0), /invalid_coordinates/);
+  assert.equal(called, false);
+});

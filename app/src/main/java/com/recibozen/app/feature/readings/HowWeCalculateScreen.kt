@@ -33,6 +33,7 @@ import com.recibozen.app.core.designsystem.RzExtraShapes
 import com.recibozen.app.core.designsystem.RzSpacing
 import com.recibozen.app.demo.repository.ReciboZenRepository
 import com.recibozen.app.demo.repository.EnergyForecastBasis
+import com.recibozen.app.demo.repository.TariffRateOrigin
 import com.recibozen.app.navigation.rzViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -53,6 +54,7 @@ data class HowWeCalculateUiState(
     val applianceProjectedKwh: Int = 0,
     val meterProjectedKwh: Int = 0,
     val forecastBasis: EnergyForecastBasis = EnergyForecastBasis.NONE,
+    val rateOrigin: TariffRateOrigin = TariffRateOrigin.GENERIC,
 )
 
 class HowWeCalculateViewModel(repository: ReciboZenRepository) : ViewModel() {
@@ -71,6 +73,7 @@ class HowWeCalculateViewModel(repository: ReciboZenRepository) : ViewModel() {
                 applianceProjectedKwh = energy.applianceProjectedKwh,
                 meterProjectedKwh = energy.meterProjectedKwh,
                 forecastBasis = energy.forecastBasis,
+                rateOrigin = repository.tariffRateOrigin(),
             )
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HowWeCalculateUiState())
@@ -149,6 +152,26 @@ fun HowWeCalculateScreen(uiState: HowWeCalculateUiState, onBack: () -> Unit) {
                         modifier = Modifier.padding(top = RzSpacing.sm),
                     )
                 }
+            }
+
+            RzCard(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    stringResource(R.string.how_we_calculate_rates_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    stringResource(
+                        when (uiState.rateOrigin) {
+                            TariffRateOrigin.BILL -> R.string.how_we_calculate_rates_bill
+                            TariffRateOrigin.REMOTE_CATALOG -> R.string.how_we_calculate_rates_catalog
+                            TariffRateOrigin.GENERIC -> R.string.how_we_calculate_rates_generic
+                        },
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = RzSpacing.sm),
+                )
             }
 
             RzCard(modifier = Modifier.fillMaxWidth()) {

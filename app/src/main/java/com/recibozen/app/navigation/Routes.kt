@@ -45,5 +45,6 @@ object Routes {
     const val Donate = "donate"
     const val ReportIssue = "report_issue"
     const val NotificationSettings = "notification_settings"
+    const val Legal = "legal"
     const val Premium = "premium"
 }

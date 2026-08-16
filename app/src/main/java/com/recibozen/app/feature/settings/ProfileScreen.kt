@@ -55,6 +55,7 @@ import com.recibozen.app.core.designsystem.RzSpacing
 import com.recibozen.app.core.designsystem.ReciboZenTheme
 import com.recibozen.app.demo.repository.ReciboZenRepository
 import com.recibozen.app.navigation.Routes
+import com.recibozen.app.navigation.navigateToBottomTab
 import com.recibozen.app.navigation.rzViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -63,8 +64,6 @@ import kotlinx.coroutines.flow.stateIn
 
 /**
  * Reached from the avatar button on any bottom-nav tab (via [com.recibozen.app.core.components.RzTabHeader]).
- * All copy is fixture data from [DemoReciboZenData]; the "Estados y errores" row is the only entry
- * point into [StatesCatalogRoute] anywhere in the app, per the handoff spec.
  */
 data class ProfileUiState(
     val userName: String = "",
@@ -106,6 +105,9 @@ class ProfileViewModel(private val repository: ReciboZenRepository) : ViewModel(
     fun update(userName: String, householdName: String, location: String, goalMxn: Int) =
         repository.updateProfile(userName, householdName, location, goalMxn)
 
+    /** Queues the guided tour again; it starts the next time Inicio is shown. */
+    fun replayTutorial() = repository.setTutorialCompleted(false)
+
     fun updateService(alias: String, serviceNumber: String, rmu: String, meterNumber: String, tariffCode: String) {
         if (repository.session.value.activeServiceId.isBlank()) {
             repository.addElectricService(alias, serviceNumber, rmu, meterNumber, tariffCode)
@@ -128,9 +130,14 @@ fun ProfileRoute(navController: NavHostController, repository: ReciboZenReposito
         onNavigateNotifications = { navController.navigate(Routes.NotificationSettings) },
         onNavigatePremium = { navController.navigate(Routes.Premium) },
         onNavigateDonate = { navController.navigate(Routes.Donate) },
+        onNavigateLegal = { navController.navigate(Routes.Legal) },
         onNavigateServices = { navController.navigate(Routes.Services) },
         onUpdateProfile = viewModel::update,
         onUpdateService = viewModel::updateService,
+        onReplayTutorial = {
+            viewModel.replayTutorial()
+            navController.navigateToBottomTab(Routes.Home)
+        },
     )
 }
 
@@ -144,6 +151,8 @@ fun ProfileScreen(
     onNavigatePremium: () -> Unit,
     onNavigateDonate: () -> Unit,
     onNavigateServices: () -> Unit,
+    onReplayTutorial: () -> Unit = {},
+    onNavigateLegal: () -> Unit = {},
     onUpdateProfile: (String, String, String, Int) -> Unit,
     onUpdateService: (String, String, String, String, String) -> Unit,
 ) {
@@ -208,6 +217,12 @@ fun ProfileScreen(
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 ProfileRow(
+                    icon = RzIcons.Help,
+                    label = stringResource(R.string.profile_row_tutorial),
+                    onClick = onReplayTutorial,
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                ProfileRow(
                     icon = RzIcons.HomeWork,
                     label = stringResource(R.string.profile_row_household_goal),
                     onClick = { showEditDialog = true },
@@ -250,8 +265,8 @@ fun ProfileScreen(
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 ProfileRow(
                     icon = RzIcons.Lock,
-                    label = stringResource(R.string.profile_row_privacy),
-                    onClick = null,
+                    label = stringResource(R.string.profile_row_legal),
+                    onClick = onNavigateLegal,
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 ProfileRow(

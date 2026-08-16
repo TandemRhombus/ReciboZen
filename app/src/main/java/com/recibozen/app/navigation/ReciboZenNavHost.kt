@@ -32,10 +32,11 @@ import com.recibozen.app.feature.history.HistoryRoute
 import com.recibozen.app.feature.history.BillImportRoute
 import com.recibozen.app.feature.settings.AppearanceRoute
 import com.recibozen.app.feature.settings.ProfileRoute
-import com.recibozen.app.feature.settings.ServicesRoute
 import com.recibozen.app.feature.settings.StatesCatalogRoute
+import com.recibozen.app.feature.settings.ServicesRoute
 import com.recibozen.app.feature.solar.SolarRoute
 import com.recibozen.app.feature.support.DonationRoute
+import com.recibozen.app.feature.support.LegalRoute
 import com.recibozen.app.feature.support.NotificationSettingsRoute
 import com.recibozen.app.feature.support.ReportIssueRoute
 import com.recibozen.app.feature.support.SupportCenterRoute
@@ -94,6 +95,7 @@ fun ReciboZenNavHost(
         composable(Routes.StatesCatalog) { StatesCatalogRoute(navController, repository) }
         composable(Routes.Support) { SupportCenterRoute(navController) }
         composable(Routes.Donate) { DonationRoute(navController) }
+        composable(Routes.Legal) { LegalRoute(navController) }
         composable(Routes.ReportIssue) { ReportIssueRoute(navController) }
         composable(Routes.NotificationSettings) { NotificationSettingsRoute(navController, repository) }
         composable(Routes.Premium) { PremiumRoute(navController, repository) }

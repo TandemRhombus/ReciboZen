@@ -15,6 +15,7 @@ import kotlin.coroutines.resume
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import androidx.core.graphics.createBitmap
 
 data class ExtractedPdfDocument(
     val text: String,
@@ -56,7 +57,7 @@ class CfePdfDocumentExtractor(private val context: Context) {
         val scale = (TARGET_WIDTH.toFloat() / page.width.coerceAtLeast(1)).coerceIn(1f, 3f)
         val width = (page.width * scale).toInt().coerceAtMost(TARGET_WIDTH)
         val height = (page.height * scale).toInt().coerceAtMost(TARGET_HEIGHT)
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val bitmap = createBitmap(width, height)
         bitmap.eraseColor(Color.WHITE)
         page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
         val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)

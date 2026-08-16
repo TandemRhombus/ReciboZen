@@ -58,6 +58,8 @@ import com.recibozen.app.core.model.HistoryUnit
 import com.recibozen.app.core.model.PastPeriodComparison
 import com.recibozen.app.core.model.ReadingMethod
 import com.recibozen.app.demo.repository.ReciboZenRepository
+import com.recibozen.app.core.components.rzCoachAnchor
+import com.recibozen.app.navigation.RzTourAnchors
 import com.recibozen.app.navigation.Routes
 import com.recibozen.app.navigation.rzViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -172,7 +174,7 @@ fun HistoryScreen(
                 RzSecondaryButton(
                     text = stringResource(R.string.history_import_bill),
                     onClick = onImportBill,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.rzCoachAnchor(RzTourAnchors.HISTORY_IMPORT).fillMaxWidth(),
                 )
 
                 uiState.currentPeriod?.let { currentPeriod ->

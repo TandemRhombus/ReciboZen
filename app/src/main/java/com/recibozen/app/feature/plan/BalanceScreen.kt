@@ -29,6 +29,7 @@ import com.recibozen.app.core.components.RzFlowTopBar
 import com.recibozen.app.core.components.RzPrimaryButton
 import com.recibozen.app.core.components.RzSecondaryButton
 import com.recibozen.app.core.components.RzStackedBarRow
+import com.recibozen.app.core.calculation.OvernightBaselineCalculator
 import com.recibozen.app.core.components.RzStatusChip
 import com.recibozen.app.core.designsystem.ReciboZenTheme
 import com.recibozen.app.core.designsystem.RzSpacing
@@ -61,6 +62,9 @@ data class BalanceUiState(
     val overnightObservedKwh: Double = 0.0,
     val overnightExpectedKwh: Double = 0.0,
     val overnightUnexplainedKwh: Double = 0.0,
+    val overnightHours: Int = 0,
+    val overnightObservedWatts: Int = 0,
+    val overnightExpectedWatts: Int = 0,
 )
 
 class BalanceViewModel(repository: ReciboZenRepository) : ViewModel() {
@@ -75,6 +79,9 @@ class BalanceViewModel(repository: ReciboZenRepository) : ViewModel() {
             val explained = expectedInWindow.coerceAtMost(observed)
             val unexplained = (observed - explained).coerceAtLeast(0)
             val explainedShare = if (observed == 0) 0 else (explained * 100f / observed).toInt().coerceIn(0, 100)
+            // Phantom consumption: what the meter recorded overnight against
+            // what the registered inventory can justify while nobody uses it.
+            val overnight = OvernightBaselineCalculator.evaluate(state.readings, repository.appliances(state))
             BalanceUiState(
                 hasUsageData = energy.hasUsageEvidence,
                 explainedSharePercent = explainedShare,
@@ -89,6 +96,13 @@ class BalanceViewModel(repository: ReciboZenRepository) : ViewModel() {
                 suspects = repository.appliances(state)
                     .filter { it.confidence != com.recibozen.app.core.model.ConfidenceLevel.HIGH }
                     .map { it.name },
+                hasOvernightTest = overnight != null,
+                overnightObservedKwh = overnight?.observedKwh ?: 0.0,
+                overnightExpectedKwh = overnight?.expectedKwh ?: 0.0,
+                overnightUnexplainedKwh = overnight?.unexplainedKwh ?: 0.0,
+                overnightHours = overnight?.hours?.roundToInt() ?: 0,
+                overnightObservedWatts = overnight?.observedWatts?.roundToInt() ?: 0,
+                overnightExpectedWatts = overnight?.expectedWatts?.roundToInt() ?: 0,
             )
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), BalanceUiState())
@@ -254,21 +268,36 @@ fun BalanceScreen(
                     borderColor = null,
                 ) {
                     Text(
-                        stringResource(R.string.balance_overnight_observed, uiState.overnightObservedKwh),
+                        stringResource(
+                            R.string.balance_overnight_observed,
+                            uiState.overnightObservedKwh,
+                            uiState.overnightHours,
+                            uiState.overnightObservedWatts,
+                        ),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
-                        stringResource(R.string.balance_overnight_expected, uiState.overnightExpectedKwh),
+                        stringResource(
+                            R.string.balance_overnight_expected,
+                            uiState.overnightExpectedKwh,
+                            uiState.overnightExpectedWatts,
+                        ),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 2.dp),
                     )
                     Text(
-                        stringResource(R.string.balance_overnight_unexplained, uiState.overnightUnexplainedKwh),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 2.dp),
+                        stringResource(
+                            if (uiState.overnightUnexplainedKwh > 0.05) R.string.balance_overnight_unexplained
+                            else R.string.balance_overnight_matches,
+                            uiState.overnightUnexplainedKwh,
+                        ),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = if (uiState.overnightUnexplainedKwh > 0.05) {
+                            RzTheme.extendedColors.warningText
+                        } else RzTheme.extendedColors.success,
+                        modifier = Modifier.padding(top = RzSpacing.sm),
                     )
                 }
                 else Text(

@@ -14,8 +14,8 @@ import com.recibozen.app.data.local.ReciboZenDatabase
 import com.recibozen.app.data.local.ReferenceDatasetEntity
 import com.recibozen.app.data.local.TariffRateReferenceEntity
 import java.io.ByteArrayOutputStream
-import java.net.HttpURLConnection
 import java.net.URL
+import javax.net.ssl.HttpsURLConnection
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -30,16 +30,27 @@ class TariffSyncWorker(appContext: Context, workerParameters: WorkerParameters) 
             persist(payload)
         }.fold(
             onSuccess = { Result.success() },
-            onFailure = { if (runAttemptCount < 3) Result.retry() else Result.failure() },
+            onFailure = { error ->
+                // A malformed URL or a rejected protocol will not fix itself on
+                // retry; only transport failures are worth another attempt.
+                val retryable = error !is IllegalArgumentException && error !is java.net.MalformedURLException
+                if (retryable && runAttemptCount < 3) Result.retry() else Result.failure()
+            },
         )
     }
 
     private fun downloadCatalog(): JSONObject {
-        val connection = (URL("${BuildConfig.API_BASE_URL.trimEnd('/')}/v1/tariffs/current")
-            .openConnection() as HttpURLConnection).apply {
+        // Tariffs decide what the user is told their bill will cost. The
+        // platform already blocks cleartext, but the check is repeated here so
+        // a misconfigured API_BASE_URL fails loudly instead of downgrading, and
+        // redirects are refused so the response cannot come from another host.
+        val url = URL("${BuildConfig.API_BASE_URL.trimEnd('/')}/v1/tariffs/current")
+        require(url.protocol.equals("https", ignoreCase = true)) { "El catálogo de tarifas requiere HTTPS." }
+        val connection = (url.openConnection() as HttpsURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = 10_000
             readTimeout = 20_000
+            instanceFollowRedirects = false
             setRequestProperty("Accept", "application/json")
         }
         return try {

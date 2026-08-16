@@ -2,14 +2,11 @@ package com.recibozen.app.feature.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.recibozen.app.core.model.PlanActionStatus
 import com.recibozen.app.core.model.ConfidenceLevel
 import com.recibozen.app.core.model.ReadingMethod
 import com.recibozen.app.core.calculation.DacRiskCalculator
-import com.recibozen.app.core.calculation.BillingPeriodTimeline
 import com.recibozen.app.core.calculation.ConsumptionPaceCalculator
 import com.recibozen.app.demo.repository.EnergyForecastBasis
-import com.recibozen.app.demo.data.DemoReciboZenData
 import com.recibozen.app.demo.repository.ReciboZenRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -36,12 +33,26 @@ class HomeViewModel(private val repository: ReciboZenRepository) : ViewModel() {
                 projection.hasUsageEvidence -> HomeDataMode.PROJECTION
                 else -> HomeDataMode.EMPTY
             }
-            val minisplit = appliances.find { it.id == "minisplit" }
-            val refrigerador = appliances.find { it.id == "refrigerador" }
-            val ps5 = appliances.find { it.id == "ps5" }
-            val minisplitAction = state.planActions.find { it.id == DemoReciboZenData.MINISPLIT_ACTION_ID }
             val liveReadings = state.readings.count { it.method != ReadingMethod.PDF }
-            val currentPeriod = BillingPeriodTimeline.after(latestBill, energy.billingDays)
+            // "Qué está influyendo más" comes from the household's own inventory.
+            // A household total only exists when a meter pace or a closed bill
+            // provides one; otherwise there is nothing left to call "sin identificar".
+            val hasHouseholdTotal = energy.forecastBasis == EnergyForecastBasis.METER ||
+                energy.forecastBasis == EnergyForecastBasis.CLOSED_BILL
+            val rankedAppliances = appliances
+                .filter { it.kwh > 0 }
+                .sortedByDescending { it.costMxn }
+            val topAppliances = rankedAppliances.take(3).map {
+                HomeApplianceShare(
+                    id = it.id,
+                    name = it.name,
+                    costMxn = it.costMxn,
+                    sharePercent = it.sharePercent,
+                )
+            }
+            val explainedSharePercent = rankedAppliances.sumOf { it.sharePercent }
+            val explainedCostMxn = rankedAppliances.sumOf { it.costMxn }
+            val currentPeriod = energy.currentPeriod
             val applianceExpectedToDate =
                 (energy.applianceProjectedKwh * energy.observedWindowFraction).roundToInt().coerceAtLeast(0)
             val paceGoal = ConsumptionPaceCalculator.goal(
@@ -60,6 +71,7 @@ class HomeViewModel(private val repository: ReciboZenRepository) : ViewModel() {
                 periodLabel = latestBill?.monthLabel.orEmpty(),
                 currentPeriodLabel = currentPeriod?.shortLabel.orEmpty(),
                 currentPeriodDateRange = currentPeriod?.dateRangeLabel.orEmpty(),
+                currentPeriodIsEstimated = currentPeriod?.isBeyondNextPeriod == true,
                 projectedMxn = projection.projectedMxn,
                 rangeLowMxn = projection.rangeLowMxn,
                 rangeHighMxn = projection.rangeHighMxn,
@@ -85,10 +97,13 @@ class HomeViewModel(private val repository: ReciboZenRepository) : ViewModel() {
                 applianceDailyAverageKwh = if (energy.billingDays > 0) {
                     energy.applianceProjectedKwh.toDouble() / energy.billingDays
                 } else 0.0,
+                // Not clamped at 100: when the declared inventory adds up to
+                // more than the meter measured, that gap is the useful signal
+                // (usually overstated hours), and hiding it helps nobody.
                 applianceCoveragePercent = if (energy.observedKwh > 0) {
                     (applianceExpectedToDate * 100f / energy.observedKwh)
                         .toInt()
-                        .coerceIn(0, 100)
+                        .coerceIn(0, 999)
                 } else 0,
                 hasCurrentMeterProjection = energy.hasCurrentMeterProjection,
                 dailyRateNow = energy.dailyAverageKwh,
@@ -107,15 +122,15 @@ class HomeViewModel(private val repository: ReciboZenRepository) : ViewModel() {
                     importedBills.isNotEmpty() || liveReadings > 0 -> ConfidenceLevel.MEDIUM
                     else -> ConfidenceLevel.LOW
                 },
-                minisplitStatus = minisplitAction?.status ?: PlanActionStatus.SUGGESTED,
-                minisplitSavingsLabel = minisplitAction?.savingsRangeLabel.orEmpty(),
-                minisplitCostMxn = minisplit?.costMxn ?: 0,
-                minisplitSharePercent = minisplit?.sharePercent ?: 0,
-                refrigeradorCostMxn = refrigerador?.costMxn ?: 0,
-                refrigeradorSharePercent = refrigerador?.sharePercent ?: 0,
-                ps5CostMxn = ps5?.costMxn ?: 0,
-                ps5SharePercent = ps5?.sharePercent ?: 0,
-                recentReadingsCountLabel = "$liveReadings lecturas posteriores al recibo",
+                topAppliances = topAppliances,
+                hasHouseholdTotal = hasHouseholdTotal && rankedAppliances.isNotEmpty(),
+                unidentifiedSharePercent = if (hasHouseholdTotal) {
+                    (100 - explainedSharePercent).coerceIn(0, 100)
+                } else 0,
+                unidentifiedCostMxn = if (hasHouseholdTotal) {
+                    (energy.projectedCostMxn - explainedCostMxn).coerceAtLeast(0)
+                } else 0,
+                liveReadingCount = liveReadings,
                 previousBillsLoadedCount = importedBills.size,
                 missingApplianceSchedules = appliances.count { it.hoursPerWeek == null },
                 dacRisk = DacRiskCalculator.calculate(
@@ -130,8 +145,4 @@ class HomeViewModel(private val repository: ReciboZenRepository) : ViewModel() {
             )
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HomeUiState())
-
-    fun onToggleMinisplitAction() {
-        repository.togglePlanAction(DemoReciboZenData.MINISPLIT_ACTION_ID)
-    }
 }

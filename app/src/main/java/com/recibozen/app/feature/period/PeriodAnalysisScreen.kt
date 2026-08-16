@@ -25,6 +25,9 @@ import androidx.navigation.NavHostController
 import com.recibozen.app.R
 import com.recibozen.app.core.components.RzBannerTone
 import com.recibozen.app.core.components.RzCard
+import com.recibozen.app.core.components.ChartLineStyle
+import com.recibozen.app.core.components.RzChartSeries
+import com.recibozen.app.core.components.RzLineChart
 import com.recibozen.app.core.components.RzFlowTopBar
 import com.recibozen.app.core.components.RzInlineBanner
 import com.recibozen.app.core.components.RzLinearProgress
@@ -78,6 +81,7 @@ fun PeriodAnalysisScreen(
                 item { EmptyPeriodCard() }
             } else {
                 item { CurrentPeriodOverviewCard(uiState) }
+                if (uiState.accumulatedKwhByDay.size >= 2) item { PeriodCurveCard(uiState) }
                 item { PeriodComparisonCard(uiState) }
                 item { ReadingEvidenceCard(uiState) }
                 item {
@@ -102,6 +106,101 @@ private fun EmptyPeriodCard() {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = RzSpacing.sm),
         )
+    }
+}
+
+/**
+ * Accumulated consumption against the pace the goal allows. The real curve
+ * stops where the readings stop; the dashed line continues to the projected
+ * close so the measured part is never confused with the forecast.
+ */
+@Composable
+private fun PeriodCurveCard(uiState: PeriodAnalysisUiState) {
+    val days = uiState.billingDays.coerceAtLeast(uiState.accumulatedKwhByDay.size)
+    val ceiling = maxOf(
+        uiState.projectedKwh,
+        uiState.goalKwh,
+        uiState.accumulatedKwhByDay.maxOrNull() ?: 0,
+        1,
+    ).toFloat()
+    val observedDays = uiState.accumulatedKwhByDay.lastIndex.coerceAtLeast(1)
+
+    // One value per day of the period, normalised to the same ceiling so the
+    // three series can be compared by eye.
+    val realSeries = (0..days).map { day ->
+        (uiState.accumulatedKwhByDay.getOrNull(day) ?: uiState.accumulatedKwhByDay.last()) / ceiling
+    }
+    val projectionSeries = (0..days).map { day ->
+        val observedKwh = uiState.accumulatedKwhByDay.last().toFloat()
+        if (day <= observedDays) {
+            (uiState.accumulatedKwhByDay.getOrNull(day) ?: 0).toFloat() / ceiling
+        } else {
+            val remaining = (days - observedDays).coerceAtLeast(1)
+            val extra = (uiState.projectedKwh - observedKwh) * (day - observedDays) / remaining
+            (observedKwh + extra) / ceiling
+        }
+    }
+    val goalSeries = (0..days).map { day -> uiState.goalKwh * day / days.toFloat() / ceiling }
+
+    RzCard(modifier = Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.period_curve_title), style = MaterialTheme.typography.titleMedium)
+        Text(
+            stringResource(R.string.period_curve_subtitle, uiState.accumulatedKwhByDay.last(), uiState.observedDays),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+        RzLineChart(
+            series = buildList {
+                if (uiState.goalKwh > 0) {
+                    add(
+                        RzChartSeries(
+                            values = goalSeries,
+                            color = RzTheme.extendedColors.success,
+                            style = ChartLineStyle.DOTTED,
+                        ),
+                    )
+                }
+                add(
+                    RzChartSeries(
+                        values = projectionSeries,
+                        color = MaterialTheme.colorScheme.outline,
+                        style = ChartLineStyle.DASHED,
+                    ),
+                )
+                add(
+                    RzChartSeries(
+                        values = realSeries,
+                        color = MaterialTheme.colorScheme.primary,
+                        markEnd = true,
+                        visibleUntilIndex = observedDays,
+                    ),
+                )
+            },
+            modifier = Modifier.padding(top = RzSpacing.md),
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.sm),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                stringResource(R.string.period_curve_legend_real),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                stringResource(R.string.period_curve_legend_projection),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline,
+            )
+            if (uiState.goalKwh > 0) {
+                Text(
+                    stringResource(R.string.period_curve_legend_goal),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = RzTheme.extendedColors.success,
+                )
+            }
+        }
     }
 }
 

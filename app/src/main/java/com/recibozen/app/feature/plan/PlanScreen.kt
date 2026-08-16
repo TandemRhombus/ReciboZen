@@ -38,6 +38,7 @@ import com.recibozen.app.core.components.RzLinearProgress
 import com.recibozen.app.core.components.RzPrimaryButton
 import com.recibozen.app.core.components.RzSecondaryButton
 import com.recibozen.app.core.components.RzStatusChip
+import com.recibozen.app.core.components.RzTextButton
 import com.recibozen.app.core.components.RzTabHeader
 import com.recibozen.app.core.components.rzTimeGreeting
 import com.recibozen.app.core.designsystem.ReciboZenTheme
@@ -48,10 +49,12 @@ import com.recibozen.app.core.model.ConfidenceLevel
 import com.recibozen.app.core.model.EffortLevel
 import com.recibozen.app.core.model.PlanAction
 import com.recibozen.app.core.model.PlanActionStatus
-import com.recibozen.app.demo.data.DemoReciboZenData
 import com.recibozen.app.demo.repository.ReciboZenRepository
 import com.recibozen.app.demo.repository.ReciboZenSessionState
+import com.recibozen.app.core.components.rzCoachAnchor
+import com.recibozen.app.navigation.RzTourAnchors
 import com.recibozen.app.navigation.Routes
+import com.recibozen.app.navigation.navigateToBottomTab
 import com.recibozen.app.navigation.rzViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -75,7 +78,10 @@ data class PlanUiState(
     val baselineMxn: Int = 0,
     val kwhAboveGoal: Int = 0,
     val suggestionActions: List<PlanAction> = emptyList(),
-    val verifiedAction: PlanAction? = null,
+    val trackedCount: Int = 0,
+    /** Pesos the tracked actions actually subtract from the projection. */
+    val trackedSavingsMxn: Int = 0,
+    val hasAppliances: Boolean = false,
 )
 
 class PlanViewModel(private val repository: ReciboZenRepository) : ViewModel() {
@@ -96,6 +102,7 @@ class PlanViewModel(private val repository: ReciboZenRepository) : ViewModel() {
     private fun toUiState(state: ReciboZenSessionState, hasLiveReading: Boolean = false): PlanUiState {
         val projection = repository.billProjection(state)
         val energy = repository.energySummary(state)
+        val actions = repository.planActions(state)
         return PlanUiState(
             userName = state.userName,
             householdName = state.householdName,
@@ -108,8 +115,12 @@ class PlanViewModel(private val repository: ReciboZenRepository) : ViewModel() {
             goalMxn = state.goalMxn,
             baselineMxn = energy.projectedCostMxn,
             kwhAboveGoal = kwhReductionToGoal(state, energy.projectedKwh, energy.projectedCostMxn, projection.projectedMxn),
-            suggestionActions = state.planActions.filter { it.status != PlanActionStatus.VERIFIED },
-            verifiedAction = state.planActions.find { it.status == PlanActionStatus.VERIFIED },
+            suggestionActions = actions,
+            trackedCount = actions.count { it.status == PlanActionStatus.TRACKING },
+            trackedSavingsMxn = actions
+                .filter { it.status == PlanActionStatus.TRACKING }
+                .sumOf { it.estimatedCutMxn },
+            hasAppliances = repository.appliances(state).isNotEmpty(),
         )
     }
 
@@ -149,6 +160,8 @@ fun PlanRoute(navController: NavHostController, repository: ReciboZenRepository)
         onDacClick = { navController.navigate(Routes.Dac) },
         onSolarClick = { navController.navigate(Routes.Solar) },
         onBalanceClick = { navController.navigate(Routes.Balance) },
+        onApplianceClick = { id -> navController.navigate(Routes.applianceDetail(id)) },
+        onAddAppliances = { navController.navigateToBottomTab(Routes.Appliances) },
     )
 }
 
@@ -163,6 +176,8 @@ fun PlanScreen(
     onBalanceClick: () -> Unit,
     modifier: Modifier = Modifier,
     onHouseholdClick: () -> Unit = {},
+    onApplianceClick: (String) -> Unit = {},
+    onAddAppliances: () -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -185,7 +200,7 @@ fun PlanScreen(
                 .padding(bottom = RzSpacing.xxl),
             verticalArrangement = Arrangement.spacedBy(RzSpacing.lg),
         ) {
-            Column {
+            Column(modifier = Modifier.rzCoachAnchor(RzTourAnchors.PLAN_ACTIONS)) {
                 Text(
                     stringResource(R.string.plan_headline),
                     style = MaterialTheme.typography.headlineLarge,
@@ -198,34 +213,53 @@ fun PlanScreen(
                 )
             }
 
-            if (!uiState.hasProjection) {
+            if (uiState.suggestionActions.isEmpty()) {
                 RzCard(modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.plan_empty_title), style = MaterialTheme.typography.titleLarge)
                     Text(
-                        stringResource(R.string.plan_empty_body),
+                        stringResource(
+                            if (uiState.hasAppliances) R.string.plan_empty_no_actions_body
+                            else R.string.plan_empty_body,
+                        ),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = RzSpacing.sm),
                     )
+                    if (!uiState.hasAppliances) {
+                        RzPrimaryButton(
+                            text = stringResource(R.string.plan_empty_add_appliances),
+                            onClick = onAddAppliances,
+                            modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.lg),
+                        )
+                    }
                 }
             } else {
-            PlanSummaryCard(uiState)
+                if (uiState.hasProjection) PlanSummaryCard(uiState)
 
-            Text(
-                stringResource(R.string.plan_suggestions_title),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-
-            uiState.suggestionActions.forEach { action ->
-                PlanActionCard(
-                    action = action,
-                    onAdd = { onAddAction(action.id) },
-                    onRemove = { onRemoveAction(action.id) },
+                Text(
+                    stringResource(R.string.plan_suggestions_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
-            }
+                Text(
+                    stringResource(
+                        R.string.plan_suggestions_subtitle,
+                        uiState.suggestionActions.size,
+                        uiState.trackedCount,
+                        uiState.trackedSavingsMxn,
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
 
-            uiState.verifiedAction?.let { VerifiedActionCard(it) }
+                uiState.suggestionActions.forEach { action ->
+                    PlanActionCard(
+                        action = action,
+                        onAdd = { onAddAction(action.id) },
+                        onRemove = { onRemoveAction(action.id) },
+                        onOpenAppliance = { onApplianceClick(action.applianceId) },
+                    )
+                }
             }
 
             PlanLinkCard(
@@ -314,6 +348,7 @@ private fun PlanActionCard(
     action: PlanAction,
     onAdd: () -> Unit,
     onRemove: () -> Unit,
+    onOpenAppliance: () -> Unit,
 ) {
     var showManageDialog by remember { mutableStateOf(false) }
     val isTracking = action.status == PlanActionStatus.TRACKING
@@ -335,17 +370,41 @@ private fun PlanActionCard(
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(top = RzSpacing.sm),
         )
+        if (action.description.isNotBlank()) {
+            Text(
+                action.description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
         Text(
-            stringResource(
-                R.string.plan_action_meta,
-                action.savingsRangeLabel,
-                effortLabel(action.effort),
-                confidenceLabel(action.confidence),
-            ),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp),
+            if (action.savingsRangeLabel.isBlank()) {
+                stringResource(
+                    R.string.plan_action_meta_no_savings,
+                    effortLabel(action.effort),
+                    confidenceLabel(action.confidence),
+                )
+            } else {
+                stringResource(
+                    R.string.plan_action_meta,
+                    action.savingsRangeLabel,
+                    effortLabel(action.effort),
+                    confidenceLabel(action.confidence),
+                )
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.padding(top = RzSpacing.sm),
         )
+        action.sourceLabel?.let { source ->
+            Text(
+                stringResource(R.string.plan_action_source, source),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
 
         if (isTracking && action.trackingNote != null) {
             RzCard(
@@ -369,6 +428,17 @@ private fun PlanActionCard(
             }
         }
 
+        // Only a quantified saving moves the projection. Saying "add to my plan"
+        // for advice we cannot price would promise a change that never arrives.
+        val movesProjection = action.estimatedCutMxn > 0
+        if (!movesProjection) {
+            Text(
+                stringResource(R.string.plan_action_no_projection_effect),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(top = RzSpacing.sm),
+            )
+        }
         if (isTracking) {
             RzSecondaryButton(
                 text = stringResource(R.string.plan_action_manage),
@@ -379,11 +449,20 @@ private fun PlanActionCard(
             )
         } else {
             RzPrimaryButton(
-                text = stringResource(R.string.plan_action_add),
+                text = stringResource(
+                    if (movesProjection) R.string.plan_action_add else R.string.plan_action_follow,
+                ),
                 onClick = onAdd,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = RzSpacing.md),
+            )
+        }
+        if (action.applianceId.isNotBlank()) {
+            RzTextButton(
+                text = stringResource(R.string.plan_action_open_appliance),
+                onClick = onOpenAppliance,
+                modifier = Modifier.fillMaxWidth(),
             )
         }
     }
@@ -407,45 +486,6 @@ private fun PlanActionCard(
                 }
             },
         )
-    }
-}
-
-@Composable
-private fun VerifiedActionCard(action: PlanAction) {
-    RzCard(modifier = Modifier.fillMaxWidth()) {
-        RzStatusChip(
-            text = stringResource(R.string.plan_chip_verified),
-            icon = RzIcons.TaskAlt,
-            containerColor = RzTheme.extendedColors.successContainer,
-            contentColor = RzTheme.extendedColors.success,
-        )
-        Text(
-            action.title,
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(top = RzSpacing.sm),
-        )
-        Text(
-            stringResource(R.string.plan_verified_since, action.verifiedSinceLabel.orEmpty()),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp),
-        )
-        if (action.verifiedNote != null) {
-            RzCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = RzSpacing.md),
-                containerColor = RzTheme.extendedColors.successContainer,
-                borderColor = null,
-            ) {
-                Text(
-                    action.verifiedNote,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        }
     }
 }
 
@@ -550,12 +590,34 @@ private fun PlanScreenPreview() {
                 rangeHighMxn = 890,
                 isWithinGoal = false,
                 planProgressFraction = 0.05f,
-                suggestionActions = DemoReciboZenData.planActions.filter {
-                    it.status != PlanActionStatus.VERIFIED
-                },
-                verifiedAction = DemoReciboZenData.planActions.find {
-                    it.status == PlanActionStatus.VERIFIED
-                },
+                hasProjection = true,
+                hasAppliances = true,
+                trackedCount = 1,
+                trackedSavingsMxn = 64,
+                suggestionActions = listOf(
+                    PlanAction(
+                        id = "a1::standby",
+                        title = "Consola · apagar el reposo",
+                        savingsRangeLabel = "$18",
+                        effort = EffortLevel.LOW,
+                        confidence = ConfidenceLevel.HIGH,
+                        status = PlanActionStatus.SUGGESTED,
+                        estimatedCutMxn = 18,
+                        applianceId = "a1",
+                        description = "En reposo sigue gastando. Apágala desde el menú de ahorro.",
+                    ),
+                    PlanAction(
+                        id = "a2::hours",
+                        title = "Minisplit · 30 minutos menos al día",
+                        savingsRangeLabel = "$64",
+                        effort = EffortLevel.MEDIUM,
+                        confidence = ConfidenceLevel.MEDIUM,
+                        status = PlanActionStatus.TRACKING,
+                        estimatedCutMxn = 64,
+                        applianceId = "a2",
+                        description = "Programa el apagado media hora antes de dormir.",
+                    ),
+                ),
             ),
             onProfileClick = {},
             onAddAction = {},

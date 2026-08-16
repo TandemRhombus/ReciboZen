@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="bill_import_title">Importar recibo</string>
-    <string name="bill_import_intro">Selecciona un recibo CFE en PDF. Extraeremos el suministro, tarifa, medidor, lecturas, cargos y el historial anterior para que los revises antes de guardar.</string>
+    <string name="bill_import_intro">Elige tu recibo de CFE en PDF. Sacamos los datos y los revisas antes de guardar.</string>
     <string name="bill_import_choose">Elegir PDF</string>
     <string name="bill_import_privacy">El archivo se procesa en este teléfono. No guardamos el PDF original ni enviamos su texto a analítica.</string>
     <string name="bill_import_photograph">Fotografiar recibo impreso</string>
-    <string name="bill_import_photograph_hint">¿No tienes el PDF? Toma una foto del recibo en papel. Se lee menos preciso que el archivo, así que después podrás corregir cada dato antes de importarlo.</string>
+    <string name="bill_import_photograph_hint">¿No tienes el PDF? Toma una foto del recibo. Se lee menos preciso, pero puedes corregir cada dato.</string>
     <string name="bill_import_processing">Leyendo y validando el recibo…</string>
     <string name="bill_import_review_title">Revisa lo detectado</string>
     <string name="bill_import_service">Servicio</string>
@@ -40,12 +40,10 @@
     <string name="bill_import_plan_limit">El recibo pertenece a otro suministro</string>
     <string name="bill_import_done">Listo</string>
     <string name="history_import_bill">Importar recibo PDF</string>
-    <string name="history_greeting">Buenas tardes, %1$s</string>
     <string name="history_headline">Historial</string>
 
     <string name="history_current_period_title">Periodo en curso — proyección</string>
     <string name="history_current_period_badge">Proyección</string>
-    <string name="history_current_period_caption">El periodo (%1$s) todavía no termina: la cifra es una proyección, no un recibo.</string>
     <string name="history_current_period_caption_dynamic">Esta tarjeta sólo aparece cuando existe una lectura posterior al último recibo importado.</string>
 
     <string name="history_previous_bills_title">Recibos anteriores — valores reales</string>
@@ -54,7 +52,6 @@
     <string name="history_legend_real">Recibo real</string>
     <string name="history_no_bills">Todavía no hay recibos importados. Usa “Importar recibo PDF” para cargar valores reales.</string>
     <string name="history_amount_mxn">$%1$s</string>
-    <string name="history_amount_kwh">%1$s kWh</string>
 
     <string name="history_period_comparison_title">Periodo %1$s</string>
     <string name="history_estimate_label">Estimación previa</string>

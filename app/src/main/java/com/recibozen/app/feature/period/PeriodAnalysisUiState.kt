@@ -16,4 +16,10 @@ data class PeriodAnalysisUiState(
     val currentPeriodDateRange: String = "",
     val previousPeriodLabel: String = "",
     val previousBillKwh: Int = 0,
+    /**
+     * Accumulated kWh at each day of the period, built from the real readings.
+     * Only covers the days already measured; the rest of the curve is the
+     * projection, drawn separately so both are never confused.
+     */
+    val accumulatedKwhByDay: List<Int> = emptyList(),
 )

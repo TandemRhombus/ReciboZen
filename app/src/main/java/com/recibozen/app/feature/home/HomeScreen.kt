@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -46,6 +47,7 @@ import com.recibozen.app.R
 import com.recibozen.app.core.components.RzBannerTone
 import com.recibozen.app.core.components.RzBarEntry
 import com.recibozen.app.core.components.RzCard
+import com.recibozen.app.core.components.rzCoachAnchor
 import com.recibozen.app.core.components.RzConfidenceIndicator
 import com.recibozen.app.core.components.RzInlineBanner
 import com.recibozen.app.core.components.RzLinearProgress
@@ -62,10 +64,10 @@ import com.recibozen.app.core.designsystem.RzIcons
 import com.recibozen.app.core.designsystem.RzPalette
 import com.recibozen.app.core.designsystem.RzSpacing
 import com.recibozen.app.core.designsystem.RzTheme
-import com.recibozen.app.core.model.PlanActionStatus
 import com.recibozen.app.core.calculation.DacRiskLevel
 import com.recibozen.app.core.calculation.ConsumptionPaceRelation
 import com.recibozen.app.demo.repository.ReciboZenRepository
+import com.recibozen.app.navigation.RzTourAnchors
 import com.recibozen.app.navigation.Routes
 import com.recibozen.app.navigation.rzViewModel
 import com.recibozen.app.navigation.navigateToBottomTab
@@ -86,8 +88,6 @@ fun HomeRoute(navController: NavHostController, repository: ReciboZenRepository)
         uiState = uiState,
         onProfileClick = { navController.navigate(Routes.Profile) },
         onHouseholdClick = { navController.navigate(Routes.Services) },
-        onToggleMinisplitAction = viewModel::onToggleMinisplitAction,
-        onSeeWhyMinisplit = { navController.navigate(Routes.applianceDetail("minisplit")) },
         onViewFullAnalysis = { navController.navigate(Routes.PeriodAnalysis) },
         onApplianceClick = { id -> navController.navigate(Routes.applianceDetail(id)) },
         onUnidentifiedClick = { navController.navigate(Routes.Balance) },
@@ -104,8 +104,6 @@ fun HomeScreen(
     uiState: HomeUiState,
     onProfileClick: () -> Unit,
     onHouseholdClick: () -> Unit,
-    onToggleMinisplitAction: () -> Unit,
-    onSeeWhyMinisplit: () -> Unit,
     onViewFullAnalysis: () -> Unit,
     onApplianceClick: (String) -> Unit,
     onUnidentifiedClick: () -> Unit,
@@ -116,6 +114,8 @@ fun HomeScreen(
     onDacClick: () -> Unit = {},
 ) {
     val listState = rememberLazyListState()
+    val readingAnchor = Modifier.rzCoachAnchor(RzTourAnchors.HOME_REGISTER_READING)
+    val headlineAnchor = Modifier.rzCoachAnchor(RzTourAnchors.HOME_HEADLINE)
     Scaffold(
         modifier = Modifier.fillMaxSize().statusBarsPadding(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -123,6 +123,7 @@ fun HomeScreen(
         floatingActionButton = {
             AnimatedVisibility(visible = !listState.canScrollBackward) {
                 ExtendedFloatingActionButton(
+                    modifier = readingAnchor,
                     onClick = onRegisterReading,
                     containerColor = RzPalette.Lime,
                     // Lime remains bright in both themes, so it always needs
@@ -137,6 +138,7 @@ fun HomeScreen(
     ) { innerPadding ->
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             RzTabHeader(
+                modifier = headlineAnchor,
                 greeting = rzTimeGreeting(uiState.userName),
                 householdName = uiState.householdName.ifBlank { stringResource(R.string.home_household_unconfigured) },
                 userInitial = uiState.userInitial,
@@ -162,6 +164,9 @@ fun HomeScreen(
                     item { LatestRealBillCard(uiState) }
                     if (uiState.realBillHistory.size >= 2) item { HistoricalBillsChartCard(uiState) }
                     item { BuildProjectionCard(onRegisterReading, onViewAllAppliances) }
+                    if (uiState.topAppliances.isNotEmpty()) {
+                        item { InfluenceCard(uiState, onApplianceClick, onUnidentifiedClick, onViewAllAppliances) }
+                    }
                     if (uiState.hasAppliances) item { ApplianceForecastCard(uiState, onViewAllAppliances) }
                     item { ApplianceDataCard(uiState, onViewAllAppliances) }
                     item { ConfidenceCard(uiState, onRegisterReading) }
@@ -176,6 +181,9 @@ fun HomeScreen(
                     item { PaceCard(uiState) }
                     item { PeriodProgressCard(uiState, onViewFullAnalysis) }
                     if (uiState.realBillHistory.size >= 2) item { HistoricalBillsChartCard(uiState) }
+                    if (uiState.topAppliances.isNotEmpty()) {
+                        item { InfluenceCard(uiState, onApplianceClick, onUnidentifiedClick, onViewAllAppliances) }
+                    }
                     if (uiState.hasAppliances) item { ApplianceForecastCard(uiState, onViewAllAppliances) }
                     item { ApplianceDataCard(uiState, onViewAllAppliances) }
                     item { ConfidenceCard(uiState, onRegisterReading) }
@@ -237,7 +245,11 @@ private fun DacRiskCard(uiState: HomeUiState, onClick: () -> Unit) {
             risk.tariffCode.ifBlank { "—" },
         )
     }
-    RzCard(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+    RzCard(
+        modifier = Modifier.rzCoachAnchor(RzTourAnchors.HOME_DAC)
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(RzSpacing.sm)) {
             Icon(RzIcons.Monitoring, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
             Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
@@ -440,15 +452,22 @@ private fun ApplianceForecastCard(uiState: HomeUiState, onViewAllAppliances: () 
                     modifier = Modifier.weight(1f),
                 )
             }
+            val inventoryExceedsMeter = uiState.applianceCoveragePercent > 105
             Text(
-                stringResource(R.string.home_appliance_forecast_coverage, uiState.applianceCoveragePercent),
+                stringResource(
+                    if (inventoryExceedsMeter) R.string.home_appliance_forecast_coverage_over
+                    else R.string.home_appliance_forecast_coverage,
+                    uiState.applianceCoveragePercent,
+                ),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (inventoryExceedsMeter) RzTheme.extendedColors.warningText
+                else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = RzSpacing.md),
             )
             RzLinearProgress(
-                progress = uiState.applianceCoveragePercent / 100f,
-                progressColor = MaterialTheme.colorScheme.primary,
+                progress = (uiState.applianceCoveragePercent / 100f).coerceIn(0f, 1f),
+                progressColor = if (inventoryExceedsMeter) RzTheme.extendedColors.warning
+                else MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(top = RzSpacing.xs),
             )
             Text(
@@ -538,6 +557,14 @@ private fun ProjectedBillCard(uiState: HomeUiState) {
                 ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(top = RzSpacing.xs),
+            )
+        }
+        if (uiState.currentPeriodIsEstimated) {
+            Text(
+                stringResource(R.string.home_period_estimated_dates),
+                style = MaterialTheme.typography.bodySmall,
+                color = RzTheme.extendedColors.warningText,
                 modifier = Modifier.padding(top = RzSpacing.xs),
             )
         }
@@ -657,71 +684,6 @@ private fun VerticalDivider() {
             .height(28.dp)
             .background(MaterialTheme.colorScheme.outlineVariant),
     )
-}
-
-@Composable
-private fun MinisplitTipCard(
-    uiState: HomeUiState,
-    onToggleMinisplitAction: () -> Unit,
-    onSeeWhy: () -> Unit,
-) {
-    RzCard(
-        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-        borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Icon(RzIcons.Lightbulb, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(16.dp))
-            Text(
-                stringResource(R.string.home_tip_eyebrow),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-            )
-        }
-        Text(
-            stringResource(R.string.home_tip_headline),
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onSecondaryContainer,
-            modifier = Modifier.padding(top = RzSpacing.sm),
-        )
-        Text(
-            stringResource(R.string.home_tip_savings, uiState.minisplitSavingsLabel),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSecondaryContainer,
-            modifier = Modifier.padding(top = 6.dp),
-        )
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(RzSpacing.sm),
-            modifier = Modifier.padding(top = RzSpacing.md),
-        ) {
-            RzStatusChip(
-                text = stringResource(R.string.home_chip_effort_low),
-                icon = RzIcons.Bolt,
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            RzStatusChip(
-                text = stringResource(R.string.home_chip_confidence_medium),
-                icon = RzIcons.Help,
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = RzTheme.extendedColors.warningText,
-            )
-        }
-
-        val isTracking = uiState.minisplitStatus == PlanActionStatus.TRACKING
-        RzPrimaryButton(
-            text = stringResource(if (isTracking) R.string.home_tracking else R.string.home_add_to_plan),
-            onClick = onToggleMinisplitAction,
-            containerColor = if (isTracking) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primary,
-            contentColor = if (isTracking) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimary,
-            modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.lg),
-        )
-        RzTextButton(
-            text = stringResource(R.string.home_see_why),
-            onClick = onSeeWhy,
-            modifier = Modifier.fillMaxWidth(),
-        )
-    }
 }
 
 @Composable
@@ -1017,31 +979,31 @@ private fun InfluenceCard(
             verticalArrangement = Arrangement.spacedBy(RzSpacing.lg),
             modifier = Modifier.padding(top = RzSpacing.sm),
         ) {
-            InfluenceRow(
-                name = stringResource(R.string.home_appliance_minisplit),
-                costShare = stringResource(R.string.home_cost_share_format, uiState.minisplitCostMxn, uiState.minisplitSharePercent),
-                fraction = uiState.minisplitSharePercent / 100f,
-                onClick = { onApplianceClick("minisplit") },
-            )
-            InfluenceRow(
-                name = stringResource(R.string.home_appliance_refrigerador),
-                costShare = stringResource(R.string.home_cost_share_format, uiState.refrigeradorCostMxn, uiState.refrigeradorSharePercent),
-                fraction = uiState.refrigeradorSharePercent / 100f,
-                onClick = { onApplianceClick("refrigerador") },
-            )
-            InfluenceRow(
-                name = stringResource(R.string.home_appliance_ps5),
-                costShare = stringResource(R.string.home_cost_share_format, uiState.ps5CostMxn, uiState.ps5SharePercent),
-                fraction = uiState.ps5SharePercent / 100f,
-                onClick = { onApplianceClick("ps5") },
-            )
-            InfluenceRow(
-                name = stringResource(R.string.home_unidentified),
-                costShare = stringResource(R.string.home_cost_share_format, uiState.unidentifiedCostMxn, uiState.unidentifiedSharePercent),
-                fraction = uiState.unidentifiedSharePercent / 100f,
-                onClick = onUnidentifiedClick,
-                muted = true,
-            )
+            uiState.topAppliances.forEach { appliance ->
+                InfluenceRow(
+                    name = appliance.name,
+                    costShare = stringResource(
+                        R.string.home_cost_share_format,
+                        appliance.costMxn,
+                        appliance.sharePercent,
+                    ),
+                    fraction = appliance.sharePercent / 100f,
+                    onClick = { onApplianceClick(appliance.id) },
+                )
+            }
+            if (uiState.hasHouseholdTotal && uiState.unidentifiedSharePercent > 0) {
+                InfluenceRow(
+                    name = stringResource(R.string.home_unidentified),
+                    costShare = stringResource(
+                        R.string.home_cost_share_format,
+                        uiState.unidentifiedCostMxn,
+                        uiState.unidentifiedSharePercent,
+                    ),
+                    fraction = uiState.unidentifiedSharePercent / 100f,
+                    onClick = onUnidentifiedClick,
+                    muted = true,
+                )
+            }
         }
     }
 }
@@ -1119,7 +1081,11 @@ private fun ConfidenceCard(uiState: HomeUiState, onRegisterReading: () -> Unit) 
                 ConfidenceStatusRow(
                     icon = RzIcons.Pending,
                     iconTint = RzTheme.extendedColors.warning,
-                    text = uiState.recentReadingsCountLabel,
+                    text = pluralStringResource(
+                        R.plurals.home_confidence_readings_status,
+                        uiState.liveReadingCount,
+                        uiState.liveReadingCount,
+                    ),
                 )
                 Text(
                     stringResource(
@@ -1182,19 +1148,18 @@ private fun HomeScreenOverGoalPreview() {
         HomeScreen(
             uiState = HomeUiState(
                 isWithinGoal = false,
-                minisplitStatus = PlanActionStatus.SUGGESTED,
-                minisplitSavingsLabel = "\$64–\$82",
-                minisplitCostMxn = 322,
-                minisplitSharePercent = 38,
-                refrigeradorCostMxn = 141,
-                refrigeradorSharePercent = 17,
-                ps5CostMxn = 93,
-                ps5SharePercent = 11,
+                hasAppliances = true,
+                hasHouseholdTotal = true,
+                topAppliances = listOf(
+                    HomeApplianceShare("a1", "Minisplit recámara", costMxn = 322, sharePercent = 38),
+                    HomeApplianceShare("a2", "Refrigerador", costMxn = 141, sharePercent = 17),
+                    HomeApplianceShare("a3", "Consola", costMxn = 93, sharePercent = 11),
+                ),
+                unidentifiedCostMxn = 74,
+                unidentifiedSharePercent = 34,
             ),
             onProfileClick = {},
             onHouseholdClick = {},
-            onToggleMinisplitAction = {},
-            onSeeWhyMinisplit = {},
             onViewFullAnalysis = {},
             onApplianceClick = {},
             onUnidentifiedClick = {},
@@ -1215,19 +1180,18 @@ private fun HomeScreenWithinGoalPreview() {
                 rangeLowMxn = 724,
                 rangeHighMxn = 804,
                 isWithinGoal = true,
-                minisplitStatus = PlanActionStatus.TRACKING,
-                minisplitSavingsLabel = "\$64–\$82",
-                minisplitCostMxn = 322,
-                minisplitSharePercent = 38,
-                refrigeradorCostMxn = 141,
-                refrigeradorSharePercent = 17,
-                ps5CostMxn = 93,
-                ps5SharePercent = 11,
+                hasAppliances = true,
+                hasHouseholdTotal = true,
+                topAppliances = listOf(
+                    HomeApplianceShare("a1", "Minisplit recámara", costMxn = 322, sharePercent = 38),
+                    HomeApplianceShare("a2", "Refrigerador", costMxn = 141, sharePercent = 17),
+                    HomeApplianceShare("a3", "Consola", costMxn = 93, sharePercent = 11),
+                ),
+                unidentifiedCostMxn = 74,
+                unidentifiedSharePercent = 34,
             ),
             onProfileClick = {},
             onHouseholdClick = {},
-            onToggleMinisplitAction = {},
-            onSeeWhyMinisplit = {},
             onViewFullAnalysis = {},
             onApplianceClick = {},
             onUnidentifiedClick = {},

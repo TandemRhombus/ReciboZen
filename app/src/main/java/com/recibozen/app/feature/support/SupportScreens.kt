@@ -60,8 +60,11 @@ import com.recibozen.app.core.notifications.ReadingReminderStore
 import com.recibozen.app.demo.repository.ReciboZenRepository
 import com.recibozen.app.navigation.Routes
 
-private const val SUPPORT_EMAIL = "emilianohdzv5@gmail.com"
-private const val PAYPAL_HOME = "https://www.paypal.com/"
+/** Where issue reports land. PayPal donations use its own link, see [PAYPAL_ME]. */
+private const val SUPPORT_EMAIL = "emilianohdzvi@gmail.com"
+/** Direct donation link: opens the PayPal app or the web checkout already addressed. */
+private const val PAYPAL_ME = "https://paypal.me/KALIJOKER"
+private const val PAYPAL_ME_HANDLE = "paypal.me/KALIJOKER"
 
 @Composable
 fun SupportCenterRoute(navController: NavHostController) {
@@ -138,10 +141,10 @@ fun DonationRoute(navController: NavHostController) {
         onBack = navController::popBackStack,
         emailCopied = emailCopied,
         onCopyEmail = {
-            clipboard.setPrimaryClip(ClipData.newPlainText("PayPal", SUPPORT_EMAIL))
+            clipboard.setPrimaryClip(ClipData.newPlainText("PayPal", PAYPAL_ME))
             emailCopied = true
         },
-        onOpenPayPal = { uriHandler.openUri(PAYPAL_HOME) },
+        onOpenPayPal = { uriHandler.openUri(PAYPAL_ME) },
     )
 }
 
@@ -166,15 +169,15 @@ fun DonationScreen(onBack: () -> Unit, emailCopied: Boolean, onCopyEmail: () -> 
             )
             RzCard(modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.donate_paypal_label), style = MaterialTheme.typography.labelLarge)
-                Text(SUPPORT_EMAIL, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = RzSpacing.xs))
-                RzSecondaryButton(
-                    text = stringResource(if (emailCopied) R.string.donate_email_copied else R.string.donate_copy_email),
-                    onClick = onCopyEmail,
-                    modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.md),
-                )
+                Text(PAYPAL_ME_HANDLE, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = RzSpacing.xs))
                 RzPrimaryButton(
                     text = stringResource(R.string.donate_open_paypal),
                     onClick = onOpenPayPal,
+                    modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.md),
+                )
+                RzSecondaryButton(
+                    text = stringResource(if (emailCopied) R.string.donate_email_copied else R.string.donate_copy_email),
+                    onClick = onCopyEmail,
                     modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.sm),
                 )
                 Text(stringResource(R.string.donate_paypal_help), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = RzSpacing.sm))

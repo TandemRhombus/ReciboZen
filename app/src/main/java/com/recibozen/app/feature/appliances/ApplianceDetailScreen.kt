@@ -53,7 +53,6 @@ import com.recibozen.app.core.model.ApplianceDataSource
 import com.recibozen.app.core.model.ConfidenceLevel
 import com.recibozen.app.core.model.PlanAction
 import com.recibozen.app.core.model.PlanActionStatus
-import com.recibozen.app.demo.data.DemoReciboZenData
 import com.recibozen.app.demo.repository.ReciboZenRepository
 import com.recibozen.app.navigation.Routes
 import com.recibozen.app.navigation.rzViewModel
@@ -81,11 +80,11 @@ class ApplianceDetailViewModel(
 
     val uiState: StateFlow<ApplianceDetailUiState> = combine(repository.session, repository.tariffCalibration) { session, _ ->
             val appliance = repository.appliance(applianceId, session)
-            val actionId = recommendationActionId(applianceId)
             ApplianceDetailUiState(
                 applianceId = applianceId,
                 appliance = appliance,
-                recommendationAction = session.planActions.find { it.id == actionId },
+                recommendationAction = repository.planActions(session)
+                    .find { it.applianceId == applianceId },
                 recommendations = appliance?.let(ApplianceAdviceEngine::recommendations).orEmpty(),
             )
         }
@@ -95,25 +94,23 @@ class ApplianceDetailViewModel(
             initialValue = ApplianceDetailUiState(
                 applianceId = applianceId,
                 appliance = repository.appliance(applianceId),
-                recommendationAction = repository.session.value.planActions
-                    .find { it.id == recommendationActionId(applianceId) },
+                recommendationAction = repository.planActions()
+                    .find { it.applianceId == applianceId },
                 recommendations = repository.appliance(applianceId)
                     ?.let(ApplianceAdviceEngine::recommendations)
                     .orEmpty(),
             ),
         )
 
+    /** Adds or removes this appliance's top action from the plan. */
     fun onToggleRecommendation() {
-        recommendationActionId(applianceId)?.let { repository.togglePlanAction(it) }
+        repository.planActions()
+            .find { it.applianceId == applianceId }
+            ?.let { repository.togglePlanAction(it.id) }
     }
 
     fun onRemove() = repository.removeAppliance(applianceId)
 
-    private fun recommendationActionId(id: String): String? = when (id) {
-        "minisplit" -> DemoReciboZenData.MINISPLIT_ACTION_ID
-        "ps5" -> DemoReciboZenData.PS5_ACTION_ID
-        else -> null
-    }
 }
 
 @Composable
@@ -593,8 +590,8 @@ private fun ApplianceDetailScreenPreview() {
         ApplianceDetailScreen(
             uiState = ApplianceDetailUiState(
                 applianceId = "ps5",
-                appliance = DemoReciboZenData.appliances.find { it.id == "ps5" },
-                recommendationAction = DemoReciboZenData.planActions.find { it.id == DemoReciboZenData.PS5_ACTION_ID },
+                appliance = null,
+                recommendationAction = null,
             ),
             onBack = {},
             onModifyUsage = {},

@@ -1,5 +1,6 @@
 package com.recibozen.app.feature.appliances
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -49,6 +50,7 @@ import com.recibozen.app.core.components.RzFlowTopBar
 import com.recibozen.app.core.components.RzDropdownField
 import com.recibozen.app.core.components.RzDropdownOption
 import com.recibozen.app.core.components.RzSecondaryButton
+import com.recibozen.app.core.designsystem.RzExtraShapes
 import com.recibozen.app.core.designsystem.RzSpacing
 import com.recibozen.app.core.designsystem.ReciboZenTheme
 import com.recibozen.app.core.model.Appliance
@@ -80,6 +82,11 @@ data class AppliancesEmptyUiState(
     val effectiveRateMxnPerKwh: Double = 0.0,
     val hasCostReference: Boolean = false,
     val spaces: List<HouseSpace> = HouseSpaceDefaults.items,
+    /**
+     * Space of the appliance added most recently. Someone registering the whole
+     * kitchen should not have to pick "Cocina" again on every single item.
+     */
+    val defaultSpaceId: String? = null,
     val certifiedModelResults: List<ApplianceCatalogItem> = emptyList(),
     val certifiedModelCount: Int = 0,
     val isSearchingCertifiedModels: Boolean = false,
@@ -152,13 +159,14 @@ class AppliancesEmptyViewModel(
     ) { state, bills, certified ->
             val latestBill = bills.lastOrNull()
             AppliancesEmptyUiState(
-                billingDays = if (latestBill?.periodStartEpochDay != null && latestBill.periodEndEpochDay != null) {
-                    (latestBill.periodEndEpochDay - latestBill.periodStartEpochDay).toInt().coerceAtLeast(1)
-                } else if (state.billingCycle.contains("bi", ignoreCase = true)) 61 else 30,
+                // Same period length the projection uses, instead of a second
+                // rule that could disagree with the rest of the app.
+                billingDays = repository.energySummary(state).billingDays.takeIf { it > 0 } ?: 30,
                 effectiveRateMxnPerKwh = latestBill?.takeIf { it.consumptionKwh > 0 }
                     ?.let { it.amountMxn.toDouble() / it.consumptionKwh } ?: 0.0,
                 hasCostReference = latestBill?.consumptionKwh?.let { it > 0 } == true,
                 spaces = state.houseSpaces,
+                defaultSpaceId = state.customAppliances.lastOrNull()?.spaceId,
                 certifiedModelResults = certified.results,
                 certifiedModelCount = certified.totalModels,
                 isSearchingCertifiedModels = certified.loading,
@@ -551,6 +559,7 @@ fun AppliancesEmptyScreen(
             effectiveRateMxnPerKwh = uiState.effectiveRateMxnPerKwh,
             hasCostReference = uiState.hasCostReference,
             spaces = uiState.spaces,
+            defaultSpaceId = uiState.defaultSpaceId,
             onDismiss = { selectedItem = null },
             onConfirm = { draft -> onAddCatalogItem(item, draft) },
         )
@@ -561,6 +570,7 @@ fun AppliancesEmptyScreen(
             effectiveRateMxnPerKwh = uiState.effectiveRateMxnPerKwh,
             hasCostReference = uiState.hasCostReference,
             spaces = uiState.spaces,
+            defaultSpaceId = uiState.defaultSpaceId,
             onDismiss = { showCustom = false },
             onConfirm = onAddCustom,
         )
@@ -625,11 +635,14 @@ private fun CatalogItemDialog(
     effectiveRateMxnPerKwh: Double,
     hasCostReference: Boolean,
     spaces: List<HouseSpace>,
+    defaultSpaceId: String?,
     onDismiss: () -> Unit,
     onConfirm: (CatalogApplianceDraft) -> Unit,
 ) {
     val safeSpaces = spaces.ifEmpty { HouseSpaceDefaults.items }
-    var selectedSpace by remember(safeSpaces) { mutableStateOf(safeSpaces.first()) }
+    var selectedSpace by remember(safeSpaces, defaultSpaceId) {
+        mutableStateOf(safeSpaces.firstOrNull { it.id == defaultSpaceId } ?: safeSpaces.first())
+    }
     var quantity by remember { mutableStateOf("1") }
     var brand by remember(item.id) { mutableStateOf(item.brand.orEmpty()) }
     var model by remember(item.id) { mutableStateOf(item.model.orEmpty()) }
@@ -688,6 +701,26 @@ private fun CatalogItemDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(RzSpacing.sm),
             ) {
+                // The number is the reason the user is here: it stays at the top
+                // and updates as the fields change, instead of hiding under them.
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceVariant, RzExtraShapes.cardSmall)
+                        .padding(horizontal = RzSpacing.md, vertical = RzSpacing.sm),
+                ) {
+                    Text(
+                        if (hasCostReference) stringResource(R.string.appliances_catalog_estimate, billingDays, estimate.kwh, estimate.costMxn)
+                        else stringResource(R.string.appliances_catalog_estimate_without_cost, billingDays, estimate.kwh),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        estimate.calculation,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 RzDropdownField(
                     label = stringResource(R.string.appliances_space_select),
                     selectedLabel = selectedSpace.name,
@@ -796,11 +829,6 @@ private fun CatalogItemDialog(
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
-                Text(
-                    if (hasCostReference) stringResource(R.string.appliances_catalog_estimate, billingDays, estimate.kwh, estimate.costMxn)
-                    else stringResource(R.string.appliances_catalog_estimate_without_cost, billingDays, estimate.kwh),
-                )
-                Text(estimate.calculation, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 item.sourceLabel?.let { source ->
                     Text(
                         stringResource(R.string.appliances_catalog_source, source),
@@ -862,12 +890,15 @@ private fun CustomApplianceDialog(
     effectiveRateMxnPerKwh: Double,
     hasCostReference: Boolean,
     spaces: List<HouseSpace>,
+    defaultSpaceId: String?,
     onDismiss: () -> Unit,
     onConfirm: (CustomApplianceDraft) -> Unit,
 ) {
     val safeSpaces = spaces.ifEmpty { HouseSpaceDefaults.items }
     var name by remember { mutableStateOf("") }
-    var selectedSpace by remember(safeSpaces) { mutableStateOf(safeSpaces.first()) }
+    var selectedSpace by remember(safeSpaces, defaultSpaceId) {
+        mutableStateOf(safeSpaces.firstOrNull { it.id == defaultSpaceId } ?: safeSpaces.first())
+    }
     var quantity by remember { mutableStateOf("1") }
     var brand by remember { mutableStateOf("") }
     var model by remember { mutableStateOf("") }
@@ -915,6 +946,26 @@ private fun CustomApplianceDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(RzSpacing.sm),
             ) {
+                estimate?.let {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surfaceVariant, RzExtraShapes.cardSmall)
+                            .padding(horizontal = RzSpacing.md, vertical = RzSpacing.sm),
+                    ) {
+                        Text(
+                            if (hasCostReference) stringResource(R.string.appliances_catalog_estimate, billingDays, it.kwh, it.costMxn)
+                            else stringResource(R.string.appliances_catalog_estimate_without_cost, billingDays, it.kwh),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            it.calculation,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
                 Text(stringResource(R.string.appliances_custom_dialog_hint), style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(
                     name,
@@ -1026,13 +1077,6 @@ private fun CustomApplianceDialog(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
-                }
-                estimate?.let {
-                    Text(
-                        if (hasCostReference) stringResource(R.string.appliances_catalog_estimate, billingDays, it.kwh, it.costMxn)
-                        else stringResource(R.string.appliances_catalog_estimate_without_cost, billingDays, it.kwh),
-                    )
-                    Text(it.calculation, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         },

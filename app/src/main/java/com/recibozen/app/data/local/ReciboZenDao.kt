@@ -72,6 +72,23 @@ interface ReciboZenDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTariffReferences(items: List<TariffRateReferenceEntity>)
+
+    /**
+     * Newest synced CFE rows for one tariff. Only the latest
+     * `effectiveYearMonth` is returned, so an older catalog left behind by a
+     * previous sync is never mixed with the current one.
+     */
+    @Query(
+        """
+        SELECT * FROM tariff_rate_references
+        WHERE tariffCode = :tariffCode
+          AND effectiveYearMonth = (
+            SELECT MAX(effectiveYearMonth) FROM tariff_rate_references WHERE tariffCode = :tariffCode
+          )
+        ORDER BY season, blockOrder
+        """,
+    )
+    fun observeTariffReference(tariffCode: String): Flow<List<TariffRateReferenceEntity>>
 }
 
 data class ElectricServiceWithMeters(

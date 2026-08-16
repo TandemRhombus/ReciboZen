@@ -3,7 +3,6 @@ package com.recibozen.app.demo.repository
 import com.recibozen.app.core.designsystem.AppThemeMode
 import com.recibozen.app.core.model.HistoryReadingEntry
 import com.recibozen.app.core.model.HistoryUnit
-import com.recibozen.app.core.model.PlanAction
 import com.recibozen.app.core.model.Appliance
 import com.recibozen.app.core.model.EntitlementTier
 import com.recibozen.app.core.model.HouseSpace
@@ -13,6 +12,8 @@ import com.recibozen.app.core.model.HouseSpaceDefaults
 data class ReciboZenSessionState(
     val isHydrated: Boolean = true,
     val onboardingCompleted: Boolean = false,
+    /** The guided tour was finished or skipped. Replayable from Perfil. */
+    val tutorialCompleted: Boolean = false,
     val themeMode: AppThemeMode = AppThemeMode.SYSTEM,
     val userName: String = "",
     val householdName: String = "",
@@ -27,6 +28,15 @@ data class ReciboZenSessionState(
     /** Last domestic tariff for each service, needed to calculate a DAC exit target. */
     val dacReferenceTariffsByService: Map<String, String> = emptyMap(),
     val billingCycle: String = "",
+    /**
+     * Goal, meter type and city belong to the supply, not to the person: a Plus
+     * or Familiar household has one of each per service, and the city feeds the
+     * solar study. The active service's value is mirrored into [goalMxn],
+     * [meterType] and [location] so every screen keeps reading one field.
+     */
+    val goalMxnByService: Map<String, Int> = emptyMap(),
+    val meterTypeByService: Map<String, String> = emptyMap(),
+    val locationByService: Map<String, String> = emptyMap(),
     val goalMxn: Int = 0,
     val meterType: String = "",
     val applianceHoursPerWeek: Map<String, Int> = emptyMap(),
@@ -36,7 +46,12 @@ data class ReciboZenSessionState(
     val simulatorScenarioName: String = "",
     val simulatorScenarioWatts: Int = 0,
     val simulatorScenarioHoursPerWeek: Double = 0.0,
-    val planActions: List<PlanAction> = emptyList(),
+    /**
+     * Ids of the savings actions the household decided to follow. The action
+     * list itself is derived from the appliance inventory on every read, so
+     * only the decision is persisted, never a snapshot of the advice.
+     */
+    val trackedActionIds: Set<String> = emptySet(),
     val dialAngles: List<Float> = listOf(66.3f, 56.7f, 153.4f, 266.4f, 216f),
     val dialDirections: List<Boolean> = listOf(true, false, true, false, true),
     val dialSelectedIndex: Int = 0,
@@ -93,6 +108,12 @@ data class EnergySummary(
     val applianceProjectedKwh: Int = 0,
     val applianceProjectedCostMxn: Int = 0,
     val forecastBasis: EnergyForecastBasis = EnergyForecastBasis.NONE,
+    /**
+     * The billing period the household is living right now, chained forward from
+     * the latest imported bill. Single source for every "period" label and for
+     * [daysRemaining], so Home, Análisis del periodo and DAC cannot disagree.
+     */
+    val currentPeriod: com.recibozen.app.core.calculation.CurrentBillingPeriod? = null,
 ) {
     val hasCurrentMeterProjection: Boolean
         get() = forecastBasis == EnergyForecastBasis.METER
@@ -129,6 +150,37 @@ data class TariffCalibrationState(
 ) {
     val isCalibrated: Boolean
         get() = coverage != com.recibozen.app.core.calculation.TariffCalibration.Coverage.NONE
+}
+
+/**
+ * Where the rates behind the estimate came from, in decreasing order of how
+ * closely they match this household.
+ */
+enum class TariffRateOrigin {
+    /** Tier rates read from the household's own CFE bill. */
+    BILL,
+
+    /** CFE's published catalog, synced by the backend and stored locally. */
+    REMOTE_CATALOG,
+
+    /** Built-in generic blocks. An order of magnitude, never a quote. */
+    GENERIC,
+}
+
+/**
+ * Rates published by CFE for one tariff, synced by the backend and kept in
+ * Room. Seasonal tariffs carry two sets; without a verified summer start for
+ * the locality we do not guess which one applies today.
+ */
+data class RemoteTariffReference(
+    val tariffCode: String,
+    val effectiveYearMonth: String,
+    val season: String,
+    val blocks: List<com.recibozen.app.core.calculation.TariffBlock>,
+    val fixedChargeMxn: Double?,
+    val sourceUrl: String?,
+) {
+    val isSeasonAmbiguous: Boolean get() = season != "NONE"
 }
 
 /** Result of interpreting the 5 dial faces into a meter reading. */

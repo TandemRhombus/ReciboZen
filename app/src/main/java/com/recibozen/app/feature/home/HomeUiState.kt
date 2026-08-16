@@ -2,16 +2,23 @@ package com.recibozen.app.feature.home
 
 import com.recibozen.app.core.model.ConfidenceLevel
 import com.recibozen.app.core.model.BillPeriod
-import com.recibozen.app.core.model.PlanActionStatus
 import com.recibozen.app.core.calculation.DacRiskSnapshot
 import com.recibozen.app.core.calculation.ConsumptionPaceRelation
 
 enum class HomeDataMode { EMPTY, BILL_REFERENCE, APPLIANCE_FORECAST, PROJECTION }
 
+/** One row of "what is driving the bill", built from the user's own inventory. */
+data class HomeApplianceShare(
+    val id: String,
+    val name: String,
+    val costMxn: Int,
+    val sharePercent: Int,
+)
+
 /**
  * Everything the "Inicio" tab needs to render, derived from
- * [com.recibozen.app.demo.repository.ReciboZenSessionState] + the demo
- * fixtures. Immutable snapshot consumed by the stateless [HomeScreen].
+ * [com.recibozen.app.demo.repository.ReciboZenSessionState]. Immutable snapshot
+ * consumed by the stateless [HomeScreen].
  */
 data class HomeUiState(
     val userName: String = "",
@@ -23,6 +30,8 @@ data class HomeUiState(
     val periodLabel: String = "",
     val currentPeriodLabel: String = "",
     val currentPeriodDateRange: String = "",
+    /** The latest bill is old enough that whole periods have closed since. */
+    val currentPeriodIsEstimated: Boolean = false,
     val projectedMxn: Int = 0,
     val rangeLowMxn: Int = 0,
     val rangeHighMxn: Int = 0,
@@ -46,8 +55,6 @@ data class HomeUiState(
     val applianceCoveragePercent: Int = 0,
     val hasCurrentMeterProjection: Boolean = false,
 
-    val minisplitStatus: PlanActionStatus = PlanActionStatus.SUGGESTED,
-    val minisplitSavingsLabel: String = "",
 
     val dailyRateNow: Double = 0.0,
     val dailyRateRecommended: Double = 0.0,
@@ -56,18 +63,16 @@ data class HomeUiState(
     val hasAppliances: Boolean = false,
     val applianceCount: Int = 0,
 
-    val minisplitCostMxn: Int = 0,
-    val minisplitSharePercent: Int = 0,
-    val refrigeradorCostMxn: Int = 0,
-    val refrigeradorSharePercent: Int = 0,
-    val ps5CostMxn: Int = 0,
-    val ps5SharePercent: Int = 0,
+    /** Highest-cost appliances the user actually registered, already ranked. */
+    val topAppliances: List<HomeApplianceShare> = emptyList(),
     val unidentifiedCostMxn: Int = 0,
     val unidentifiedSharePercent: Int = 0,
+    /** True only when a household total exists to subtract the inventory from. */
+    val hasHouseholdTotal: Boolean = false,
 
     val confidenceLevel: ConfidenceLevel = ConfidenceLevel.MEDIUM,
     val previousBillsLoadedCount: Int = 0,
-    val recentReadingsCountLabel: String = "0 lecturas recientes",
+    val liveReadingCount: Int = 0,
     val missingApplianceSchedules: Int = 0,
     val dacRisk: DacRiskSnapshot = DacRiskSnapshot(),
 )

@@ -3,6 +3,7 @@ package com.recibozen.app.demo.repository
 import com.recibozen.app.core.designsystem.AppThemeMode
 import com.recibozen.app.core.model.Appliance
 import com.recibozen.app.core.model.BillPeriod
+import com.recibozen.app.core.model.PlanAction
 import com.recibozen.app.core.model.HistoryUnit
 import com.recibozen.app.core.model.ReadingMethod
 import com.recibozen.app.core.model.ElectricServiceIdentity
@@ -40,6 +41,13 @@ interface ReciboZenRepository {
     fun billHistory(state: ReciboZenSessionState = session.value): List<BillPeriod>
 
     /**
+     * Savings actions for this household, ranked by the advice engine over
+     * the appliances the user registered. Derived on every read: it is empty
+     * until there is an inventory, and never shows preloaded suggestions.
+     */
+    fun planActions(state: ReciboZenSessionState = session.value): List<PlanAction>
+
+    /**
      * Cost of [kwh] under the tariff currently in force. Exposed so screens can
      * ask marginal questions ("what would adding this appliance cost?") without
      * reimplementing the progressive blocks — adding 100 kWh is not a flat rate,
@@ -47,6 +55,13 @@ interface ReciboZenRepository {
      */
     fun estimateCostMxn(kwh: Int): Int
     fun activeTariffBlocks(): List<TariffBlock>
+
+    /**
+     * Which source priced the current estimate: the household's own bill, CFE's
+     * synced catalog, or the built-in generic blocks. Screens read it so a
+     * generic order of magnitude is never presented like a real rate.
+     */
+    fun tariffRateOrigin(): TariffRateOrigin
     fun dialReading(state: ReciboZenSessionState = session.value): DialReadingResult
 
     fun setThemeMode(mode: AppThemeMode)
@@ -85,6 +100,9 @@ interface ReciboZenRepository {
     fun setHistoryUnit(unit: HistoryUnit)
     fun setOnboardingStep(step: Int)
     fun completeOnboarding()
+
+    /** Marks the guided tour as seen, or queues it again from Perfil. */
+    fun setTutorialCompleted(completed: Boolean)
     fun setMeterType(meterType: String)
     fun updateProfile(userName: String, householdName: String, location: String, goalMxn: Int)
     fun setTariff(tariff: String)

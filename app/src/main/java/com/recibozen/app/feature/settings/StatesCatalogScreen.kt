@@ -67,12 +67,6 @@ fun StatesCatalogRoute(navController: NavHostController, repository: ReciboZenRe
         uiState = uiState,
         onBack = { navController.popBackStack() },
         onRegisterReading = { navController.navigate(Routes.ReadingMethod) },
-        onReviewReading = { navController.navigate(Routes.ReadingDial) },
-        onGoHome = {
-            navController.navigate(Routes.Home) {
-                popUpTo(Routes.Home) { inclusive = false }
-            }
-        },
     )
 }
 
@@ -81,8 +75,6 @@ fun StatesCatalogScreen(
     uiState: StatesCatalogUiState,
     onBack: () -> Unit,
     onRegisterReading: () -> Unit,
-    onReviewReading: () -> Unit,
-    onGoHome: () -> Unit,
 ) {
     Scaffold(topBar = { RzFlowTopBar(title = stringResource(R.string.states_catalog_title), onBack = onBack) }) { padding ->
         Column(
@@ -102,7 +94,7 @@ fun StatesCatalogScreen(
             CalculatingStateCard()
             InsufficientInfoStateCard(onRegisterReading = onRegisterReading)
             OfflineStateCard()
-            DubiousReadingStateCard(onReview = onReviewReading, onSave = onGoHome)
+            DubiousReadingStateCard()
             ReadingRegisteredStateCard()
             PlanEmptyStateCard()
             SolarLowConfidenceStateCard()
@@ -181,7 +173,7 @@ private fun OfflineStateCard() {
 }
 
 @Composable
-private fun DubiousReadingStateCard(onReview: () -> Unit, onSave: () -> Unit) {
+private fun DubiousReadingStateCard() {
     RzCard(modifier = Modifier.fillMaxWidth()) {
         StateEyebrow(stringResource(R.string.states_catalog_eyebrow_dubious))
         RzInlineBanner(
@@ -191,21 +183,12 @@ private fun DubiousReadingStateCard(onReview: () -> Unit, onSave: () -> Unit) {
             icon = RzIcons.GppMaybe,
             modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.sm),
         )
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.md),
-            horizontalArrangement = Arrangement.spacedBy(RzSpacing.sm),
-        ) {
-            RzSecondaryButton(
-                text = stringResource(R.string.states_catalog_dubious_review),
-                onClick = onReview,
-                modifier = Modifier.weight(1f),
-            )
-            RzSecondaryButton(
-                text = stringResource(R.string.states_catalog_dubious_save),
-                onClick = onSave,
-                modifier = Modifier.weight(1f),
-            )
-        }
+        Text(
+            stringResource(R.string.states_catalog_dubious_what_to_do),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = RzSpacing.sm),
+        )
     }
 }
 
@@ -267,8 +250,6 @@ private fun StatesCatalogScreenPreview() {
             uiState = StatesCatalogUiState(),
             onBack = {},
             onRegisterReading = {},
-            onReviewReading = {},
-            onGoHome = {},
         )
     }
 }

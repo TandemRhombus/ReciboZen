@@ -38,7 +38,6 @@ import com.recibozen.app.core.designsystem.RzExtraShapes
 import com.recibozen.app.core.designsystem.RzIcons
 import com.recibozen.app.core.designsystem.RzSpacing
 import com.recibozen.app.core.designsystem.ReciboZenTheme
-import com.recibozen.app.demo.data.DemoReciboZenData
 import com.recibozen.app.demo.repository.ReciboZenRepository
 import com.recibozen.app.navigation.rzViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -55,13 +54,15 @@ import kotlinx.coroutines.flow.stateIn
  */
 data class AppearanceUiState(
     val themeMode: AppThemeMode = AppThemeMode.SYSTEM,
-    val periodLabel: String = DemoReciboZenData.PERIOD_LABEL,
-    val projectedMxn: Int = DemoReciboZenData.BASE_PROJECTED_MXN,
-    val projectedRangeLowMxn: Int = DemoReciboZenData.BASE_PROJECTED_MXN - 36,
-    val projectedRangeHighMxn: Int = DemoReciboZenData.BASE_PROJECTED_MXN + 44,
-    val goalMxn: Int = DemoReciboZenData.GOAL_MXN,
-    val overGoalMxn: Int = DemoReciboZenData.BASE_PROJECTED_MXN - DemoReciboZenData.GOAL_MXN,
-    val daysRemaining: Int = DemoReciboZenData.DAYS_REMAINING,
+    // Neutral defaults: the sample card exists to show the theme, and it must
+    // not flash invented amounts before the real state arrives.
+    val periodLabel: String = "",
+    val projectedMxn: Int = 0,
+    val projectedRangeLowMxn: Int = 0,
+    val projectedRangeHighMxn: Int = 0,
+    val goalMxn: Int = 0,
+    val overGoalMxn: Int = 0,
+    val daysRemaining: Int = 0,
 )
 
 class AppearanceViewModel(private val repository: ReciboZenRepository) : ViewModel() {
