@@ -21,3 +21,4 @@ local.properties
 
 # Scratch folder used to move files in and out of the repo.
 /tmp/_transfer/
+/tmp/_to_delete/
