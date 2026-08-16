@@ -19,8 +19,18 @@ data class ApplianceCatalogItem(
     val brand: String? = null,
     val model: String? = null,
     val annualKwh: Double? = null,
+    /** Lowest certified value found for the same normalized brand/model. */
+    val annualKwhMin: Double? = null,
+    /** Highest certified value found for the same normalized brand/model. */
+    val annualKwhMax: Double? = null,
     val sourceLabel: String? = null,
     val sourceUrl: String? = null,
+    val dataSource: ApplianceDataSource? = null,
+    val confidence: ConfidenceLevel? = null,
+    /** null means the source did not make a market claim. */
+    val marketMexicoVerified: Boolean? = null,
+    /** ENERGY STAR sometimes certifies a wildcard model family instead of one exact SKU. */
+    val isModelFamily: Boolean = false,
 )
 
 data class ApplianceUsageEstimate(
@@ -110,31 +120,65 @@ object ApplianceCatalog {
             "model_lg_gb35bvb", "Refrigerador Bottom Freezer 12 pies³", ApplianceCategory.KITCHEN, 0, null,
             brand = "LG", model = "GB35BVB", annualKwh = 329.0, sourceLabel = "Ficha oficial LG México",
             sourceUrl = "https://www.lg.com/mx/small-medium-business/refrigeradores/refrigeradores-bottom-freezer-congelador-abajo/gb35bvb/",
+            marketMexicoVerified = true,
         ),
         ApplianceCatalogItem(
             "model_lg_gm39bt", "Refrigerador French Door 29 pies³", ApplianceCategory.KITCHEN, 0, null,
             brand = "LG", model = "GM39BT", annualKwh = 534.0, sourceLabel = "Ficha oficial LG México",
             sourceUrl = "https://www.lg.com/mx/refrigeradores/refrigeradores-french-door/gm39bt/",
+            marketMexicoVerified = true,
         ),
         ApplianceCatalogItem(
             "model_lg_gm65bpp", "Refrigerador French Door 25 pies³", ApplianceCategory.KITCHEN, 0, null,
             brand = "LG", model = "GM65BPP", annualKwh = 535.0, sourceLabel = "Ficha oficial LG México",
             sourceUrl = "https://www.lg.com/mx/refrigeradores/refrigeradores-french-door/gm65bpp/",
+            marketMexicoVerified = true,
         ),
         ApplianceCatalogItem(
             "model_lg_gm90fip", "Refrigerador Multi-Door 32 pies³", ApplianceCategory.KITCHEN, 0, null,
             brand = "LG", model = "GM90FIP", annualKwh = 712.0, sourceLabel = "Ficha oficial LG México",
             sourceUrl = "https://www.lg.com/mx/refrigeradores/refrigeradores-french-door/gm90fip/",
+            marketMexicoVerified = true,
         ),
         ApplianceCatalogItem(
             "model_samsung_rf22a4010s9", "Refrigerador French Door 22 pies³", ApplianceCategory.KITCHEN, 0, null,
             brand = "Samsung", model = "RF22A4010S9/EM", annualKwh = 504.0, sourceLabel = "Ficha oficial Samsung México",
             sourceUrl = "https://www.samsung.com/mx/refrigerators/french-door/rf4500a-french-door-refrigerator-flat-door-design-silver-rf22a4010s9-em/",
+            marketMexicoVerified = true,
         ),
         ApplianceCatalogItem(
             "model_mabe_rma0821xmxgc", "Refrigerador 8 pies³", ApplianceCategory.KITCHEN, 0, null,
             brand = "Mabe", model = "RMA0821XMXGC", annualKwh = 316.0, sourceLabel = "Manual oficial Mabe",
             sourceUrl = "https://servicio.mabeglobal.com/medias/RMA0821XMXGC-ManualUsuario-Refrigerador.pdf",
+            marketMexicoVerified = true,
+        ),
+
+        // Potencias por modelo recuperadas del paquete y respaldadas por fichas oficiales.
+        // Se calculan con las horas reales del usuario; no se presenta el perfil de uso del
+        // fabricante como si fuera una medición de ese hogar.
+        ApplianceCatalogItem(
+            "model_sony_ps5_cfi2016", "PlayStation 5", ApplianceCategory.ENTERTAINMENT, 217, 14,
+            brand = "Sony", model = "CFI-2016", sourceLabel = "Potencia activa oficial de PlayStation",
+            sourceUrl = "https://www.playstation.com/en-dk/legal/ecodesign/",
+            dataSource = ApplianceDataSource.MANUFACTURER_LABEL, confidence = ConfidenceLevel.HIGH,
+        ),
+        ApplianceCatalogItem(
+            "model_sony_ps5_cfi1216b", "PlayStation 5 Digital", ApplianceCategory.ENTERTAINMENT, 201, 14,
+            brand = "Sony", model = "CFI-1216B", sourceLabel = "Potencia activa oficial de PlayStation",
+            sourceUrl = "https://www.playstation.com/en-dk/legal/ecodesign/",
+            dataSource = ApplianceDataSource.MANUFACTURER_LABEL, confidence = ConfidenceLevel.HIGH,
+        ),
+        ApplianceCatalogItem(
+            "model_sony_ps5_pro_cfi7021", "PlayStation 5 Pro", ApplianceCategory.ENTERTAINMENT, 216, 14,
+            brand = "Sony", model = "CFI-7021", sourceLabel = "Potencia activa oficial de PlayStation",
+            sourceUrl = "https://www.playstation.com/en-dk/legal/ecodesign/",
+            dataSource = ApplianceDataSource.MANUFACTURER_LABEL, confidence = ConfidenceLevel.HIGH,
+        ),
+        ApplianceCatalogItem(
+            "model_nintendo_switch2", "Nintendo Switch 2", ApplianceCategory.ENTERTAINMENT, 19, 14,
+            brand = "Nintendo", model = "Switch 2", sourceLabel = "Especificaciones oficiales de Nintendo",
+            sourceUrl = "https://www.nintendo.com/au/hardware/nintendo-switch-2/tech-specs/",
+            dataSource = ApplianceDataSource.MANUFACTURER_LABEL, confidence = ConfidenceLevel.HIGH,
         ),
 
         // Catálogo genérico: potencia orientativa y perfiles editables basados en la base CFE entregada.
@@ -285,7 +329,8 @@ object ApplianceCatalog {
             kwh = estimate.kwh,
             sharePercent = 0,
             hoursPerWeek = if (usesPeriodKwh) null else hoursPerWeek,
-            confidence = if (item.annualKwh != null) ConfidenceLevel.HIGH else ConfidenceLevel.MEDIUM,
+            confidence = item.confidence
+                ?: if (item.annualKwh != null) ConfidenceLevel.HIGH else ConfidenceLevel.MEDIUM,
             opportunity = OpportunityLevel.MEDIUM,
             activeCostMxn = if (estimate.standbyKwh > 0) {
                 (estimate.activeKwh * effectiveRateMxnPerKwh).roundToInt()
@@ -300,7 +345,8 @@ object ApplianceCatalog {
             category = item.category,
             powerWatts = item.typicalWatts,
             standbyWatts = item.standbyWatts.takeIf { it > 0 },
-            dataSource = if (item.annualKwh != null) ApplianceDataSource.MANUFACTURER_LABEL else ApplianceDataSource.CATALOG,
+            dataSource = item.dataSource
+                ?: if (item.annualKwh != null) ApplianceDataSource.MANUFACTURER_LABEL else ApplianceDataSource.CATALOG,
             quantity = safeQuantity,
             spaceId = spaceId,
             brand = brand?.trim()?.takeIf { it.isNotEmpty() },
@@ -309,6 +355,10 @@ object ApplianceCatalog {
             unitKwh = exactUnitKwh,
             referencePeriodDays = billingDays.coerceAtLeast(1),
             referenceAnnualKwh = item.annualKwh,
+            referenceAnnualKwhMin = item.annualKwhMin ?: item.annualKwh,
+            referenceAnnualKwhMax = item.annualKwhMax ?: item.annualKwh,
+            marketMexicoVerified = item.marketMexicoVerified,
+            isModelFamily = item.isModelFamily,
             sourceLabel = item.sourceLabel,
             sourceUrl = item.sourceUrl,
         )

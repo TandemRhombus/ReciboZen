@@ -15,6 +15,9 @@
     <string name="appliances_forecast_meter_comparison">El ritmo del medidor proyecta %1$d kWh. Tus aparatos explican aproximadamente %2$d%% de ese consumo.</string>
     <string name="appliances_forecast_needs_meter">Esta estimación usa las potencias y horarios capturados. Una lectura posterior permitirá contrastarla con el consumo real.</string>
     <string name="appliances_forecast_no_double_count">El inventario y el medidor son dos cálculos del mismo consumo; nunca se suman entre sí.</string>
+    <string name="appliances_advice_summary_title">Prioridades de ahorro</string>
+    <string name="appliances_advice_summary_description">Ordenadas con tus aparatos, horarios y consumo en reposo. Toca una para ver el consejo completo y su respaldo.</string>
+    <string name="appliances_advice_summary_savings">Hasta ~%1$.1f kWh evitables por periodo con los datos capturados</string>
 
     <string name="appliances_filter_top_spend">Mayor gasto</string>
     <string name="appliances_filter_room">Habitación</string>
@@ -23,6 +26,7 @@
 
     <string name="appliances_card_subtitle">%1$s · %2$d kWh en %3$d días · %4$d%% del hogar</string>
     <string name="appliances_card_subtitle_with_standby">%1$s · %2$d kWh en %5$d días · %3$d%% del hogar · $%4$d en reposo</string>
+    <string name="appliances_card_advice">Consejo: %1$s →</string>
     <string name="appliances_name_with_quantity">%1$s × %2$d</string>
     <string name="appliances_cost_period">$%1$d / %2$d días</string>
     <string name="appliances_cost_pending">Costo pendiente</string>
@@ -69,13 +73,22 @@
     <!-- Catálogo y alta -->
     <string name="appliances_catalog_top_bar_title">Agregar aparato</string>
     <string name="appliances_catalog_title">¿Qué aparato quieres agregar?</string>
-    <string name="appliances_catalog_description">Busca entre %1$d aparatos comunes. Usamos potencia y uso típicos como punto de partida; podrás ajustarlos.</string>
+    <string name="appliances_catalog_description">Explora %1$d aparatos comunes o busca entre %2$d modelos con consumo anual certificado. Todo se puede ajustar.</string>
     <string name="appliances_catalog_period_context">Las estimaciones siguientes cubren %1$d días, según el ciclo de tu suministro.</string>
     <string name="appliances_catalog_search">Buscar aparato</string>
+    <string name="appliances_catalog_model_search_hint">Escribe al menos 2 caracteres para buscar marca o modelo certificado.</string>
+    <string name="appliances_catalog_international_notice">Catálogo técnico internacional; la disponibilidad comercial en México no está confirmada.</string>
+    <string name="appliances_catalog_loading">Buscando modelos certificados…</string>
+    <string name="appliances_catalog_load_error">No pudimos abrir el catálogo certificado. Los aparatos comunes siguen disponibles.</string>
     <string name="appliances_catalog_watts_short">%1$d W</string>
     <string name="appliances_catalog_annual_short">%1$.0f kWh/año</string>
     <string name="appliances_catalog_all">Todos</string>
     <string name="appliances_catalog_no_results">No encontramos ese aparato. Puedes registrarlo como personalizado al final.</string>
+    <string name="appliances_catalog_market_unverified">Venta en México no verificada</string>
+    <string name="appliances_catalog_market_unverified_detail">El consumo fue certificado por ENERGY STAR, pero la fuente no confirma que este SKU se comercialice en México.</string>
+    <string name="appliances_catalog_model_family">Familia de modelos</string>
+    <string name="appliances_catalog_model_family_detail">La certificación representa una familia o patrón de modelos. Compara el código completo de tu etiqueta antes de usarla.</string>
+    <string name="appliances_catalog_annual_range">Otras certificaciones del mismo modelo reportan entre %1$.1f y %2$.1f kWh/año.</string>
     <string name="appliances_catalog_room">Habitación o zona</string>
     <string name="appliances_catalog_hours">Horas por semana</string>
     <string name="appliances_catalog_cycle_based">Este aparato funciona por ciclos; usamos un consumo mensual típico en vez de pedirte 24 horas diarias.</string>
@@ -182,14 +195,19 @@
     <string name="appliances_detail_active_label">Activo · $%1$d</string>
     <string name="appliances_detail_standby_label">Reposo · $%1$d</string>
     <string name="appliances_detail_active_standby_note">El reposo es lo que gasta mientras está encendida sin que la uses.</string>
-    <string name="appliances_detail_recommendation_badge">MEJOR RECOMENDACIÓN</string>
-    <string name="appliances_detail_recommendation_ps5_title">Configura el ahorro en reposo</string>
-    <string name="appliances_detail_recommendation_ps5_description">Podrías ahorrar aproximadamente %1$s por periodo. Lo sugerimos porque casi una quinta parte de su costo ocurre sin que la uses.</string>
-    <string name="appliances_detail_recommendation_minisplit_title">Reduce 35 minutos diarios</string>
-    <string name="appliances_detail_recommendation_minisplit_description">Podrías ahorrar aproximadamente %1$s por periodo reduciendo el tiempo de uso diario del minisplit.</string>
-    <string name="appliances_detail_recommendation_effort_low">Esfuerzo bajo</string>
-    <string name="appliances_detail_recommendation_effort_medium">Esfuerzo medio</string>
-    <string name="appliances_detail_recommendation_effort_high">Esfuerzo alto</string>
+    <string name="appliances_advice_section_title">Cómo ahorrar con este aparato</string>
+    <string name="appliances_advice_section_description">Los pasos exactos sólo se muestran cuando hay una guía compatible de marca o modelo. Los demás consejos son buenas prácticas por categoría.</string>
+    <string name="appliances_advice_priority_high">Prioridad alta</string>
+    <string name="appliances_advice_priority_medium">Prioridad media</string>
+    <string name="appliances_advice_priority_low">Mejora útil</string>
+    <string name="appliances_advice_evidence_model">Modelo documentado</string>
+    <string name="appliances_advice_evidence_brand">Guía de la marca</string>
+    <string name="appliances_advice_evidence_data">Según tus datos</string>
+    <string name="appliances_advice_evidence_category">Consejo general</string>
+    <string name="appliances_advice_estimated_savings">Ahorro estimado: ~%1$.1f kWh por periodo</string>
+    <string name="appliances_advice_estimated_savings_with_cost">Ahorro estimado: ~%1$.1f kWh · cerca de $%2$d por periodo</string>
+    <string name="appliances_advice_open_source">Abrir guía oficial</string>
+    <string name="appliances_advice_plan_savings">Si lo agregas al plan, la meta registrada es %1$s por periodo.</string>
     <string name="appliances_detail_recommendation_cta_add">Agregar a mi plan</string>
     <string name="appliances_detail_recommendation_cta_remove">Quitar de mi plan</string>
     <string name="appliances_detail_calc_title">Cómo se calculó</string>
@@ -197,6 +215,9 @@
     <string name="appliances_detail_source_catalog">Promedio genérico del catálogo</string>
     <string name="appliances_detail_source_inferred">Inferencia a partir del recibo</string>
     <string name="appliances_detail_open_source">Abrir ficha oficial</string>
+    <string name="appliances_detail_market_unverified">Disponibilidad en México no verificada por la fuente.</string>
+    <string name="appliances_detail_model_family">Es una familia de modelos; confirma que el código completo coincida con tu etiqueta.</string>
+    <string name="appliances_detail_annual_range">Certificaciones localizadas para este modelo: %1$.1f–%2$.1f kWh/año.</string>
     <string name="appliances_detail_edit_data">Editar datos del aparato</string>
     <string name="appliances_detail_remove">Quitar este aparato</string>
     <string name="appliances_detail_remove_title">¿Quitar %1$s?</string>

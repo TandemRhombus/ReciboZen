@@ -136,6 +136,9 @@ El estado de sesión vive en **`demo/repository/ReciboZenSessionState.kt`** por 
 - Cambiar unidad Pesos/kWh en Historial.
 - Editar nombre, hogar, ciudad y meta desde Perfil.
 - Agregar aparatos sugeridos o el aparato del simulador.
+- Buscar por marca/modelo en un índice local comprimido de 9,305 equipos con consumo anual certificado por ENERGY STAR. El índice se carga sólo al buscar, conserva rangos cuando existen varias certificaciones y avisa que la venta en México no fue verificada por el dataset.
+- Recibir consejos de ahorro para cada aparato y una lista priorizada para todo el inventario. El motor distingue guía por modelo, guía de marca, cálculo con watts de reposo y consejo general por categoría; nunca recomienda desconectar refrigeración, red, seguridad, respaldo o cargas médicas a ciegas.
+- Consultar pasos oficiales de ahorro para equipos compatibles (PS5, Switch 2, Xbox, Smart TV Samsung y aire acondicionado LG) desde la ficha del aparato. Los pasos de marca incluyen una advertencia de compatibilidad y enlace a la documentación original.
 - Generar/compartir el PDF del preestudio solar.
 - Importar un recibo CFE en PDF con texto nativo u OCR local, revisión humana, deduplicación por SHA-256 y persistencia del desglose/historial.
 - Consultar desde Inicio y Plan la prevención DAC: usa una ventana móvil de 365 días, normaliza periodos irregulares por días reales y aplica el límite específico de la tarifa doméstica (1, 1A, 1B, 1C, 1D, 1E o 1F). Con historial suficiente muestra el margen restante y cuánto podría consumirse como máximo en el siguiente recibo; con datos incompletos lo presenta como estimación, nunca como una clasificación definitiva de CFE.
@@ -152,7 +155,8 @@ El estado de sesión vive en **`demo/repository/ReciboZenSessionState.kt`** por 
 ## Límites actuales
 
 - No hay login ni sincronización entre dispositivos; el producto funciona sin conexión y guarda todo localmente. El backend actual es sólo la frontera segura inicial para premium.
-- El catálogo de modelos es local y auditable, pero todavía no se actualiza desde backend. Cada modelo declara su fuente; ampliar marcas no requiere cambiar el motor, sólo incorporar registros verificados.
+- El catálogo de modelos es local y auditable, pero todavía no se actualiza desde backend. Cada modelo declara su fuente; ampliar marcas no requiere cambiar el motor, sólo regenerar el asset con `tools/build_energy_star_catalog.py` y un paquete versionado.
+- `Energy_Device_Dataset_Mexico_v1.zip` contiene 53,721 fichas, pero sólo 9,305 grupos marca/modelo tienen un valor anual aprovechable después de validar y deduplicar. Ninguna fila venía con mercado México verificado. Se excluyeron explícitamente 590 máquinas de hielo comercial porque la fuente mide kWh por 100 lb de hielo, aunque el master v1 las colocó en `annual_kwh`; usarlas como kWh/año habría subestimado gravemente el consumo.
 - No hay conexión ni descarga automática desde CFE; el usuario elige el PDF desde el selector del sistema.
 - OCR reconoce números impresos/digitales; un medidor analógico de carátulas puede requerir el flujo interactivo de manecillas.
 - Las tarifas embebidas son una configuración estimativa. Antes de publicar se debe conectar una fuente oficial/versionada o permitir captura completa de tarifa, temporada, región, subsidios y cargos del recibo.
@@ -191,6 +195,8 @@ El estado de sesión vive en **`demo/repository/ReciboZenSessionState.kt`** por 
 ## Verificación del MVP funcional
 
 - `./gradlew testDebugUnitTest assembleDebug`: **BUILD SUCCESSFUL**.
+- El motor de recomendaciones tiene pruebas para los 100+ aparatos comunes, cargas esenciales, reposo cuantificado, rutas oficiales por modelo/marca y priorización general. La búsqueda certificada prueba normalización, ranking, filtros y conservación de procedencia; la suite Android suma 76 pruebas aprobadas.
+- El APK conserva `energy_star_models_v1.jsonl.gzip` como gzip real (9,305 registros, 247,343 bytes) y el cargador usa exactamente ese nombre. No debe volver a usarse la extensión final `.gz`, porque AAPT la expande y renombra durante el empaquetado.
 - El parser tiene fixtures anonimizados de cuatro variantes: tarifa 1 de consumo bajo, tarifa 1 escalonada, 1B estacional y PDBT.
 - APK instalado en `Medium_Phone_API_36.0` sin borrar datos.
 - Onboarding → Inicio y reinicio: Inicio se restaura correctamente.

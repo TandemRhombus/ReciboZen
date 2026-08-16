@@ -547,6 +547,10 @@ internal object SessionJsonCodec {
                     put("unitKwh", appliance.unitKwh ?: JSONObject.NULL)
                     put("referencePeriodDays", appliance.referencePeriodDays)
                     put("referenceAnnualKwh", appliance.referenceAnnualKwh ?: JSONObject.NULL)
+                    put("referenceAnnualKwhMin", appliance.referenceAnnualKwhMin ?: JSONObject.NULL)
+                    put("referenceAnnualKwhMax", appliance.referenceAnnualKwhMax ?: JSONObject.NULL)
+                    put("marketMexicoVerified", appliance.marketMexicoVerified ?: JSONObject.NULL)
+                    put("isModelFamily", appliance.isModelFamily)
                     put("sourceLabel", appliance.sourceLabel ?: JSONObject.NULL)
                     put("sourceUrl", appliance.sourceUrl ?: JSONObject.NULL)
                 })
@@ -663,7 +667,7 @@ internal object SessionJsonCodec {
         }.getOrElse { ReciboZenSessionState() }
     }
 
-    private const val CURRENT_SCHEMA_VERSION = 3
+    private const val CURRENT_SCHEMA_VERSION = 4
 
     private inline fun <reified T : Enum<T>> enumValueOr(raw: String?, fallback: T): T =
         enumValues<T>().firstOrNull { it.name == raw?.uppercase(Locale.ROOT) } ?: fallback
@@ -736,6 +740,10 @@ internal object SessionJsonCodec {
                         unitKwh = item.optNullableDouble("unitKwh"),
                         referencePeriodDays = item.optInt("referencePeriodDays", 30).coerceIn(1, 366),
                         referenceAnnualKwh = item.optNullableDouble("referenceAnnualKwh"),
+                        referenceAnnualKwhMin = item.optNullableDouble("referenceAnnualKwhMin"),
+                        referenceAnnualKwhMax = item.optNullableDouble("referenceAnnualKwhMax"),
+                        marketMexicoVerified = item.optNullableBoolean("marketMexicoVerified"),
+                        isModelFamily = item.optBoolean("isModelFamily", false),
                         sourceLabel = item.optNullableString("sourceLabel"),
                         sourceUrl = item.optNullableString("sourceUrl"),
                     ),
@@ -774,5 +782,6 @@ internal object SessionJsonCodec {
     private fun JSONObject.optNullableInt(key: String): Int? = if (isNull(key)) null else optInt(key)
     private fun JSONObject.optNullableLong(key: String): Long? = if (isNull(key)) null else optLong(key)
     private fun JSONObject.optNullableDouble(key: String): Double? = if (isNull(key)) null else optDouble(key)
+    private fun JSONObject.optNullableBoolean(key: String): Boolean? = if (isNull(key)) null else optBoolean(key)
     private fun JSONObject.optNullableString(key: String): String? = if (isNull(key)) null else optString(key).takeIf { it.isNotBlank() }
 }

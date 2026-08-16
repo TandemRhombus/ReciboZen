@@ -20,11 +20,13 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
@@ -50,9 +52,15 @@ import com.recibozen.app.core.model.OpportunityLevel
 import com.recibozen.app.core.model.ApplianceUsageModel
 import com.recibozen.app.core.model.HouseSpace
 import com.recibozen.app.core.model.HouseSpaceDefaults
+import com.recibozen.app.data.catalog.AssetEnergyStarCatalogSource
+import com.recibozen.app.data.catalog.EnergyStarCatalogSource
 import com.recibozen.app.demo.repository.ReciboZenRepository
 import com.recibozen.app.navigation.rzViewModel
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -64,6 +72,10 @@ data class AppliancesEmptyUiState(
     val effectiveRateMxnPerKwh: Double = 0.0,
     val hasCostReference: Boolean = false,
     val spaces: List<HouseSpace> = HouseSpaceDefaults.items,
+    val certifiedModelResults: List<ApplianceCatalogItem> = emptyList(),
+    val certifiedModelCount: Int = 0,
+    val isSearchingCertifiedModels: Boolean = false,
+    val certifiedCatalogError: Boolean = false,
 )
 
 data class CatalogApplianceDraft(
@@ -88,11 +100,35 @@ data class CustomApplianceDraft(
     val periodKwhPerUnit: Double?,
 )
 
-class AppliancesEmptyViewModel(private val repository: ReciboZenRepository) : ViewModel() {
+private data class CertifiedCatalogSearchState(
+    val results: List<ApplianceCatalogItem> = emptyList(),
+    val totalModels: Int = 0,
+    val loading: Boolean = false,
+    val error: Boolean = false,
+)
+
+class AppliancesEmptyViewModel(
+    private val repository: ReciboZenRepository,
+    private val certifiedCatalog: EnergyStarCatalogSource,
+) : ViewModel() {
+    private val certifiedSearch = MutableStateFlow(CertifiedCatalogSearchState())
+    private var searchJob: Job? = null
+
+    init {
+        viewModelScope.launch {
+            runCatching { certifiedCatalog.metadata() }
+                .onSuccess { metadata ->
+                    certifiedSearch.value = certifiedSearch.value.copy(totalModels = metadata.searchableModels)
+                }
+                .onFailure { certifiedSearch.value = certifiedSearch.value.copy(error = true) }
+        }
+    }
+
     val uiState: StateFlow<AppliancesEmptyUiState> = combine(
         repository.session,
         repository.importedBillHistory,
-    ) { state, bills ->
+        certifiedSearch,
+    ) { state, bills, certified ->
             val latestBill = bills.lastOrNull()
             AppliancesEmptyUiState(
                 billingDays = if (latestBill?.periodStartEpochDay != null && latestBill.periodEndEpochDay != null) {
@@ -102,9 +138,32 @@ class AppliancesEmptyViewModel(private val repository: ReciboZenRepository) : Vi
                     ?.let { it.amountMxn.toDouble() / it.consumptionKwh } ?: 0.0,
                 hasCostReference = latestBill?.consumptionKwh?.let { it > 0 } == true,
                 spaces = state.houseSpaces,
+                certifiedModelResults = certified.results,
+                certifiedModelCount = certified.totalModels,
+                isSearchingCertifiedModels = certified.loading,
+                certifiedCatalogError = certified.error,
             )
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppliancesEmptyUiState())
+
+    fun searchCertifiedModels(query: String, category: ApplianceCategory?) {
+        searchJob?.cancel()
+        if (query.trim().length < 2) {
+            certifiedSearch.value = certifiedSearch.value.copy(results = emptyList(), loading = false, error = false)
+            return
+        }
+        searchJob = viewModelScope.launch {
+            delay(180)
+            certifiedSearch.value = certifiedSearch.value.copy(loading = true, error = false)
+            runCatching { certifiedCatalog.search(query.trim(), category) }
+                .onSuccess { results ->
+                    certifiedSearch.value = certifiedSearch.value.copy(results = results, loading = false)
+                }
+                .onFailure {
+                    certifiedSearch.value = certifiedSearch.value.copy(results = emptyList(), loading = false, error = true)
+                }
+        }
+    }
 
     fun addCatalogItem(item: ApplianceCatalogItem, draft: CatalogApplianceDraft) {
         repository.addAppliance(
@@ -175,7 +234,9 @@ class AppliancesEmptyViewModel(private val repository: ReciboZenRepository) : Vi
 
 @Composable
 fun AppliancesEmptyRoute(navController: NavHostController, repository: ReciboZenRepository) {
-    val viewModel = rzViewModel { AppliancesEmptyViewModel(repository) }
+    val context = LocalContext.current.applicationContext
+    val certifiedCatalog = remember(context) { AssetEnergyStarCatalogSource(context) }
+    val viewModel = rzViewModel { AppliancesEmptyViewModel(repository, certifiedCatalog) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     AppliancesEmptyScreen(
@@ -189,6 +250,7 @@ fun AppliancesEmptyRoute(navController: NavHostController, repository: ReciboZen
             viewModel.addCustom(draft)
             navController.popBackStack()
         },
+        onSearchCertifiedModels = viewModel::searchCertifiedModels,
     )
 }
 
@@ -198,15 +260,20 @@ fun AppliancesEmptyScreen(
     onBack: () -> Unit,
     onAddCatalogItem: (ApplianceCatalogItem, CatalogApplianceDraft) -> Unit,
     onAddCustom: (CustomApplianceDraft) -> Unit,
+    onSearchCertifiedModels: (String, ApplianceCategory?) -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf<ApplianceCategory?>(null) }
     var selectedItem by remember { mutableStateOf<ApplianceCatalogItem?>(null) }
     var showCustom by remember { mutableStateOf(false) }
-    val filtered = uiState.catalog.filter { item ->
+    LaunchedEffect(query, selectedCategory) {
+        onSearchCertifiedModels(query, selectedCategory)
+    }
+    val commonMatches = uiState.catalog.filter { item ->
         (selectedCategory == null || item.category == selectedCategory) &&
             (query.isBlank() || listOfNotNull(item.name, item.brand, item.model).any { it.contains(query, ignoreCase = true) })
     }
+    val filtered = (uiState.certifiedModelResults + commonMatches).distinctBy { it.id }
 
     Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
         RzFlowTopBar(title = stringResource(R.string.appliances_catalog_top_bar_title), onBack = onBack)
@@ -226,7 +293,11 @@ fun AppliancesEmptyScreen(
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     Text(
-                        stringResource(R.string.appliances_catalog_description, uiState.catalog.size),
+                        stringResource(
+                            R.string.appliances_catalog_description,
+                            uiState.catalog.size,
+                            uiState.certifiedModelCount,
+                        ),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -244,7 +315,25 @@ fun AppliancesEmptyScreen(
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text(stringResource(R.string.appliances_catalog_search)) },
                     singleLine = true,
+                    supportingText = {
+                        Text(
+                            if (query.trim().length < 2) stringResource(R.string.appliances_catalog_model_search_hint)
+                            else stringResource(R.string.appliances_catalog_international_notice),
+                        )
+                    },
                 )
+            }
+            if (uiState.isSearchingCertifiedModels) {
+                item { Text(stringResource(R.string.appliances_catalog_loading), style = MaterialTheme.typography.bodySmall) }
+            }
+            if (uiState.certifiedCatalogError) {
+                item {
+                    Text(
+                        stringResource(R.string.appliances_catalog_load_error),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
             }
             item {
                 FlowRow(
@@ -286,6 +375,20 @@ fun AppliancesEmptyScreen(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                            if (item.marketMexicoVerified == false) {
+                                Text(
+                                    stringResource(R.string.appliances_catalog_market_unverified),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.tertiary,
+                                )
+                            }
+                            if (item.isModelFamily) {
+                                Text(
+                                    stringResource(R.string.appliances_catalog_model_family),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                         Text(
                             item.annualKwh?.let { stringResource(R.string.appliances_catalog_annual_short, it) }
@@ -432,6 +535,27 @@ private fun CatalogItemDialog(
                         stringResource(R.string.appliances_catalog_source, source),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                if (item.marketMexicoVerified == false) {
+                    Text(
+                        stringResource(R.string.appliances_catalog_market_unverified_detail),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
+                if (item.isModelFamily) {
+                    Text(
+                        stringResource(R.string.appliances_catalog_model_family_detail),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (item.annualKwhMin != null && item.annualKwhMax != null && item.annualKwhMax - item.annualKwhMin >= 0.1) {
+                    Text(
+                        stringResource(R.string.appliances_catalog_annual_range, item.annualKwhMin, item.annualKwhMax),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -640,6 +764,7 @@ private fun AppliancesEmptyScreenPreview() {
             onBack = {},
             onAddCatalogItem = { _, _ -> },
             onAddCustom = {},
+            onSearchCertifiedModels = { _, _ -> },
         )
     }
 }

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "datasetVersion": "1.0.0",
+  "sourceName": "ENERGY STAR certified products",
+  "sourceArchiveSha256": "e324af63e4f1044f9d9c528799346fd59fdc256d9aa6918baf40e28381a6d9de",
+  "sourceRows": 53721,
+  "eligibleRowsBeforeDeduplication": 9678,
+  "searchableModels": 9305,
+  "duplicateModelGroupsCollapsed": 359,
+  "groupsWithAnnualKwhRange": 239,
+  "excludedMisclassifiedIceMachineRows": 590,
+  "excludedIncompleteRows": 0,
+  "marketMexicoVerifiedModels": 0,
+  "license": "U.S. federal government public data; ENERGY STAR marks/logos not included"
+}

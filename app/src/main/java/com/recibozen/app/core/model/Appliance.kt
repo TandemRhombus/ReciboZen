@@ -84,6 +84,11 @@ data class Appliance(
     val unitKwh: Double? = null,
     val referencePeriodDays: Int = 30,
     val referenceAnnualKwh: Double? = null,
+    val referenceAnnualKwhMin: Double? = null,
+    val referenceAnnualKwhMax: Double? = null,
+    /** null means the source did not assert a target market. */
+    val marketMexicoVerified: Boolean? = null,
+    val isModelFamily: Boolean = false,
     val sourceLabel: String? = null,
     val sourceUrl: String? = null,
 )

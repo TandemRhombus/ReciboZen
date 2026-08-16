@@ -25,6 +25,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.recibozen.app.R
+import com.recibozen.app.core.calculation.ApplianceAdvice
+import com.recibozen.app.core.calculation.ApplianceAdviceEngine
+import com.recibozen.app.core.calculation.InventoryApplianceAdvice
 import com.recibozen.app.core.components.RzCard
 import com.recibozen.app.core.components.RzDashedCard
 import com.recibozen.app.core.components.RzFilterChip
@@ -71,6 +74,8 @@ data class AppliancesUiState(
     val hasCurrentMeterProjection: Boolean = false,
     val inventoryCoveragePercent: Int = 0,
     val spaceCount: Int = 0,
+    val primaryAdviceByAppliance: Map<String, ApplianceAdvice> = emptyMap(),
+    val topSavingsActions: List<InventoryApplianceAdvice> = emptyList(),
 )
 
 class AppliancesViewModel(private val repository: ReciboZenRepository) : ViewModel() {
@@ -114,6 +119,10 @@ class AppliancesViewModel(private val repository: ReciboZenRepository) : ViewMod
             3 -> all.filter { it.confidence != ConfidenceLevel.HIGH }.sortedBy { it.name }
             else -> all.sortedByDescending { it.costMxn }
         }
+        val adviceByAppliance = all.associate { appliance ->
+            appliance.id to ApplianceAdviceEngine.recommendations(appliance, energy.billingDays)
+                .first()
+        }
         return AppliancesUiState(
         greetingUserName = userName,
         householdName = householdName,
@@ -135,6 +144,8 @@ class AppliancesViewModel(private val repository: ReciboZenRepository) : ViewMod
                 .coerceIn(0, 100)
         } else 0,
         spaceCount = houseSpaces.size,
+        primaryAdviceByAppliance = adviceByAppliance,
+        topSavingsActions = ApplianceAdviceEngine.rankInventory(all, energy.billingDays),
     )
     }
 
@@ -225,6 +236,7 @@ fun AppliancesScreen(
 
             if (uiState.appliances.isNotEmpty()) {
                 ApplianceForecastSummary(uiState)
+                InventoryAdviceSummary(uiState.topSavingsActions, onApplianceClick)
             }
 
             Row(
@@ -255,6 +267,7 @@ fun AppliancesScreen(
             uiState.appliances.forEach { appliance ->
                 ApplianceCard(
                     appliance = appliance,
+                    advice = uiState.primaryAdviceByAppliance[appliance.id],
                     billingDays = uiState.billingDays,
                     onClick = { onApplianceClick(appliance.id) },
                     onEditUsageClick = { onEditUsageClick(appliance.id) },
@@ -382,8 +395,56 @@ private fun ApplianceForecastSummary(uiState: AppliancesUiState) {
 }
 
 @Composable
+private fun InventoryAdviceSummary(
+    actions: List<InventoryApplianceAdvice>,
+    onApplianceClick: (String) -> Unit,
+) {
+    if (actions.isEmpty()) return
+    RzCard(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            stringResource(R.string.appliances_advice_summary_title),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            stringResource(R.string.appliances_advice_summary_description),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.padding(top = RzSpacing.xs),
+        )
+        actions.forEach { action ->
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = RzSpacing.md)
+                    .clickable { onApplianceClick(action.applianceId) },
+            ) {
+                Text(
+                    action.applianceName,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    action.advice.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                action.advice.estimatedSavingsKwh?.let { savings ->
+                    Text(
+                        stringResource(R.string.appliances_advice_summary_savings, savings),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = RzTheme.extendedColors.success,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun ApplianceCard(
     appliance: Appliance,
+    advice: ApplianceAdvice?,
     billingDays: Int,
     onClick: () -> Unit,
     onEditUsageClick: () -> Unit,
@@ -429,6 +490,14 @@ private fun ApplianceCard(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(top = RzSpacing.xs),
+                )
+            }
+            advice?.let {
+                Text(
+                    stringResource(R.string.appliances_card_advice, it.title),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = RzSpacing.sm),
                 )
             }
             RzLinearProgress(

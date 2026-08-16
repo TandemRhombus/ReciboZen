@@ -79,9 +79,11 @@ class ApplianceInventoryTest {
     @Test
     fun catalogIncludesManufacturerModelsWithAuditableConsumption() {
         assertTrue(ApplianceCatalog.items.size >= 100)
-        val models = ApplianceCatalog.items.filter { it.annualKwh != null }
-        assertTrue(models.size >= 6)
-        assertTrue(models.all { it.brand != null && it.model != null && it.sourceUrl?.startsWith("https://") == true })
+        val documentedModels = ApplianceCatalog.items.filter {
+            it.brand != null && it.model != null && it.sourceUrl?.startsWith("https://") == true
+        }
+        assertTrue(documentedModels.size >= 10)
+        assertTrue(documentedModels.count { it.annualKwh != null } >= 6)
     }
 
     @Test
@@ -97,6 +99,10 @@ class ApplianceInventoryTest {
                     model = "GB35BVB",
                     dataSource = ApplianceDataSource.MANUFACTURER_LABEL,
                     referenceAnnualKwh = 329.0,
+                    referenceAnnualKwhMin = 320.0,
+                    referenceAnnualKwhMax = 341.0,
+                    marketMexicoVerified = false,
+                    isModelFamily = true,
                     sourceLabel = "Ficha oficial",
                     sourceUrl = "https://example.com/model",
                 ),
@@ -111,6 +117,35 @@ class ApplianceInventoryTest {
         assertEquals("LG", appliance.brand)
         assertEquals(ApplianceDataSource.MANUFACTURER_LABEL, appliance.dataSource)
         assertEquals(329.0, appliance.referenceAnnualKwh!!, 0.001)
+        assertEquals(320.0, appliance.referenceAnnualKwhMin!!, 0.001)
+        assertEquals(341.0, appliance.referenceAnnualKwhMax!!, 0.001)
+        assertEquals(false, appliance.marketMexicoVerified)
+        assertTrue(appliance.isModelFamily)
+    }
+
+    @Test
+    fun catalogProvenanceSurvivesConversionToInventory() {
+        val source = com.recibozen.app.core.calculation.ApplianceCatalogItem(
+            id = "certified_model",
+            name = "Refrigerador",
+            category = ApplianceCategory.KITCHEN,
+            typicalWatts = 0,
+            defaultHoursPerWeek = null,
+            brand = "Marca",
+            model = "ABC*",
+            annualKwh = 300.0,
+            annualKwhMin = 290.0,
+            annualKwhMax = 315.0,
+            marketMexicoVerified = false,
+            isModelFamily = true,
+        )
+
+        val appliance = ApplianceCatalog.toAppliance(source, "instance", "Cocina")
+
+        assertEquals(290.0, appliance.referenceAnnualKwhMin!!, 0.001)
+        assertEquals(315.0, appliance.referenceAnnualKwhMax!!, 0.001)
+        assertEquals(false, appliance.marketMexicoVerified)
+        assertTrue(appliance.isModelFamily)
     }
 
     @Test

@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,6 +32,10 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.recibozen.app.R
+import com.recibozen.app.core.calculation.ApplianceAdvice
+import com.recibozen.app.core.calculation.ApplianceAdviceEngine
+import com.recibozen.app.core.calculation.ApplianceAdviceEvidence
+import com.recibozen.app.core.calculation.ApplianceAdvicePriority
 import com.recibozen.app.core.components.RzBarSegment
 import com.recibozen.app.core.components.RzCard
 import com.recibozen.app.core.components.RzFlowTopBar
@@ -46,7 +51,6 @@ import com.recibozen.app.core.designsystem.ReciboZenTheme
 import com.recibozen.app.core.model.Appliance
 import com.recibozen.app.core.model.ApplianceDataSource
 import com.recibozen.app.core.model.ConfidenceLevel
-import com.recibozen.app.core.model.EffortLevel
 import com.recibozen.app.core.model.PlanAction
 import com.recibozen.app.core.model.PlanActionStatus
 import com.recibozen.app.demo.data.DemoReciboZenData
@@ -62,6 +66,7 @@ data class ApplianceDetailUiState(
     val applianceId: String,
     val appliance: Appliance?,
     val recommendationAction: PlanAction?,
+    val recommendations: List<ApplianceAdvice> = emptyList(),
 )
 
 /**
@@ -81,6 +86,7 @@ class ApplianceDetailViewModel(
                 applianceId = applianceId,
                 appliance = appliance,
                 recommendationAction = session.planActions.find { it.id == actionId },
+                recommendations = appliance?.let(ApplianceAdviceEngine::recommendations).orEmpty(),
             )
         }
         .stateIn(
@@ -91,6 +97,9 @@ class ApplianceDetailViewModel(
                 appliance = repository.appliance(applianceId),
                 recommendationAction = repository.session.value.planActions
                     .find { it.id == recommendationActionId(applianceId) },
+                recommendations = repository.appliance(applianceId)
+                    ?.let(ApplianceAdviceEngine::recommendations)
+                    .orEmpty(),
             ),
         )
 
@@ -181,10 +190,10 @@ fun ApplianceDetailScreen(
                 ActiveStandbyCard(appliance)
             }
 
-            if (uiState.recommendationAction != null) {
-                RecommendationCard(
-                    applianceId = uiState.applianceId,
-                    action = uiState.recommendationAction,
+            if (uiState.recommendations.isNotEmpty()) {
+                SavingsAdviceSection(
+                    recommendations = uiState.recommendations,
+                    trackedAction = uiState.recommendationAction,
                     onToggle = onToggleRecommendation,
                 )
             }
@@ -206,6 +215,38 @@ fun ApplianceDetailScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = RzSpacing.xs),
                 )
+                if (appliance.marketMexicoVerified == false) {
+                    Text(
+                        stringResource(R.string.appliances_detail_market_unverified),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.padding(top = RzSpacing.xs),
+                    )
+                }
+                if (appliance.isModelFamily) {
+                    Text(
+                        stringResource(R.string.appliances_detail_model_family),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = RzSpacing.xs),
+                    )
+                }
+                if (
+                    appliance.referenceAnnualKwhMin != null &&
+                    appliance.referenceAnnualKwhMax != null &&
+                    appliance.referenceAnnualKwhMax - appliance.referenceAnnualKwhMin >= 0.1
+                ) {
+                    Text(
+                        stringResource(
+                            R.string.appliances_detail_annual_range,
+                            appliance.referenceAnnualKwhMin,
+                            appliance.referenceAnnualKwhMax,
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = RzSpacing.xs),
+                    )
+                }
                 appliance.sourceUrl?.let { sourceUrl ->
                     Text(
                         stringResource(R.string.appliances_detail_open_source),
@@ -411,79 +452,129 @@ private fun ActiveStandbyCard(appliance: Appliance) {
 }
 
 @Composable
-private fun RecommendationCard(applianceId: String, action: PlanAction, onToggle: () -> Unit) {
-    val titleRes = if (applianceId == "ps5") {
-        R.string.appliances_detail_recommendation_ps5_title
-    } else {
-        R.string.appliances_detail_recommendation_minisplit_title
-    }
-    val descriptionRes = if (applianceId == "ps5") {
-        R.string.appliances_detail_recommendation_ps5_description
-    } else {
-        R.string.appliances_detail_recommendation_minisplit_description
-    }
-    val effortRes = when (action.effort) {
-        EffortLevel.LOW -> R.string.appliances_detail_recommendation_effort_low
-        EffortLevel.MEDIUM -> R.string.appliances_detail_recommendation_effort_medium
-        EffortLevel.HIGH -> R.string.appliances_detail_recommendation_effort_high
-    }
-    val ext = RzTheme.extendedColors
-    val (confidenceRes, confidenceColor) = when (action.confidence) {
-        ConfidenceLevel.HIGH -> R.string.appliances_chip_confidence_high to ext.success
-        ConfidenceLevel.MEDIUM -> R.string.appliances_chip_confidence_medium to ext.warningText
-        ConfidenceLevel.LOW -> R.string.appliances_chip_confidence_low to ext.warningText
-    }
-    val isTracking = action.status == PlanActionStatus.TRACKING
-
-    RzCard(
-        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-        borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
+private fun SavingsAdviceSection(
+    recommendations: List<ApplianceAdvice>,
+    trackedAction: PlanAction?,
+    onToggle: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(RzSpacing.md)) {
         Text(
-            stringResource(R.string.appliances_detail_recommendation_badge),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
+            stringResource(R.string.appliances_advice_section_title),
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
-            stringResource(titleRes),
+            stringResource(R.string.appliances_advice_section_description),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+        )
+        recommendations.forEachIndexed { index, advice ->
+            SavingsAdviceCard(
+                advice = advice,
+                trackedAction = trackedAction.takeIf { index == 0 },
+                onToggle = onToggle,
+                highlighted = index == 0,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SavingsAdviceCard(
+    advice: ApplianceAdvice,
+    trackedAction: PlanAction?,
+    onToggle: () -> Unit,
+    highlighted: Boolean,
+) {
+    val ext = RzTheme.extendedColors
+    val uriHandler = LocalUriHandler.current
+    val evidenceLabel = when (advice.evidence) {
+        ApplianceAdviceEvidence.MODEL -> stringResource(R.string.appliances_advice_evidence_model)
+        ApplianceAdviceEvidence.BRAND -> stringResource(R.string.appliances_advice_evidence_brand)
+        ApplianceAdviceEvidence.DEVICE_DATA -> stringResource(R.string.appliances_advice_evidence_data)
+        ApplianceAdviceEvidence.CATEGORY -> stringResource(R.string.appliances_advice_evidence_category)
+    }
+    val priorityLabel = when (advice.priority) {
+        ApplianceAdvicePriority.HIGH -> stringResource(R.string.appliances_advice_priority_high)
+        ApplianceAdvicePriority.MEDIUM -> stringResource(R.string.appliances_advice_priority_medium)
+        ApplianceAdvicePriority.LOW -> stringResource(R.string.appliances_advice_priority_low)
+    }
+    val isTracking = trackedAction?.status == PlanActionStatus.TRACKING
+
+    RzCard(
+        containerColor = if (highlighted) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
+        borderColor = if (highlighted) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else MaterialTheme.colorScheme.outlineVariant,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(RzSpacing.sm),
+            verticalArrangement = Arrangement.spacedBy(RzSpacing.sm),
+        ) {
+            RzStatusChip(
+                text = priorityLabel,
+                containerColor = if (advice.priority == ApplianceAdvicePriority.HIGH) ext.successContainer else MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = if (advice.priority == ApplianceAdvicePriority.HIGH) ext.success else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            RzStatusChip(
+                text = evidenceLabel,
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Text(
+            advice.title,
             style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(top = RzSpacing.sm),
         )
         Text(
-            stringResource(descriptionRes, action.savingsRangeLabel),
+            advice.description,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = RzSpacing.xs),
         )
-        Row(
-            modifier = Modifier.padding(top = RzSpacing.sm),
-            horizontalArrangement = Arrangement.spacedBy(RzSpacing.sm),
-        ) {
-            RzStatusChip(
-                text = stringResource(effortRes),
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            RzStatusChip(
-                text = stringResource(confidenceRes),
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = confidenceColor,
+        advice.estimatedSavingsKwh?.let { kwh ->
+            Text(
+                if (advice.estimatedSavingsMxn != null) {
+                    stringResource(R.string.appliances_advice_estimated_savings_with_cost, kwh, advice.estimatedSavingsMxn)
+                } else {
+                    stringResource(R.string.appliances_advice_estimated_savings, kwh)
+                },
+                style = MaterialTheme.typography.titleSmall,
+                color = ext.success,
+                modifier = Modifier.padding(top = RzSpacing.sm),
             )
         }
-        if (isTracking) {
-            RzSecondaryButton(
-                text = stringResource(R.string.appliances_detail_recommendation_cta_remove),
-                onClick = onToggle,
-                modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.md),
+        advice.sourceUrl?.let { sourceUrl ->
+            Text(
+                advice.sourceLabel ?: stringResource(R.string.appliances_advice_open_source),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .padding(top = RzSpacing.sm)
+                    .clickable { runCatching { uriHandler.openUri(sourceUrl) } },
             )
-        } else {
-            RzPrimaryButton(
-                text = stringResource(R.string.appliances_detail_recommendation_cta_add),
-                onClick = onToggle,
-                modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.md),
+        }
+        if (trackedAction != null) {
+            Text(
+                stringResource(R.string.appliances_advice_plan_savings, trackedAction.savingsRangeLabel),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(top = RzSpacing.sm),
             )
+            if (isTracking) {
+                RzSecondaryButton(
+                    text = stringResource(R.string.appliances_detail_recommendation_cta_remove),
+                    onClick = onToggle,
+                    modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.md),
+                )
+            } else {
+                RzPrimaryButton(
+                    text = stringResource(R.string.appliances_detail_recommendation_cta_add),
+                    onClick = onToggle,
+                    modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.md),
+                )
+            }
         }
     }
 }
