@@ -60,6 +60,7 @@ interface ReciboZenRepository {
         model: String?,
         usageModel: ApplianceUsageModel,
         hoursPerWeek: Int?,
+        powerWatts: Int? = null,
         unitKwh: Double?,
         dataSource: ApplianceDataSource,
     )

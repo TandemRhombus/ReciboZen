@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -42,6 +43,9 @@ import com.recibozen.app.core.components.RzCard
 import com.recibozen.app.core.components.RzDashedCard
 import com.recibozen.app.core.components.RzFilterChip
 import com.recibozen.app.core.components.RzFlowTopBar
+import com.recibozen.app.core.components.RzDropdownField
+import com.recibozen.app.core.components.RzDropdownOption
+import com.recibozen.app.core.components.RzSecondaryButton
 import com.recibozen.app.core.designsystem.RzSpacing
 import com.recibozen.app.core.designsystem.ReciboZenTheme
 import com.recibozen.app.core.model.Appliance
@@ -85,6 +89,8 @@ data class CatalogApplianceDraft(
     val periodKwhPerUnit: Double?,
     val brand: String?,
     val model: String?,
+    val usageModel: ApplianceUsageModel,
+    val activeWatts: Int?,
 )
 
 data class CustomApplianceDraft(
@@ -98,6 +104,7 @@ data class CustomApplianceDraft(
     val hoursPerDay: Double?,
     val daysPerWeek: Int?,
     val periodKwhPerUnit: Double?,
+    val dataSource: ApplianceDataSource,
 )
 
 private data class CertifiedCatalogSearchState(
@@ -166,19 +173,38 @@ class AppliancesEmptyViewModel(
     }
 
     fun addCatalogItem(item: ApplianceCatalogItem, draft: CatalogApplianceDraft) {
+        val defaultPeriodKwh = item.annualKwh?.let { it * uiState.value.billingDays / 365.0 }
+            ?: item.typicalKwhPer30Days?.let { it * uiState.value.billingDays / 30.0 }
+        val consumptionWasCustomized = when (draft.usageModel) {
+            ApplianceUsageModel.POWER_SCHEDULE -> draft.activeWatts != null && draft.activeWatts != item.typicalWatts
+            ApplianceUsageModel.PERIOD_KWH -> defaultPeriodKwh == null ||
+                kotlin.math.abs((draft.periodKwhPerUnit ?: 0.0) - defaultPeriodKwh) >= 0.05
+        }
+        val configuredItem = item.copy(
+            typicalWatts = draft.activeWatts ?: item.typicalWatts,
+            annualKwh = item.annualKwh.takeIf { draft.usageModel == ApplianceUsageModel.PERIOD_KWH },
+            typicalKwhPer30Days = item.typicalKwhPer30Days.takeIf {
+                draft.usageModel == ApplianceUsageModel.PERIOD_KWH
+            },
+            dataSource = if (consumptionWasCustomized) ApplianceDataSource.USER_ESTIMATE else item.dataSource,
+            confidence = if (consumptionWasCustomized) ConfidenceLevel.LOW else item.confidence,
+            sourceLabel = if (consumptionWasCustomized) {
+                item.sourceLabel?.let { "Ajuste del usuario · referencia original: $it" } ?: "Ajuste del usuario"
+            } else item.sourceLabel,
+        )
         repository.addAppliance(
             ApplianceCatalog.toAppliance(
-                item = item,
+                item = configuredItem,
                 instanceId = "catalog_${item.id}_${System.currentTimeMillis()}",
                 room = draft.space.name,
-                hoursPerWeek = draft.hoursPerWeek,
+                hoursPerWeek = draft.hoursPerWeek.takeIf { draft.usageModel == ApplianceUsageModel.POWER_SCHEDULE },
                 billingDays = uiState.value.billingDays,
                 effectiveRateMxnPerKwh = uiState.value.effectiveRateMxnPerKwh,
                 quantity = draft.quantity,
                 spaceId = draft.space.id,
                 brand = draft.brand,
                 model = draft.model,
-                periodKwhPerUnit = draft.periodKwhPerUnit,
+                periodKwhPerUnit = draft.periodKwhPerUnit.takeIf { draft.usageModel == ApplianceUsageModel.PERIOD_KWH },
             ),
         )
     }
@@ -214,12 +240,20 @@ class AppliancesEmptyViewModel(
                 hoursPerWeek = if (draft.usageModel == ApplianceUsageModel.POWER_SCHEDULE) {
                     ((draft.hoursPerDay ?: 0.0) * (draft.daysPerWeek ?: 0)).roundToInt()
                 } else null,
-                confidence = ConfidenceLevel.LOW,
+                confidence = when (draft.dataSource) {
+                    ApplianceDataSource.USER_MEASURED,
+                    ApplianceDataSource.MANUFACTURER_LABEL -> ConfidenceLevel.HIGH
+                    ApplianceDataSource.CATALOG,
+                    ApplianceDataSource.RECEIPT_INFERENCE -> ConfidenceLevel.MEDIUM
+                    ApplianceDataSource.USER_ESTIMATE -> ConfidenceLevel.LOW
+                },
                 opportunity = OpportunityLevel.MEDIUM,
                 calculationNote = estimate.calculation,
                 category = ApplianceCategory.OTHER,
                 powerWatts = draft.watts,
-                dataSource = ApplianceDataSource.USER_ESTIMATE,
+                dataSource = if (draft.usageModel == ApplianceUsageModel.POWER_SCHEDULE) {
+                    ApplianceDataSource.USER_ESTIMATE
+                } else draft.dataSource,
                 quantity = draft.quantity,
                 spaceId = draft.space.id,
                 brand = draft.brand?.trim()?.takeIf { it.isNotEmpty() },
@@ -227,6 +261,12 @@ class AppliancesEmptyViewModel(
                 usageModel = draft.usageModel,
                 unitKwh = (estimate.activeKwh + estimate.standbyKwh) / draft.quantity.coerceAtLeast(1),
                 referencePeriodDays = uiState.value.billingDays,
+                sourceLabel = when {
+                    draft.usageModel == ApplianceUsageModel.POWER_SCHEDULE -> "Estimación ajustada por el usuario"
+                    draft.dataSource == ApplianceDataSource.USER_MEASURED -> "Medición capturada por el usuario"
+                    draft.dataSource == ApplianceDataSource.MANUFACTURER_LABEL -> "Dato capturado de etiqueta o fabricante"
+                    else -> "Estimación ajustada por el usuario"
+                },
             ),
         )
     }
@@ -275,7 +315,7 @@ fun AppliancesEmptyScreen(
     }
     val filtered = (uiState.certifiedModelResults + commonMatches).distinctBy { it.id }
 
-    Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+    Column(modifier = Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
         RzFlowTopBar(title = stringResource(R.string.appliances_catalog_top_bar_title), onBack = onBack)
         LazyColumn(
             modifier = Modifier
@@ -323,6 +363,27 @@ fun AppliancesEmptyScreen(
                     },
                 )
             }
+            item {
+                RzSecondaryButton(
+                    text = stringResource(R.string.appliances_custom_quick_add),
+                    onClick = { showCustom = true },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            item {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(RzSpacing.xs),
+                    verticalArrangement = Arrangement.spacedBy(RzSpacing.xs),
+                ) {
+                    listOf("LG", "Samsung", "Whirlpool", "Midea", "Xbox").forEach { suggestion ->
+                        RzFilterChip(
+                            text = suggestion,
+                            selected = query.equals(suggestion, ignoreCase = true),
+                            onClick = { query = suggestion },
+                        )
+                    }
+                }
+            }
             if (uiState.isSearchingCertifiedModels) {
                 item { Text(stringResource(R.string.appliances_catalog_loading), style = MaterialTheme.typography.bodySmall) }
             }
@@ -336,23 +397,24 @@ fun AppliancesEmptyScreen(
                 }
             }
             item {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(RzSpacing.xs),
-                    verticalArrangement = Arrangement.spacedBy(RzSpacing.xs),
-                ) {
-                    RzFilterChip(
-                        text = stringResource(R.string.appliances_catalog_all),
-                        selected = selectedCategory == null,
-                        onClick = { selectedCategory = null },
-                    )
-                    ApplianceCategory.entries.forEach { category ->
-                        RzFilterChip(
-                            text = categoryLabel(category),
-                            selected = selectedCategory == category,
-                            onClick = { selectedCategory = category },
+                RzDropdownField(
+                    label = stringResource(R.string.appliances_catalog_category),
+                    selectedLabel = selectedCategory?.let { categoryLabel(it) }
+                        ?: stringResource(R.string.appliances_catalog_all),
+                    options = buildList {
+                        add(
+                            RzDropdownOption<ApplianceCategory?>(
+                                null,
+                                stringResource(R.string.appliances_catalog_all),
+                            ),
                         )
-                    }
-                }
+                        ApplianceCategory.entries.forEach { category ->
+                            add(RzDropdownOption(category, categoryLabel(category)))
+                        }
+                    },
+                    onSelected = { selectedCategory = it },
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
             items(filtered, key = { it.id }) { item ->
                 RzCard(
@@ -392,6 +454,9 @@ fun AppliancesEmptyScreen(
                         }
                         Text(
                             item.annualKwh?.let { stringResource(R.string.appliances_catalog_annual_short, it) }
+                                ?: item.typicalKwhPer30Days?.let {
+                                    stringResource(R.string.appliances_catalog_monthly_short, it)
+                                }
                                 ?: stringResource(R.string.appliances_catalog_watts_short, item.typicalWatts),
                             style = MaterialTheme.typography.labelLarge,
                         )
@@ -400,23 +465,15 @@ fun AppliancesEmptyScreen(
             }
             if (filtered.isEmpty()) {
                 item {
-                    RzDashedCard(modifier = Modifier.fillMaxWidth()) {
+                    RzDashedCard(modifier = Modifier.fillMaxWidth().clickable { showCustom = true }) {
                         Text(stringResource(R.string.appliances_catalog_no_results))
+                        Text(
+                            stringResource(R.string.appliances_custom_quick_add),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = RzSpacing.sm),
+                        )
                     }
-                }
-            }
-            item {
-                RzDashedCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showCustom = true },
-                ) {
-                    Text(stringResource(R.string.appliances_custom_title), style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        stringResource(R.string.appliances_custom_description),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                 }
             }
         }
@@ -461,18 +518,36 @@ private fun CatalogItemDialog(
     var brand by remember(item.id) { mutableStateOf(item.brand.orEmpty()) }
     var model by remember(item.id) { mutableStateOf(item.model.orEmpty()) }
     var hours by remember(item.id) { mutableStateOf(item.defaultHoursPerWeek?.toString().orEmpty()) }
+    var watts by remember(item.id) { mutableStateOf(item.typicalWatts.takeIf { it > 0 }?.toString().orEmpty()) }
     val defaultPeriodKwh = item.annualKwh?.let { it * billingDays / 365.0 }
         ?: item.typicalKwhPer30Days?.let { it * billingDays / 30.0 }
+    val schedulePeriodKwh = item.defaultHoursPerWeek?.let { defaultHours ->
+        ApplianceCalculator.fromCatalog(item, defaultHours, billingDays, 0.0).let { it.activeKwh + it.standbyKwh }
+    }
     var periodKwh by remember(item.id, billingDays) {
-        mutableStateOf(defaultPeriodKwh?.let { "%.1f".format(java.util.Locale.US, it) }.orEmpty())
+        mutableStateOf((defaultPeriodKwh ?: schedulePeriodKwh)?.let { "%.1f".format(java.util.Locale.US, it) }.orEmpty())
+    }
+    val canUseSchedule = item.typicalWatts > 0
+    var usageModel by remember(item.id) {
+        mutableStateOf(if (defaultPeriodKwh != null || !canUseSchedule) ApplianceUsageModel.PERIOD_KWH else ApplianceUsageModel.POWER_SCHEDULE)
     }
     val parsedQuantity = quantity.toIntOrNull()?.takeIf { it in 1..999 }
-    val parsedHours = hours.toIntOrNull()?.coerceIn(0, 168)
+    val parsedHours = hours.toIntOrNull()?.takeIf { it in 0..168 }
+    val parsedWatts = watts.toIntOrNull()?.takeIf { it in 1..100_000 }
     val parsedPeriodKwh = periodKwh.toDoubleOrNull()?.takeIf { it in 0.0..100_000.0 }
-    val isPeriodBased = defaultPeriodKwh != null
-    val valid = parsedQuantity != null && if (isPeriodBased) parsedPeriodKwh != null else parsedHours != null
+    val isPeriodBased = usageModel == ApplianceUsageModel.PERIOD_KWH
+    val valid = parsedQuantity != null && if (isPeriodBased) {
+        parsedPeriodKwh != null
+    } else {
+        parsedHours != null && parsedWatts != null
+    }
+    val calculationItem = item.copy(
+        typicalWatts = parsedWatts ?: item.typicalWatts,
+        annualKwh = item.annualKwh.takeIf { isPeriodBased },
+        typicalKwhPer30Days = item.typicalKwhPer30Days.takeIf { isPeriodBased },
+    )
     val estimate = ApplianceCalculator.fromCatalog(
-        item = item,
+        item = calculationItem,
         hoursPerWeek = parsedHours,
         billingDays = billingDays,
         effectiveRateMxnPerKwh = effectiveRateMxnPerKwh,
@@ -487,34 +562,78 @@ private fun CatalogItemDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(RzSpacing.sm),
             ) {
-                Text(stringResource(R.string.appliances_space_select), style = MaterialTheme.typography.labelLarge)
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(RzSpacing.xs),
-                    verticalArrangement = Arrangement.spacedBy(RzSpacing.xs),
-                ) {
-                    safeSpaces.forEach { space ->
-                        RzFilterChip(
-                            text = space.name,
-                            selected = selectedSpace.id == space.id,
-                            onClick = { selectedSpace = space },
-                        )
-                    }
-                }
+                RzDropdownField(
+                    label = stringResource(R.string.appliances_space_select),
+                    selectedLabel = selectedSpace.name,
+                    options = safeSpaces.map { RzDropdownOption(it, it.name) },
+                    onSelected = { selectedSpace = it },
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 OutlinedTextField(
                     quantity,
                     { quantity = it.filter(Char::isDigit).take(3) },
                     label = { Text(stringResource(R.string.appliances_quantity)) },
                     supportingText = { Text(stringResource(R.string.appliances_quantity_hint)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(brand, { brand = it.take(40) }, label = { Text(stringResource(R.string.appliances_brand)) })
-                OutlinedTextField(model, { model = it.take(60) }, label = { Text(stringResource(R.string.appliances_model)) })
+                OutlinedTextField(
+                    brand,
+                    { brand = it.take(40) },
+                    label = { Text(stringResource(R.string.appliances_brand)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    model,
+                    { model = it.take(60) },
+                    label = { Text(stringResource(R.string.appliances_model)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                RzDropdownField(
+                    label = stringResource(R.string.appliances_consumption_method),
+                    selectedLabel = stringResource(
+                        if (isPeriodBased) R.string.appliances_consumption_by_kwh else R.string.appliances_consumption_by_average_power,
+                    ),
+                    options = buildList {
+                        if (canUseSchedule) {
+                            add(
+                                RzDropdownOption(
+                                    ApplianceUsageModel.POWER_SCHEDULE,
+                                    stringResource(R.string.appliances_consumption_by_average_power),
+                                ),
+                            )
+                        }
+                        add(
+                            RzDropdownOption(
+                                ApplianceUsageModel.PERIOD_KWH,
+                                stringResource(R.string.appliances_consumption_by_kwh),
+                            ),
+                        )
+                    },
+                    onSelected = { usageModel = it },
+                    supportingText = stringResource(R.string.appliances_consumption_variable_hint),
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 if (!isPeriodBased) {
+                    OutlinedTextField(
+                        watts,
+                        { watts = it.filter(Char::isDigit).take(6) },
+                        label = { Text(stringResource(R.string.appliances_average_active_watts)) },
+                        supportingText = { Text(stringResource(R.string.appliances_average_active_watts_hint)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                     OutlinedTextField(
                         hours,
                         { hours = it.filter(Char::isDigit).take(3) },
                         label = { Text(stringResource(R.string.appliances_catalog_hours)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 } else {
                     Text(stringResource(R.string.appliances_catalog_cycle_based_editable), style = MaterialTheme.typography.bodySmall)
@@ -523,6 +642,8 @@ private fun CatalogItemDialog(
                         { periodKwh = it.filter { char -> char.isDigit() || char == '.' }.take(8) },
                         label = { Text(stringResource(R.string.appliances_period_kwh_per_unit, billingDays)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
                 Text(
@@ -572,6 +693,8 @@ private fun CatalogItemDialog(
                             periodKwhPerUnit = parsedPeriodKwh.takeIf { isPeriodBased },
                             brand = brand,
                             model = model,
+                            usageModel = usageModel,
+                            activeWatts = parsedWatts.takeIf { !isPeriodBased },
                         ),
                     )
                 },
@@ -597,6 +720,7 @@ private fun CustomApplianceDialog(
     var brand by remember { mutableStateOf("") }
     var model by remember { mutableStateOf("") }
     var usePeriodKwh by remember { mutableStateOf(false) }
+    var dataSource by remember { mutableStateOf(ApplianceDataSource.USER_ESTIMATE) }
     var watts by remember { mutableStateOf("") }
     var hours by remember { mutableStateOf("") }
     var days by remember { mutableStateOf("7") }
@@ -638,67 +762,115 @@ private fun CustomApplianceDialog(
                 verticalArrangement = Arrangement.spacedBy(RzSpacing.sm),
             ) {
                 Text(stringResource(R.string.appliances_custom_dialog_hint), style = MaterialTheme.typography.bodySmall)
-                OutlinedTextField(name, { name = it.take(50) }, label = { Text(stringResource(R.string.appliances_custom_name)) })
-                Text(stringResource(R.string.appliances_space_select), style = MaterialTheme.typography.labelLarge)
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(RzSpacing.xs),
-                    verticalArrangement = Arrangement.spacedBy(RzSpacing.xs),
-                ) {
-                    safeSpaces.forEach { space ->
-                        RzFilterChip(
-                            text = space.name,
-                            selected = selectedSpace.id == space.id,
-                            onClick = { selectedSpace = space },
-                        )
-                    }
-                }
+                OutlinedTextField(
+                    name,
+                    { name = it.take(50) },
+                    label = { Text(stringResource(R.string.appliances_custom_name)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                RzDropdownField(
+                    label = stringResource(R.string.appliances_space_select),
+                    selectedLabel = selectedSpace.name,
+                    options = safeSpaces.map { RzDropdownOption(it, it.name) },
+                    onSelected = { selectedSpace = it },
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 OutlinedTextField(
                     quantity,
                     { quantity = it.filter(Char::isDigit).take(3) },
                     label = { Text(stringResource(R.string.appliances_quantity)) },
                     supportingText = { Text(stringResource(R.string.appliances_quantity_hint)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(brand, { brand = it.take(40) }, label = { Text(stringResource(R.string.appliances_brand)) })
-                OutlinedTextField(model, { model = it.take(60) }, label = { Text(stringResource(R.string.appliances_model)) })
-                Text(stringResource(R.string.appliances_consumption_method), style = MaterialTheme.typography.labelLarge)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(RzSpacing.xs)) {
-                    RzFilterChip(
-                        text = stringResource(R.string.appliances_consumption_by_power),
-                        selected = !usePeriodKwh,
-                        onClick = { usePeriodKwh = false },
-                    )
-                    RzFilterChip(
-                        text = stringResource(R.string.appliances_consumption_by_kwh),
-                        selected = usePeriodKwh,
-                        onClick = { usePeriodKwh = true },
-                    )
-                }
+                OutlinedTextField(
+                    brand,
+                    { brand = it.take(40) },
+                    label = { Text(stringResource(R.string.appliances_brand)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    model,
+                    { model = it.take(60) },
+                    label = { Text(stringResource(R.string.appliances_model)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                RzDropdownField(
+                    label = stringResource(R.string.appliances_consumption_method),
+                    selectedLabel = stringResource(
+                        if (usePeriodKwh) R.string.appliances_consumption_by_kwh else R.string.appliances_consumption_by_average_power,
+                    ),
+                    options = listOf(
+                        RzDropdownOption(false, stringResource(R.string.appliances_consumption_by_average_power)),
+                        RzDropdownOption(true, stringResource(R.string.appliances_consumption_by_kwh)),
+                    ),
+                    onSelected = { usePeriodKwh = it },
+                    supportingText = stringResource(R.string.appliances_consumption_variable_hint),
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 if (usePeriodKwh) {
                     OutlinedTextField(
                         periodKwh,
                         { periodKwh = it.filter { char -> char.isDigit() || char == '.' }.take(8) },
                         label = { Text(stringResource(R.string.appliances_period_kwh_per_unit, billingDays)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    val sourceOptions = listOf(
+                        RzDropdownOption(
+                            ApplianceDataSource.USER_MEASURED,
+                            stringResource(R.string.appliances_source_measured),
+                        ),
+                        RzDropdownOption(
+                            ApplianceDataSource.MANUFACTURER_LABEL,
+                            stringResource(R.string.appliances_source_label),
+                        ),
+                        RzDropdownOption(
+                            ApplianceDataSource.USER_ESTIMATE,
+                            stringResource(R.string.appliances_source_estimated),
+                        ),
+                    )
+                    RzDropdownField(
+                        label = stringResource(R.string.appliances_usage_source_title),
+                        selectedLabel = when (dataSource) {
+                            ApplianceDataSource.USER_MEASURED -> stringResource(R.string.appliances_source_measured)
+                            ApplianceDataSource.MANUFACTURER_LABEL -> stringResource(R.string.appliances_source_label)
+                            else -> stringResource(R.string.appliances_source_estimated)
+                        },
+                        options = sourceOptions,
+                        onSelected = { dataSource = it },
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 } else {
                     OutlinedTextField(
                         watts,
                         { watts = it.filter(Char::isDigit).take(6) },
-                        label = { Text(stringResource(R.string.appliances_custom_watts)) },
+                        label = { Text(stringResource(R.string.appliances_average_active_watts)) },
+                        supportingText = { Text(stringResource(R.string.appliances_average_active_watts_hint)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
                     )
                     OutlinedTextField(
                         hours,
                         { hours = it.filter { char -> char.isDigit() || char == '.' }.take(4) },
                         label = { Text(stringResource(R.string.appliances_custom_hours_day)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
                     )
                     OutlinedTextField(
                         days,
                         { days = it.filter(Char::isDigit).take(1) },
                         label = { Text(stringResource(R.string.appliances_custom_days_week)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
                 estimate?.let {
@@ -726,6 +898,7 @@ private fun CustomApplianceDialog(
                             hoursPerDay = hoursValue,
                             daysPerWeek = daysValue,
                             periodKwhPerUnit = periodKwhValue,
+                            dataSource = if (usePeriodKwh) dataSource else ApplianceDataSource.USER_ESTIMATE,
                         ),
                     )
                 },

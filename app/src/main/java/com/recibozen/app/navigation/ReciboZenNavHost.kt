@@ -1,6 +1,7 @@
 package com.recibozen.app.navigation
 
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
@@ -50,7 +51,9 @@ fun ReciboZenNavHost(
     NavHost(
         navController = navController,
         startDestination = startDestination,
-        modifier = Modifier.padding(innerPadding),
+        modifier = Modifier
+            .padding(innerPadding)
+            .consumeWindowInsets(innerPadding),
     ) {
         composable(Routes.Onboarding) { OnboardingRoute(navController, repository) }
 

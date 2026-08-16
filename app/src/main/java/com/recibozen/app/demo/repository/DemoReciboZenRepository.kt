@@ -329,16 +329,31 @@ open class DemoReciboZenRepository : ReciboZenRepository {
         model: String?,
         usageModel: ApplianceUsageModel,
         hoursPerWeek: Int?,
+        powerWatts: Int?,
         unitKwh: Double?,
         dataSource: ApplianceDataSource,
     ) {
         _session.update { state ->
             val safeQuantity = quantity.coerceIn(1, 999)
             val safeHours = hoursPerWeek?.coerceIn(0, 168)
+            val safePowerWatts = powerWatts?.coerceIn(1, 100_000)
             val safeUnitKwh = unitKwh?.coerceIn(0.0, 100_000.0)
             val safeRoom = room.trim().take(40).ifEmpty { "Toda la casa" }
             val updated = state.customAppliances.map { appliance ->
-                if (appliance.id != applianceId) appliance else appliance.copy(
+                if (appliance.id != applianceId) return@map appliance
+                val effectivePower = safePowerWatts ?: appliance.powerWatts
+                val referenceDays = appliance.referencePeriodDays.coerceIn(1, 366)
+                val scheduledUnitKwh = if (
+                    usageModel == ApplianceUsageModel.POWER_SCHEDULE && safeHours != null && effectivePower != null
+                ) {
+                    val active = effectivePower / 1_000.0 * safeHours * referenceDays / 7.0
+                    val standby = appliance.standbyWatts?.let { standbyWatts ->
+                        standbyWatts / 1_000.0 * (168 - safeHours).coerceAtLeast(0) * referenceDays / 7.0
+                    } ?: 0.0
+                    active + standby
+                } else null
+                val effectiveUnitKwh = scheduledUnitKwh ?: safeUnitKwh ?: appliance.unitKwh
+                appliance.copy(
                     room = safeRoom,
                     spaceId = spaceId,
                     quantity = safeQuantity,
@@ -346,10 +361,16 @@ open class DemoReciboZenRepository : ReciboZenRepository {
                     model = model?.trim()?.take(60)?.takeIf { it.isNotEmpty() },
                     usageModel = usageModel,
                     hoursPerWeek = if (usageModel == ApplianceUsageModel.POWER_SCHEDULE) safeHours else null,
-                    unitKwh = safeUnitKwh ?: appliance.unitKwh,
-                    kwh = if (usageModel == ApplianceUsageModel.PERIOD_KWH && safeUnitKwh != null) {
-                        (safeUnitKwh * safeQuantity).roundToInt()
-                    } else appliance.kwh,
+                    powerWatts = effectivePower,
+                    unitKwh = effectiveUnitKwh,
+                    kwh = effectiveUnitKwh?.let { (it * safeQuantity).roundToInt() } ?: appliance.kwh,
+                    calculationNote = when {
+                        usageModel == ApplianceUsageModel.POWER_SCHEDULE && effectivePower != null && safeHours != null ->
+                            "$effectivePower W promedio × $safeHours h/semana × $referenceDays días ÷ 7 ÷ 1,000"
+                        usageModel == ApplianceUsageModel.PERIOD_KWH && safeUnitKwh != null ->
+                            "$safeUnitKwh kWh por unidad en $referenceDays días"
+                        else -> appliance.calculationNote
+                    },
                     dataSource = dataSource,
                     confidence = when (dataSource) {
                         ApplianceDataSource.USER_MEASURED,
@@ -361,6 +382,11 @@ open class DemoReciboZenRepository : ReciboZenRepository {
                     referenceAnnualKwh = if (dataSource == ApplianceDataSource.MANUFACTURER_LABEL) {
                         appliance.referenceAnnualKwh
                     } else null,
+                    sourceLabel = when (dataSource) {
+                        ApplianceDataSource.USER_MEASURED -> "Medición capturada por el usuario"
+                        ApplianceDataSource.USER_ESTIMATE -> "Estimación ajustada por el usuario"
+                        else -> appliance.sourceLabel
+                    },
                 )
             }
             val hoursMap = if (usageModel == ApplianceUsageModel.POWER_SCHEDULE && safeHours != null) {

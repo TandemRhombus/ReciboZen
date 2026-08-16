@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -202,7 +203,7 @@ fun ApplianceSimulatorScreen(
     onWattsChange: (String) -> Unit = {},
     onHoursChange: (String) -> Unit = {},
 ) {
-    Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+    Column(modifier = Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
         RzFlowTopBar(title = stringResource(R.string.appliances_simulator_top_bar_title), onBack = onBack)
 
         Column(
@@ -228,27 +229,22 @@ fun ApplianceSimulatorScreen(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(RzSpacing.sm),
-                    modifier = Modifier.padding(top = RzSpacing.sm),
-                ) {
-                    OutlinedTextField(
-                        value = uiState.watts,
-                        onValueChange = onWattsChange,
-                        label = { Text(stringResource(R.string.appliances_simulator_field_watts)) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                    OutlinedTextField(
-                        value = uiState.hoursPerWeek,
-                        onValueChange = onHoursChange,
-                        label = { Text(stringResource(R.string.appliances_simulator_field_hours)) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
+                OutlinedTextField(
+                    value = uiState.watts,
+                    onValueChange = onWattsChange,
+                    label = { Text(stringResource(R.string.appliances_average_active_watts)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.sm),
+                )
+                OutlinedTextField(
+                    value = uiState.hoursPerWeek,
+                    onValueChange = onHoursChange,
+                    label = { Text(stringResource(R.string.appliances_simulator_field_hours)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.sm),
+                )
                 Text(
                     stringResource(R.string.appliances_simulator_field_hint),
                     style = MaterialTheme.typography.bodySmall,

@@ -201,6 +201,11 @@ object ApplianceAdviceEngine {
                 "Evita calentar o bombear de más",
                 "Corrige fugas, programa bombas y ajusta el termostato del calentador a una temperatura segura. No cortes bombas de acuario ni equipos críticos sin evaluar primero la necesidad del sistema.",
             )
+            appliance.isContinuousOrEssential() -> Triple(
+                "continuous_safe",
+                "Optimiza sin interrumpir una función esencial",
+                "No lo desconectes a ciegas. Revisa horarios, mantenimiento y funciones que puedan apagarse de forma segura sin afectar seguridad, conservación de alimentos, red o salud.",
+            )
             appliance.category == ApplianceCategory.PERSONAL_CARE -> Triple(
                 "personal_unplug",
                 "Desconecta cargadores y resistencias al terminar",
@@ -215,11 +220,6 @@ object ApplianceAdviceEngine {
                 "kitchen_right_size",
                 "Usa el equipo adecuado y evita esperas encendidas",
                 "Elige el aparato del tamaño justo para la tarea, aprovecha el calor residual y apágalo al terminar. Activa Eco o apagado de display sólo cuando el manual de tu modelo lo confirme.",
-            )
-            appliance.isContinuousOrEssential() -> Triple(
-                "continuous_safe",
-                "Optimiza sin interrumpir una función esencial",
-                "No lo desconectes a ciegas. Revisa horarios, mantenimiento y funciones que puedan apagarse de forma segura sin afectar seguridad, conservación de alimentos, red o salud.",
             )
             else -> Triple(
                 "general_schedule",
@@ -255,7 +255,7 @@ object ApplianceAdviceEngine {
         val text = searchableText()
         return listOf(
             "router", "wi-fi", "wifi", "ont", "nvr", "dvr", "cámara de seguridad", "camara de seguridad",
-            "servidor", "nas", "ups", "no-break", "acuario", "alarma", "equipo médico", "equipo medico",
+            "servidor", "nas", "ups", "no-break", "acuario", "alarma", "equipo médico", "equipo medico", "cpap",
         ).any(text::contains)
     }
 

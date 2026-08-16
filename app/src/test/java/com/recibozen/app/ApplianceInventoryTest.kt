@@ -61,6 +61,41 @@ class ApplianceInventoryTest {
     }
 
     @Test
+    fun variableLoadApplianceCanUseAUserAdjustedAveragePower() {
+        val repository = DemoReciboZenRepository()
+        val catalogItem = ApplianceCatalog.find("pc_gaming")!!
+        repository.addAppliance(
+            ApplianceCatalog.toAppliance(
+                item = catalogItem,
+                instanceId = "gaming_pc",
+                room = "Oficina",
+                billingDays = 30,
+                hoursPerWeek = 21,
+            ),
+        )
+
+        repository.updateAppliance(
+            applianceId = "gaming_pc",
+            quantity = 1,
+            spaceId = "home",
+            room = "Oficina",
+            brand = null,
+            model = "Equipo con carga variable",
+            usageModel = ApplianceUsageModel.POWER_SCHEDULE,
+            hoursPerWeek = 21,
+            powerWatts = 800,
+            unitKwh = null,
+            dataSource = ApplianceDataSource.USER_ESTIMATE,
+        )
+
+        val updated = repository.appliance("gaming_pc")!!
+        assertEquals(800, updated.powerWatts)
+        assertEquals(75, updated.kwh)
+        assertEquals(ConfidenceLevel.LOW, updated.confidence)
+        assertTrue(updated.calculationNote.orEmpty().contains("800 W promedio"))
+    }
+
+    @Test
     fun removingSpaceReassignsItsAppliancesWithoutDeletingThem() {
         val repository = DemoReciboZenRepository()
         val office = repository.addHouseSpace("Oficina")!!
@@ -78,12 +113,14 @@ class ApplianceInventoryTest {
 
     @Test
     fun catalogIncludesManufacturerModelsWithAuditableConsumption() {
-        assertTrue(ApplianceCatalog.items.size >= 100)
+        assertTrue(ApplianceCatalog.items.size >= 140)
         val documentedModels = ApplianceCatalog.items.filter {
             it.brand != null && it.model != null && it.sourceUrl?.startsWith("https://") == true
         }
         assertTrue(documentedModels.size >= 10)
         assertTrue(documentedModels.count { it.annualKwh != null } >= 6)
+        assertTrue(ApplianceCatalog.items.any { it.name == "Xbox Series X" && it.sourceUrl?.contains("microsoft.com") == true })
+        assertTrue(ApplianceCatalog.items.any { it.id == "pc_gaming_entusiasta" && it.typicalWatts >= 600 })
     }
 
     @Test
