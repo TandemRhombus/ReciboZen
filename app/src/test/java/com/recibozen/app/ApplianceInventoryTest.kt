@@ -121,6 +121,11 @@ class ApplianceInventoryTest {
         assertTrue(documentedModels.count { it.annualKwh != null } >= 6)
         assertTrue(ApplianceCatalog.items.any { it.name == "Xbox Series X" && it.sourceUrl?.contains("microsoft.com") == true })
         assertTrue(ApplianceCatalog.items.any { it.id == "pc_gaming_entusiasta" && it.typicalWatts >= 600 })
+        val entertainmentBrands = ApplianceCatalog.items
+            .filter { it.category == ApplianceCategory.ENTERTAINMENT }
+            .mapNotNull { it.brand }
+            .toSet()
+        assertTrue(entertainmentBrands.containsAll(setOf("Microsoft", "Sony", "Nintendo", "Valve")))
     }
 
     @Test

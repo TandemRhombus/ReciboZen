@@ -72,10 +72,10 @@
 
     <!-- Catálogo y alta -->
     <string name="appliances_catalog_top_bar_title">Agregar aparato</string>
-    <string name="appliances_catalog_title">¿Qué aparato quieres agregar?</string>
-    <string name="appliances_catalog_description">Explora %1$d aparatos comunes o busca entre %2$d modelos con consumo anual certificado. Todo se puede ajustar.</string>
+    <string name="appliances_catalog_title">Agrega un aparato a tu hogar</string>
+    <string name="appliances_catalog_description">Sigue los pasos para elegir entre %1$d aparatos comunes y %2$d modelos certificados. Al final podrás corregir su consumo, cantidad y ubicación.</string>
     <string name="appliances_catalog_period_context">Las estimaciones siguientes cubren %1$d días, según el ciclo de tu suministro.</string>
-    <string name="appliances_catalog_search">Buscar aparato</string>
+    <string name="appliances_catalog_search">Buscar producto o modelo</string>
     <string name="appliances_catalog_model_search_hint">Escribe al menos 2 caracteres para buscar marca o modelo certificado.</string>
     <string name="appliances_catalog_international_notice">Catálogo técnico internacional; la disponibilidad comercial en México no está confirmada.</string>
     <string name="appliances_catalog_loading">Buscando modelos certificados…</string>
@@ -90,6 +90,16 @@
     <string name="appliances_catalog_market_unverified_detail">El consumo fue certificado por ENERGY STAR, pero la fuente no confirma que este SKU se comercialice en México.</string>
     <string name="appliances_catalog_model_family">Familia de modelos</string>
     <string name="appliances_catalog_model_family_detail">La certificación representa una familia o patrón de modelos. Compara el código completo de tu etiqueta antes de usarla.</string>
+    <string name="appliances_add_step_category">1. Elige una categoría</string>
+    <string name="appliances_add_step_brand">2. Elige una marca (opcional)</string>
+    <string name="appliances_add_step_brand_hint">Las marcas cambian según la categoría y provienen de los productos disponibles. Desliza para ver más.</string>
+    <string name="appliances_add_any_brand">Cualquier marca</string>
+    <string name="appliances_add_loading_brands">Cargando marcas disponibles…</string>
+    <string name="appliances_add_step_product">3. Elige el producto o modelo</string>
+    <string name="appliances_add_common_results">Productos y tipos disponibles (%1$d)</string>
+    <string name="appliances_add_certified_results">Modelos certificados encontrados (%1$d)</string>
+    <string name="appliances_add_configure">Configurar y agregar</string>
+    <string name="appliances_add_step_configure">4. Configura tu aparato</string>
     <string name="appliances_catalog_annual_range">Otras certificaciones del mismo modelo reportan entre %1$.1f y %2$.1f kWh/año.</string>
     <string name="appliances_catalog_room">Habitación o zona</string>
     <string name="appliances_catalog_hours">Horas por semana</string>

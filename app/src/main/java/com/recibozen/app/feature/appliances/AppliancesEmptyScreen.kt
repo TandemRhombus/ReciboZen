@@ -1,6 +1,7 @@
 package com.recibozen.app.feature.appliances
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -61,6 +62,7 @@ import com.recibozen.app.data.catalog.EnergyStarCatalogSource
 import com.recibozen.app.demo.repository.ReciboZenRepository
 import com.recibozen.app.navigation.rzViewModel
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -80,6 +82,8 @@ data class AppliancesEmptyUiState(
     val certifiedModelCount: Int = 0,
     val isSearchingCertifiedModels: Boolean = false,
     val certifiedCatalogError: Boolean = false,
+    val quickBrands: List<String> = emptyList(),
+    val isLoadingBrands: Boolean = false,
 )
 
 data class CatalogApplianceDraft(
@@ -112,6 +116,8 @@ private data class CertifiedCatalogSearchState(
     val totalModels: Int = 0,
     val loading: Boolean = false,
     val error: Boolean = false,
+    val quickBrands: List<String> = emptyList(),
+    val loadingBrands: Boolean = false,
 )
 
 class AppliancesEmptyViewModel(
@@ -120,6 +126,9 @@ class AppliancesEmptyViewModel(
 ) : ViewModel() {
     private val certifiedSearch = MutableStateFlow(CertifiedCatalogSearchState())
     private var searchJob: Job? = null
+    private var brandsJob: Job? = null
+    private var brandsCategory: ApplianceCategory? = null
+    private var brandsLoaded = false
 
     init {
         viewModelScope.launch {
@@ -129,6 +138,7 @@ class AppliancesEmptyViewModel(
                 }
                 .onFailure { certifiedSearch.value = certifiedSearch.value.copy(error = true) }
         }
+        refreshQuickBrands(null)
     }
 
     val uiState: StateFlow<AppliancesEmptyUiState> = combine(
@@ -149,11 +159,14 @@ class AppliancesEmptyViewModel(
                 certifiedModelCount = certified.totalModels,
                 isSearchingCertifiedModels = certified.loading,
                 certifiedCatalogError = certified.error,
+                quickBrands = certified.quickBrands,
+                isLoadingBrands = certified.loadingBrands,
             )
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppliancesEmptyUiState())
 
     fun searchCertifiedModels(query: String, category: ApplianceCategory?) {
+        refreshQuickBrands(category)
         searchJob?.cancel()
         if (query.trim().length < 2) {
             certifiedSearch.value = certifiedSearch.value.copy(results = emptyList(), loading = false, error = false)
@@ -162,13 +175,43 @@ class AppliancesEmptyViewModel(
         searchJob = viewModelScope.launch {
             delay(180)
             certifiedSearch.value = certifiedSearch.value.copy(loading = true, error = false)
-            runCatching { certifiedCatalog.search(query.trim(), category) }
-                .onSuccess { results ->
-                    certifiedSearch.value = certifiedSearch.value.copy(results = results, loading = false)
-                }
-                .onFailure {
-                    certifiedSearch.value = certifiedSearch.value.copy(results = emptyList(), loading = false, error = true)
-                }
+            try {
+                val results = certifiedCatalog.search(query.trim(), category)
+                certifiedSearch.value = certifiedSearch.value.copy(results = results, loading = false)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                certifiedSearch.value = certifiedSearch.value.copy(results = emptyList(), loading = false, error = true)
+            }
+        }
+    }
+
+    private fun refreshQuickBrands(category: ApplianceCategory?) {
+        if (brandsLoaded && brandsCategory == category) return
+        brandsCategory = category
+        brandsJob?.cancel()
+        brandsJob = viewModelScope.launch {
+            certifiedSearch.value = certifiedSearch.value.copy(loadingBrands = true)
+            val localBrands = ApplianceCatalog.items.asSequence()
+                .filter { category == null || it.category == category }
+                .mapNotNull(ApplianceCatalogItem::brand)
+                .filter(String::isNotBlank)
+                .toList()
+            val certifiedBrands = try {
+                certifiedCatalog.popularBrands(category, limit = 18)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                emptyList()
+            }
+            val combined = (localBrands + certifiedBrands)
+                .distinctBy { it.trim().lowercase(java.util.Locale.ROOT) }
+                .take(18)
+            brandsLoaded = true
+            certifiedSearch.value = certifiedSearch.value.copy(
+                quickBrands = combined,
+                loadingBrands = false,
+            )
         }
     }
 
@@ -304,16 +347,19 @@ fun AppliancesEmptyScreen(
 ) {
     var query by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf<ApplianceCategory?>(null) }
+    var selectedBrand by remember { mutableStateOf<String?>(null) }
     var selectedItem by remember { mutableStateOf<ApplianceCatalogItem?>(null) }
     var showCustom by remember { mutableStateOf(false) }
-    LaunchedEffect(query, selectedCategory) {
-        onSearchCertifiedModels(query, selectedCategory)
+    val effectiveSearch = listOfNotNull(selectedBrand, query.trim().takeIf { it.isNotEmpty() }).joinToString(" ")
+    LaunchedEffect(effectiveSearch, selectedCategory) {
+        onSearchCertifiedModels(effectiveSearch, selectedCategory)
     }
     val commonMatches = uiState.catalog.filter { item ->
         (selectedCategory == null || item.category == selectedCategory) &&
+            (selectedBrand == null || item.brand.equals(selectedBrand, ignoreCase = true)) &&
             (query.isBlank() || listOfNotNull(item.name, item.brand, item.model).any { it.contains(query, ignoreCase = true) })
     }
-    val filtered = (uiState.certifiedModelResults + commonMatches).distinctBy { it.id }
+    val certifiedMatches = uiState.certifiedModelResults.distinctBy { it.id }
 
     Column(modifier = Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
         RzFlowTopBar(title = stringResource(R.string.appliances_catalog_top_bar_title), onBack = onBack)
@@ -349,54 +395,10 @@ fun AppliancesEmptyScreen(
                 }
             }
             item {
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it.take(50) },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(R.string.appliances_catalog_search)) },
-                    singleLine = true,
-                    supportingText = {
-                        Text(
-                            if (query.trim().length < 2) stringResource(R.string.appliances_catalog_model_search_hint)
-                            else stringResource(R.string.appliances_catalog_international_notice),
-                        )
-                    },
+                Text(
+                    stringResource(R.string.appliances_add_step_category),
+                    style = MaterialTheme.typography.titleMedium,
                 )
-            }
-            item {
-                RzSecondaryButton(
-                    text = stringResource(R.string.appliances_custom_quick_add),
-                    onClick = { showCustom = true },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-            item {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(RzSpacing.xs),
-                    verticalArrangement = Arrangement.spacedBy(RzSpacing.xs),
-                ) {
-                    listOf("LG", "Samsung", "Whirlpool", "Midea", "Xbox").forEach { suggestion ->
-                        RzFilterChip(
-                            text = suggestion,
-                            selected = query.equals(suggestion, ignoreCase = true),
-                            onClick = { query = suggestion },
-                        )
-                    }
-                }
-            }
-            if (uiState.isSearchingCertifiedModels) {
-                item { Text(stringResource(R.string.appliances_catalog_loading), style = MaterialTheme.typography.bodySmall) }
-            }
-            if (uiState.certifiedCatalogError) {
-                item {
-                    Text(
-                        stringResource(R.string.appliances_catalog_load_error),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-            }
-            item {
                 RzDropdownField(
                     label = stringResource(R.string.appliances_catalog_category),
                     selectedLabel = selectedCategory?.let { categoryLabel(it) }
@@ -412,58 +414,113 @@ fun AppliancesEmptyScreen(
                             add(RzDropdownOption(category, categoryLabel(category)))
                         }
                     },
-                    onSelected = { selectedCategory = it },
-                    modifier = Modifier.fillMaxWidth(),
+                    onSelected = {
+                        selectedCategory = it
+                        selectedBrand = null
+                        query = ""
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.xs),
                 )
             }
-            items(filtered, key = { it.id }) { item ->
-                RzCard(
+            item {
+                Text(
+                    stringResource(R.string.appliances_add_step_brand),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    stringResource(R.string.appliances_add_step_brand_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = RzSpacing.xs),
+                )
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { selectedItem = item },
+                        .horizontalScroll(rememberScrollState())
+                        .padding(top = RzSpacing.sm),
+                    horizontalArrangement = Arrangement.spacedBy(RzSpacing.xs),
                 ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(RzSpacing.md)) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(item.name, style = MaterialTheme.typography.titleMedium)
-                            if (item.brand != null || item.model != null) {
-                                Text(
-                                    listOfNotNull(item.brand, item.model).joinToString(" · "),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                            Text(
-                                catalogUsageLabel(item),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            if (item.marketMexicoVerified == false) {
-                                Text(
-                                    stringResource(R.string.appliances_catalog_market_unverified),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.tertiary,
-                                )
-                            }
-                            if (item.isModelFamily) {
-                                Text(
-                                    stringResource(R.string.appliances_catalog_model_family),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                        Text(
-                            item.annualKwh?.let { stringResource(R.string.appliances_catalog_annual_short, it) }
-                                ?: item.typicalKwhPer30Days?.let {
-                                    stringResource(R.string.appliances_catalog_monthly_short, it)
-                                }
-                                ?: stringResource(R.string.appliances_catalog_watts_short, item.typicalWatts),
-                            style = MaterialTheme.typography.labelLarge,
+                    RzFilterChip(
+                        text = stringResource(R.string.appliances_add_any_brand),
+                        selected = selectedBrand == null,
+                        onClick = { selectedBrand = null },
+                    )
+                    uiState.quickBrands.forEach { brand ->
+                        RzFilterChip(
+                            text = brand,
+                            selected = selectedBrand.equals(brand, ignoreCase = true),
+                            onClick = { selectedBrand = brand },
                         )
                     }
                 }
+                if (uiState.isLoadingBrands) {
+                    Text(
+                        stringResource(R.string.appliances_add_loading_brands),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.padding(top = RzSpacing.xs),
+                    )
+                }
             }
-            if (filtered.isEmpty()) {
+            item {
+                Text(
+                    stringResource(R.string.appliances_add_step_product),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it.take(50) },
+                    modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.xs),
+                    label = { Text(stringResource(R.string.appliances_catalog_search)) },
+                    singleLine = true,
+                    supportingText = {
+                        Text(
+                            if (effectiveSearch.trim().length < 2) stringResource(R.string.appliances_catalog_model_search_hint)
+                            else stringResource(R.string.appliances_catalog_international_notice),
+                        )
+                    },
+                )
+                RzSecondaryButton(
+                    text = stringResource(R.string.appliances_custom_quick_add),
+                    onClick = { showCustom = true },
+                    modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.sm),
+                )
+            }
+            if (uiState.isSearchingCertifiedModels) {
+                item { Text(stringResource(R.string.appliances_catalog_loading), style = MaterialTheme.typography.bodySmall) }
+            }
+            if (uiState.certifiedCatalogError) {
+                item {
+                    Text(
+                        stringResource(R.string.appliances_catalog_load_error),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+            if (commonMatches.isNotEmpty()) {
+                item {
+                    Text(
+                        stringResource(R.string.appliances_add_common_results, commonMatches.size),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                }
+                items(commonMatches, key = { "common_${it.id}" }) { item ->
+                    CatalogResultCard(item = item, onClick = { selectedItem = item })
+                }
+            }
+            if (certifiedMatches.isNotEmpty()) {
+                item {
+                    Text(
+                        stringResource(R.string.appliances_add_certified_results, certifiedMatches.size),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                }
+                items(certifiedMatches, key = { "certified_${it.id}" }) { item ->
+                    CatalogResultCard(item = item, onClick = { selectedItem = item })
+                }
+            }
+            if (commonMatches.isEmpty() && certifiedMatches.isEmpty() && !uiState.isSearchingCertifiedModels) {
                 item {
                     RzDashedCard(modifier = Modifier.fillMaxWidth().clickable { showCustom = true }) {
                         Text(stringResource(R.string.appliances_catalog_no_results))
@@ -499,6 +556,57 @@ fun AppliancesEmptyScreen(
             onDismiss = { showCustom = false },
             onConfirm = onAddCustom,
         )
+    }
+}
+
+@Composable
+private fun CatalogResultCard(item: ApplianceCatalogItem, onClick: () -> Unit) {
+    RzCard(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(RzSpacing.md)) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(item.name, style = MaterialTheme.typography.titleMedium)
+                if (item.brand != null || item.model != null) {
+                    Text(
+                        listOfNotNull(item.brand, item.model).joinToString(" · "),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                Text(
+                    catalogUsageLabel(item),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (item.marketMexicoVerified == false) {
+                    Text(
+                        stringResource(R.string.appliances_catalog_market_unverified),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
+                if (item.isModelFamily) {
+                    Text(
+                        stringResource(R.string.appliances_catalog_model_family),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Text(
+                    stringResource(R.string.appliances_add_configure),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = RzSpacing.xs),
+                )
+            }
+            Text(
+                item.annualKwh?.let { stringResource(R.string.appliances_catalog_annual_short, it) }
+                    ?: item.typicalKwhPer30Days?.let {
+                        stringResource(R.string.appliances_catalog_monthly_short, it)
+                    }
+                    ?: stringResource(R.string.appliances_catalog_watts_short, item.typicalWatts),
+                style = MaterialTheme.typography.labelLarge,
+            )
+        }
     }
 }
 
@@ -556,7 +664,12 @@ private fun CatalogItemDialog(
     )
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(item.name) },
+        title = {
+            Column {
+                Text(stringResource(R.string.appliances_add_step_configure), style = MaterialTheme.typography.labelLarge)
+                Text(item.name)
+            }
+        },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),

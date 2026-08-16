@@ -34,6 +34,14 @@ class EnergyStarCatalogIndexTest {
             model = "MX-100 PC",
             annualKwh = 90.0,
         ),
+        record(
+            id = "other-computer",
+            category = "computo",
+            subcategory = "computadora",
+            brand = "Otra",
+            model = "PC-200",
+            annualKwh = 120.0,
+        ),
     )
     private val index = EnergyStarCatalogIndex(records)
 
@@ -63,6 +71,13 @@ class EnergyStarCatalogIndexTest {
         assertEquals(320.0, item.annualKwhMax!!, 0.001)
         assertEquals(false, item.marketMexicoVerified)
         assertFalse(item.sourceUrl.isNullOrBlank())
+    }
+
+    @Test
+    fun popularBrandsAreDerivedFromRecordsAndRespectCategory() {
+        assertEquals("Marca", index.popularBrands().first())
+        assertEquals(setOf("Marca", "Otra"), index.popularBrands(ApplianceCategory.COMPUTING).toSet())
+        assertEquals(listOf("Marca"), index.popularBrands(ApplianceCategory.KITCHEN))
     }
 
     private fun record(

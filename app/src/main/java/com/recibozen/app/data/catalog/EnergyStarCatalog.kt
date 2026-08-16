@@ -132,11 +132,32 @@ class EnergyStarCatalogIndex(private val records: List<EnergyStarCatalogRecord>)
             .map(EnergyStarCatalogRecord::toCatalogItem)
             .toList()
     }
+
+    fun popularBrands(
+        category: ApplianceCategory? = null,
+        limit: Int = 16,
+    ): List<String> = records.asSequence()
+        .filter { category == null || it.category == category }
+        .filter { it.brand.isNotBlank() }
+        .groupBy { normalizeSearchText(it.brand) }
+        .values
+        .map { sameBrand ->
+            val displayName = sameBrand
+                .groupingBy { it.brand.trim() }
+                .eachCount()
+                .maxWith(compareBy<Map.Entry<String, Int>> { it.value }.thenByDescending { it.key })
+                .key
+            displayName to sameBrand.size
+        }
+        .sortedWith(compareByDescending<Pair<String, Int>> { it.second }.thenBy { it.first.lowercase(Locale.ROOT) })
+        .take(limit.coerceIn(1, 50))
+        .map(Pair<String, Int>::first)
 }
 
 interface EnergyStarCatalogSource {
     suspend fun metadata(): EnergyStarCatalogMetadata
     suspend fun search(query: String, category: ApplianceCategory? = null, limit: Int = 80): List<ApplianceCatalogItem>
+    suspend fun popularBrands(category: ApplianceCategory? = null, limit: Int = 16): List<String>
 }
 
 class AssetEnergyStarCatalogSource(context: Context) : EnergyStarCatalogSource {
@@ -158,6 +179,9 @@ class AssetEnergyStarCatalogSource(context: Context) : EnergyStarCatalogSource {
     ): List<ApplianceCatalogItem> = withContext(Dispatchers.IO) {
         index().search(query, category, limit)
     }
+
+    override suspend fun popularBrands(category: ApplianceCategory?, limit: Int): List<String> =
+        withContext(Dispatchers.IO) { index().popularBrands(category, limit) }
 
     private suspend fun index(): EnergyStarCatalogIndex = loadedIndex ?: loadMutex.withLock {
         loadedIndex ?: readIndex().also { loadedIndex = it }
