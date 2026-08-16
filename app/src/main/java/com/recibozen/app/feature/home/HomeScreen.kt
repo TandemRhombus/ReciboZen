@@ -125,7 +125,9 @@ fun HomeScreen(
                 ExtendedFloatingActionButton(
                     onClick = onRegisterReading,
                     containerColor = RzPalette.Lime,
-                    contentColor = MaterialTheme.colorScheme.onBackground,
+                    // Lime remains bright in both themes, so it always needs
+                    // the dark ink token rather than dark mode's white text.
+                    contentColor = MaterialTheme.colorScheme.onTertiary,
                     icon = { Icon(RzIcons.Schedule, contentDescription = null) },
                     text = { Text(stringResource(R.string.action_register_reading)) },
                     elevation = FloatingActionButtonDefaults.elevation(),
@@ -216,11 +218,23 @@ private fun DacRiskCard(uiState: HomeUiState, onClick: () -> Unit) {
             R.string.home_dac_projection_risk_body,
             risk.projectedNextBillKwh ?: 0,
             risk.recommendedNextBillMaxKwh ?: 0,
+            risk.annualizedRollingKwh?.roundToInt() ?: 0,
+            risk.annualEquivalentLimitKwh ?: 0,
+            risk.tariffCode.ifBlank { "—" },
+        )
+        (risk.annualMarginKwh ?: 0.0) < 0.0 -> stringResource(
+            R.string.home_dac_annual_over_body,
+            risk.annualizedRollingKwh?.roundToInt() ?: 0,
+            risk.annualEquivalentLimitKwh ?: 0,
+            kotlin.math.abs(risk.annualMarginKwh ?: 0.0).roundToInt(),
+            risk.tariffCode.ifBlank { "—" },
         )
         else -> stringResource(
-            R.string.home_dac_margin_body,
-            risk.monthlyAverageKwh.roundToInt(),
-            risk.monthlyLimitKwh,
+            R.string.home_dac_annual_margin_body,
+            risk.annualizedRollingKwh?.roundToInt() ?: 0,
+            risk.annualEquivalentLimitKwh ?: 0,
+            risk.annualMarginKwh?.roundToInt() ?: 0,
+            risk.tariffCode.ifBlank { "—" },
         )
     }
     RzCard(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
@@ -417,12 +431,12 @@ private fun ApplianceForecastCard(uiState: HomeUiState, onViewAllAppliances: () 
             ) {
                 StatColumn(
                     label = stringResource(R.string.home_appliance_forecast_meter_label),
-                    value = stringResource(R.string.home_period_kwh_value, uiState.projectedKwh),
+                    value = stringResource(R.string.home_period_kwh_value, uiState.observedTodayKwh),
                     modifier = Modifier.weight(1f),
                 )
                 StatColumn(
                     label = stringResource(R.string.home_appliance_forecast_inventory_label),
-                    value = stringResource(R.string.home_period_kwh_value, uiState.applianceProjectedKwh),
+                    value = stringResource(R.string.home_period_kwh_value, uiState.applianceExpectedToDateKwh),
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -438,10 +452,23 @@ private fun ApplianceForecastCard(uiState: HomeUiState, onViewAllAppliances: () 
                 modifier = Modifier.padding(top = RzSpacing.xs),
             )
             Text(
-                stringResource(R.string.home_appliance_forecast_comparison_note),
+                stringResource(
+                    R.string.home_appliance_forecast_daily_basis,
+                    formatRate(uiState.applianceDailyAverageKwh),
+                    uiState.observedDays,
+                    uiState.applianceExpectedToDateKwh,
+                    uiState.billingDays,
+                    uiState.applianceProjectedKwh,
+                ),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = RzSpacing.md),
+            )
+            Text(
+                stringResource(R.string.home_appliance_forecast_comparison_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(top = RzSpacing.sm),
             )
         } else {
             Row(
@@ -499,6 +526,19 @@ private fun ProjectedBillCard(uiState: HomeUiState) {
                 icon = RzIcons.Timeline,
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.primary,
+            )
+        }
+        if (uiState.currentPeriodDateRange.isNotBlank()) {
+            Text(
+                stringResource(
+                    R.string.home_projected_period_dates,
+                    uiState.currentPeriodDateRange,
+                    uiState.daysRemaining,
+                    uiState.latestReadingDateLabel.ifBlank { stringResource(R.string.home_latest_reading_unknown) },
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(top = RzSpacing.xs),
             )
         }
 

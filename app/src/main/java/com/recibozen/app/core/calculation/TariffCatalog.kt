@@ -23,7 +23,13 @@ object TariffCatalog {
         TariffDefinition("1D", "Doméstica cálida 31 °C", TariffAudience.HOME, seasonal = true, highConsumptionLimitKwhPerMonth = 1_000),
         TariffDefinition("1E", "Doméstica cálida 32 °C", TariffAudience.HOME, seasonal = true, highConsumptionLimitKwhPerMonth = 2_000),
         TariffDefinition("1F", "Doméstica cálida 33 °C", TariffAudience.HOME, seasonal = true, highConsumptionLimitKwhPerMonth = 2_500),
-        TariffDefinition("DAC", "Doméstica de alto consumo", TariffAudience.HOME, seasonal = false),
+        TariffDefinition(
+            "DAC",
+            "Doméstica de alto consumo",
+            TariffAudience.HOME,
+            seasonal = false,
+            calculationSupport = TariffCalculationSupport.RECEIPT_CALIBRATION_REQUIRED,
+        ),
         TariffDefinition(
             "PDBT",
             "Pequeña demanda en baja tensión",

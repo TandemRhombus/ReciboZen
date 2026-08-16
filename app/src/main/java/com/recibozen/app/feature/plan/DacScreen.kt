@@ -33,6 +33,7 @@ import com.recibozen.app.core.calculation.DacRiskCalculator
 import com.recibozen.app.core.calculation.DacRiskLevel
 import com.recibozen.app.core.calculation.DacRiskSnapshot
 import com.recibozen.app.core.calculation.TariffBlock
+import com.recibozen.app.core.calculation.TariffCatalog
 import com.recibozen.app.core.components.RzBarSegment
 import com.recibozen.app.core.components.RzCard
 import com.recibozen.app.core.components.RzFlowTopBar
@@ -41,11 +42,11 @@ import com.recibozen.app.core.components.RzStackedBarRow
 import com.recibozen.app.core.designsystem.ReciboZenTheme
 import com.recibozen.app.core.designsystem.RzSpacing
 import com.recibozen.app.core.designsystem.RzTheme
-import com.recibozen.app.core.model.ReadingMethod
 import com.recibozen.app.demo.repository.ReciboZenRepository
 import com.recibozen.app.demo.repository.ReciboZenSessionState
 import com.recibozen.app.navigation.rzViewModel
 import java.text.NumberFormat
+import java.time.LocalDate
 import java.util.Locale
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.SharingStarted
@@ -63,6 +64,13 @@ data class DacTariffTier(
 
 data class DacOpportunity(val name: String, val monthlyKwh: Int)
 
+data class DacLimitReference(
+    val tariffCode: String,
+    val monthlyLimitKwh: Int,
+    val annualEquivalentKwh: Int,
+    val isSelected: Boolean,
+)
+
 data class DacUiState(
     val risk: DacRiskSnapshot = DacRiskSnapshot(),
     val tariff: String = "",
@@ -70,9 +78,14 @@ data class DacUiState(
     val tariffCalibrated: Boolean = false,
     val todayMarkerFraction: Float = 0f,
     val opportunities: List<DacOpportunity> = emptyList(),
+    val limitReferences: List<DacLimitReference> = emptyList(),
 ) {
     val rollingAverageKwh: Int get() = risk.monthlyAverageKwh?.roundToInt() ?: 0
     val referenceLimitKwh: Int get() = risk.monthlyLimitKwh ?: 0
+    val rollingWindowKwh: Int get() = risk.rollingWindowKwh?.roundToInt() ?: 0
+    val annualComparableKwh: Int get() = risk.annualizedRollingKwh?.roundToInt() ?: 0
+    val annualLimitKwh: Int get() = risk.annualEquivalentLimitKwh ?: 0
+    val annualMarginKwh: Int get() = risk.annualMarginKwh?.roundToInt() ?: 0
     val hasUsageData: Boolean get() = risk.monthlyAverageKwh != null
     private val scaleKwh: Float = maxOf(rollingAverageKwh, referenceLimitKwh, 1).toFloat()
     val averageProgressFraction: Float get() = (rollingAverageKwh / scaleKwh).coerceIn(0f, 1f)
@@ -114,10 +127,7 @@ class DacViewModel(private val repository: ReciboZenRepository) : ViewModel() {
         tariffCalibrated: Boolean,
     ): DacUiState {
         val energy = repository.energySummary(state)
-        val latestBillEndMillis = importedHistory.lastOrNull()?.periodEndEpochDay?.times(MILLIS_PER_DAY)
-        val hasLiveReading = latestBillEndMillis != null && state.readings.any { reading ->
-            reading.method != ReadingMethod.PDF && (reading.timestampEpochMillis ?: Long.MIN_VALUE) > latestBillEndMillis
-        }
+        val hasLiveReading = energy.hasCurrentMeterProjection
         val projectedKwh = energy.projectedKwh.takeIf { hasLiveReading && it > 0 }
         val billingDays = energy.billingDays.takeIf { hasLiveReading && it > 0 } ?: 0
         val risk = DacRiskCalculator.calculate(importedHistory, state.tariff, projectedKwh, billingDays)
@@ -129,6 +139,17 @@ class DacViewModel(private val repository: ReciboZenRepository) : ViewModel() {
             .sortedByDescending { it.kwh }
             .take(3)
             .map { appliance -> DacOpportunity(appliance.name, (appliance.kwh * monthlyFactor).roundToInt()) }
+        val normalizedTariff = TariffCatalog.normalize(state.tariff)
+        val limitReferences = TariffCatalog.supported.mapNotNull { definition ->
+            definition.highConsumptionLimitKwhPerMonth?.let { monthlyLimit ->
+                DacLimitReference(
+                    tariffCode = definition.code,
+                    monthlyLimitKwh = monthlyLimit,
+                    annualEquivalentKwh = monthlyLimit * 12,
+                    isSelected = definition.code == normalizedTariff,
+                )
+            }
+        }
         return DacUiState(
             risk = risk,
             tariff = state.tariff,
@@ -136,11 +157,8 @@ class DacViewModel(private val repository: ReciboZenRepository) : ViewModel() {
             tariffCalibrated = tariffCalibrated,
             todayMarkerFraction = (energy.observedKwh.toFloat() / basisKwh.coerceAtLeast(1)).coerceIn(0f, 1f),
             opportunities = opportunities,
+            limitReferences = limitReferences,
         )
-    }
-
-    private companion object {
-        const val MILLIS_PER_DAY = 86_400_000L
     }
 }
 
@@ -164,18 +182,22 @@ fun DacScreen(uiState: DacUiState, onBack: () -> Unit, modifier: Modifier = Modi
         ) {
             if (uiState.risk.level == DacRiskLevel.ALREADY_DAC) {
                 DacAlreadyClassifiedCard()
+                DacLimitReferenceCard(uiState)
                 return@Column
             }
             if (uiState.risk.level == DacRiskLevel.UNSUPPORTED) {
                 DacMissingTariffCard()
+                DacLimitReferenceCard(uiState)
                 return@Column
             }
             if (!uiState.hasUsageData) {
                 DacEmptyCard(hasTariff = uiState.referenceLimitKwh > 0)
+                DacLimitReferenceCard(uiState)
                 return@Column
             }
 
             DacStatusCard(uiState)
+            DacAnnualWindowCard(uiState)
             DacNextBillCard(uiState)
 
             if (uiState.opportunities.isNotEmpty()) {
@@ -192,8 +214,126 @@ fun DacScreen(uiState: DacUiState, onBack: () -> Unit, modifier: Modifier = Modi
                 }
             }
 
+            DacLimitReferenceCard(uiState)
+
             TariffBreakdownCard(uiState)
         }
+    }
+}
+
+@Composable
+private fun DacLimitReferenceCard(uiState: DacUiState) {
+    if (uiState.limitReferences.isEmpty()) return
+    RzCard(modifier = Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.dac_limits_by_tariff_title), style = MaterialTheme.typography.titleMedium)
+        Text(
+            stringResource(R.string.dac_limits_by_tariff_body),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = RzSpacing.xs),
+        )
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.md),
+            verticalArrangement = Arrangement.spacedBy(RzSpacing.sm),
+        ) {
+            uiState.limitReferences.forEach { reference ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(RzSpacing.sm),
+                ) {
+                    Text(
+                        if (reference.isSelected) {
+                            stringResource(R.string.dac_tariff_selected, reference.tariffCode)
+                        } else {
+                            stringResource(R.string.dac_tariff_plain, reference.tariffCode)
+                        },
+                        style = MaterialTheme.typography.titleSmall,
+                        color = if (reference.isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        stringResource(
+                            R.string.dac_tariff_limit_pair,
+                            dacNumberFormat.format(reference.monthlyLimitKwh),
+                            dacNumberFormat.format(reference.annualEquivalentKwh),
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (reference.isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        Text(
+            stringResource(R.string.dac_limits_strictly_above),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.padding(top = RzSpacing.md),
+        )
+    }
+}
+
+@Composable
+private fun DacAnnualWindowCard(uiState: DacUiState) {
+    val risk = uiState.risk
+    RzCard(modifier = Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.dac_rolling_year_title), style = MaterialTheme.typography.titleMedium)
+        val start = risk.rollingWindowStartEpochDay
+        val end = risk.rollingWindowEndEpochDay
+        if (start != null && end != null) {
+            Text(
+                stringResource(R.string.dac_rolling_year_dates, dacDate(start), dacDate(end)),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(top = RzSpacing.xs),
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.lg),
+            horizontalArrangement = Arrangement.spacedBy(RzSpacing.lg),
+        ) {
+            DacStat(
+                stringResource(R.string.dac_rolling_year_accumulated),
+                stringResource(R.string.dac_kwh_value, uiState.rollingWindowKwh),
+                MaterialTheme.colorScheme.onSurface,
+                Modifier.weight(1f),
+            )
+            DacStat(
+                stringResource(R.string.dac_rolling_year_maximum),
+                stringResource(R.string.dac_kwh_value, uiState.annualLimitKwh),
+                MaterialTheme.colorScheme.onSurface,
+                Modifier.weight(1f),
+            )
+        }
+        val margin = uiState.annualMarginKwh
+        Text(
+            if (margin >= 0) {
+                stringResource(R.string.dac_rolling_year_margin_left, margin)
+            } else {
+                stringResource(R.string.dac_rolling_year_margin_over, -margin)
+            },
+            style = MaterialTheme.typography.titleSmall,
+            color = if (margin >= 0) RzTheme.extendedColors.success else RzTheme.extendedColors.warningText,
+            modifier = Modifier.padding(top = RzSpacing.lg),
+        )
+        if (kotlin.math.abs(uiState.annualComparableKwh - uiState.rollingWindowKwh) >= 1) {
+            Text(
+                stringResource(
+                    R.string.dac_rolling_year_annualized,
+                    uiState.risk.coveredDays,
+                    uiState.annualComparableKwh,
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = RzSpacing.sm),
+            )
+        }
+        Text(
+            stringResource(R.string.dac_rolling_year_explanation),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.padding(top = RzSpacing.sm),
+        )
     }
 }
 
@@ -288,6 +428,29 @@ private fun DacNextBillCard(uiState: DacUiState) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = RzSpacing.sm),
         )
+        uiState.risk.projectedRollingWindowKwh?.let { projectedRolling ->
+            val projectedMargin = uiState.risk.projectedAnnualMarginKwh?.roundToInt() ?: 0
+            Text(
+                if (projectedMargin >= 0) {
+                    stringResource(
+                        R.string.dac_next_bill_rolling_ok,
+                        projectedRolling.roundToInt(),
+                        uiState.annualLimitKwh,
+                        projectedMargin,
+                    )
+                } else {
+                    stringResource(
+                        R.string.dac_next_bill_rolling_over,
+                        projectedRolling.roundToInt(),
+                        uiState.annualLimitKwh,
+                        -projectedMargin,
+                    )
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (projectedMargin >= 0) RzTheme.extendedColors.success else RzTheme.extendedColors.warningText,
+                modifier = Modifier.padding(top = RzSpacing.sm),
+            )
+        }
         Text(
             stringResource(R.string.dac_prediction_disclaimer),
             style = MaterialTheme.typography.bodySmall,
@@ -418,7 +581,14 @@ private fun TariffTierRow(color: Color, index: Int, tier: DacTariffTier) {
 }
 
 private val dacMoneyFormat: NumberFormat =
-    NumberFormat.getCurrencyInstance(Locale("es", "MX")).apply { maximumFractionDigits = 0 }
+    NumberFormat.getCurrencyInstance(Locale.forLanguageTag("es-MX")).apply { maximumFractionDigits = 0 }
+private val dacNumberFormat: NumberFormat = NumberFormat.getIntegerInstance(Locale.forLanguageTag("es-MX"))
+
+private fun dacDate(epochDay: Long): String {
+    val date = LocalDate.ofEpochDay(epochDay)
+    val months = arrayOf("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
+    return "${date.dayOfMonth} ${months[date.monthValue - 1]} ${date.year}"
+}
 
 @Preview(showBackground = true)
 @Composable

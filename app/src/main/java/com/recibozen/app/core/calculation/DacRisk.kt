@@ -13,16 +13,31 @@ enum class DacRiskLevel { UNKNOWN, NORMAL, WATCH, RISK, ABOVE_LIMIT, ALREADY_DAC
  */
 data class DacRiskSnapshot(
     val tariffCode: String = "",
+    /** Domestic tariff whose locality limit applies before/after DAC. */
+    val referenceDomesticTariffCode: String? = null,
     val monthlyLimitKwh: Int? = null,
     val annualEquivalentLimitKwh: Int? = monthlyLimitKwh?.times(12),
     val monthlyAverageKwh: Double? = null,
     val marginMonthlyKwh: Double? = null,
+    /** Energy actually represented inside the latest 365-day billed window. */
+    val rollingWindowKwh: Double? = null,
+    /** 365-day comparable value after correcting small uncovered date gaps. */
+    val annualizedRollingKwh: Double? = null,
+    val annualMarginKwh: Double? = null,
+    val rollingWindowStartEpochDay: Long? = null,
+    val rollingWindowEndEpochDay: Long? = null,
     val utilizationFraction: Double? = null,
     val coveredDays: Int = 0,
     val hasCompleteHistory: Boolean = false,
     val level: DacRiskLevel = DacRiskLevel.UNKNOWN,
     val projectedNextBillKwh: Int? = null,
     val recommendedNextBillMaxKwh: Int? = null,
+    /** Billed energy that will age out when the projected next period closes. */
+    val expiringBeforeNextBillKwh: Double? = null,
+    /** Historical energy that remains before adding the projected next bill. */
+    val retainedBeforeNextBillKwh: Double? = null,
+    val projectedRollingWindowKwh: Double? = null,
+    val projectedAnnualMarginKwh: Double? = null,
     val wouldExceedWithProjection: Boolean = false,
 ) {
     val coveredMonths: Int
@@ -46,10 +61,24 @@ object DacRiskCalculator {
         tariffCode: String,
         projectedNextBillKwh: Int? = null,
         projectedBillingDays: Int = 0,
+        domesticReferenceTariffCode: String? = null,
     ): DacRiskSnapshot {
         val normalizedTariff = TariffCatalog.normalize(tariffCode)
         if (normalizedTariff == "DAC") {
-            return DacRiskSnapshot(tariffCode = normalizedTariff, level = DacRiskLevel.ALREADY_DAC)
+            val reference = domesticReferenceTariffCode
+                ?.let(TariffCatalog::normalize)
+                ?.takeIf { TariffCatalog.find(it)?.highConsumptionLimitKwhPerMonth != null }
+                ?: return DacRiskSnapshot(tariffCode = normalizedTariff, level = DacRiskLevel.ALREADY_DAC)
+            return calculate(
+                history = history,
+                tariffCode = reference,
+                projectedNextBillKwh = projectedNextBillKwh,
+                projectedBillingDays = projectedBillingDays,
+            ).copy(
+                tariffCode = normalizedTariff,
+                referenceDomesticTariffCode = reference,
+                level = DacRiskLevel.ALREADY_DAC,
+            )
         }
         val limit = TariffCatalog.find(normalizedTariff)?.highConsumptionLimitKwhPerMonth
             ?: return DacRiskSnapshot(tariffCode = normalizedTariff, level = DacRiskLevel.UNSUPPORTED)
@@ -58,7 +87,7 @@ object DacRiskCalculator {
             val start = period.periodStartEpochDay ?: return@mapNotNull null
             val end = period.periodEndEpochDay ?: return@mapNotNull null
             if (end <= start || period.consumptionKwh < 0) null else DatedConsumption(start, end, period.consumptionKwh)
-        }
+        }.distinctBy { it.start to it.end }
         if (dated.isEmpty()) {
             return DacRiskSnapshot(tariffCode = normalizedTariff, monthlyLimitKwh = limit)
         }
@@ -85,22 +114,36 @@ object DacRiskCalculator {
         val futureWindowEnd = asOf + nextDays
         val futureWindowStart = futureWindowEnd - WINDOW_DAYS
         val retainedKwh = if (nextDays > 0) consumptionInWindow(dated, futureWindowStart, asOf).kwh else 0.0
+        val expiringKwh = if (nextDays > 0) (window.kwh - retainedKwh).coerceAtLeast(0.0) else null
         val recommendedMax = if (hasCompleteHistory && nextDays > 0) {
             floor(limit * 12.0 - retainedKwh).toInt().coerceAtLeast(0)
         } else null
         val safeProjection = projectedNextBillKwh?.coerceAtLeast(0)
+        val projectedRollingWindow = if (recommendedMax != null && safeProjection != null) {
+            retainedKwh + safeProjection
+        } else null
+        val annualLimit = limit * 12.0
 
         return DacRiskSnapshot(
             tariffCode = normalizedTariff,
             monthlyLimitKwh = limit,
             monthlyAverageKwh = monthlyAverage,
             marginMonthlyKwh = limit - monthlyAverage,
+            rollingWindowKwh = window.kwh,
+            annualizedRollingKwh = annualizedConsumption,
+            annualMarginKwh = annualLimit - annualizedConsumption,
+            rollingWindowStartEpochDay = windowStart,
+            rollingWindowEndEpochDay = asOf,
             utilizationFraction = utilization,
             coveredDays = window.coveredDays,
             hasCompleteHistory = hasCompleteHistory,
             level = level,
             projectedNextBillKwh = safeProjection,
             recommendedNextBillMaxKwh = recommendedMax,
+            expiringBeforeNextBillKwh = expiringKwh,
+            retainedBeforeNextBillKwh = retainedKwh.takeIf { nextDays > 0 },
+            projectedRollingWindowKwh = projectedRollingWindow,
+            projectedAnnualMarginKwh = projectedRollingWindow?.let { annualLimit - it },
             wouldExceedWithProjection = recommendedMax != null && safeProjection != null && safeProjection > recommendedMax,
         )
     }

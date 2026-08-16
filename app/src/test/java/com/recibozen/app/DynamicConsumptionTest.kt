@@ -7,17 +7,24 @@ import com.recibozen.app.core.model.BillPeriod
 import com.recibozen.app.core.model.ConfidenceLevel
 import com.recibozen.app.core.model.HistoryReadingEntry
 import com.recibozen.app.core.model.ReadingMethod
+import com.recibozen.app.core.model.ApplianceUsageModel
 import com.recibozen.app.demo.repository.DemoReciboZenRepository
 import com.recibozen.app.demo.repository.EnergyForecastBasis
 import com.recibozen.app.demo.repository.ReciboZenSessionState
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import java.time.LocalDate
+import java.time.ZoneId
 
 class DynamicConsumptionTest {
     private class Repository : DemoReciboZenRepository() {
+        var todayEpochDay: Long? = null
+
         fun setBills(bills: List<BillPeriod>) {
             mutableImportedBillHistory.value = bills
         }
+
+        override fun currentEpochDay(): Long = todayEpochDay ?: super.currentEpochDay()
     }
 
     @Test
@@ -118,7 +125,6 @@ class DynamicConsumptionTest {
                 HistoryReadingEntry(17_568, "Inicio", ReadingMethod.PDF, "PDF", 20_550L * 86_400_000),
             ),
         )
-
         val energy = repository.energySummary(state)
 
         assertEquals(858, energy.observedKwh)
@@ -145,12 +151,13 @@ class DynamicConsumptionTest {
         )
         val state = ReciboZenSessionState(
             readings = listOf(
-                HistoryReadingEntry(9_974, "30 días", ReadingMethod.DIAL, "+74", (periodEnd + 30) * 86_400_000),
-                HistoryReadingEntry(9_900, "17 días", ReadingMethod.MANUAL, "+97", (periodEnd + 17) * 86_400_000),
+                HistoryReadingEntry(9_974, "30 días", ReadingMethod.DIAL, "+74", localMillis(periodEnd + 30)),
+                HistoryReadingEntry(9_900, "17 días", ReadingMethod.MANUAL, "+97", localMillis(periodEnd + 17)),
                 HistoryReadingEntry(9_803, "Cierre", ReadingMethod.PDF, "PDF", periodEnd * 86_400_000),
                 HistoryReadingEntry(9_157, "Inicio", ReadingMethod.PDF, "PDF", periodStart * 86_400_000),
             ),
         )
+        repository.todayEpochDay = periodEnd + 30
 
         val energy = repository.energySummary(state)
 
@@ -158,6 +165,36 @@ class DynamicConsumptionTest {
         assertEquals(30, energy.observedDays)
         assertEquals(353, energy.projectedKwh)
         assertEquals(32, energy.daysRemaining)
+    }
+
+    @Test
+    fun daysRemainingUseTodaysLocalDateEvenWhenTheLatestReadingIsOlder() {
+        val repository = Repository()
+        val periodStart = 20_584L
+        val periodEnd = 20_646L
+        repository.setBills(
+            listOf(
+                BillPeriod(
+                    monthLabel = "May–Jul 26",
+                    amountMxn = 2_274,
+                    consumptionKwh = 646,
+                    periodStartEpochDay = periodStart,
+                    periodEndEpochDay = periodEnd,
+                ),
+            ),
+        )
+        repository.todayEpochDay = periodEnd + 25
+        val state = ReciboZenSessionState(
+            readings = listOf(
+                HistoryReadingEntry(9_923, "20 días", ReadingMethod.MANUAL, "+120", localMillis(periodEnd + 20)),
+                HistoryReadingEntry(9_803, "Cierre", ReadingMethod.PDF, "PDF", periodEnd * 86_400_000),
+            ),
+        )
+
+        val energy = repository.energySummary(state)
+
+        assertEquals(20, energy.observedDays)
+        assertEquals(37, energy.daysRemaining)
     }
 
     @Test
@@ -214,13 +251,14 @@ class DynamicConsumptionTest {
                     room = "Hogar",
                     costMxn = 0,
                     kwh = 100,
+                    referencePeriodDays = 62,
                     sharePercent = 0,
                     hoursPerWeek = 10,
                     confidence = ConfidenceLevel.MEDIUM,
                 ),
             ),
             readings = listOf(
-                HistoryReadingEntry(9_974, "30 días", ReadingMethod.MANUAL, "+171", (periodEnd + 30) * 86_400_000),
+                HistoryReadingEntry(9_974, "30 días", ReadingMethod.MANUAL, "+171", localMillis(periodEnd + 30)),
                 HistoryReadingEntry(9_803, "Cierre", ReadingMethod.PDF, "PDF", periodEnd * 86_400_000),
             ),
         )
@@ -255,5 +293,48 @@ class DynamicConsumptionTest {
 
         assertEquals(100, repository.energySummary().applianceProjectedKwh)
         assertEquals(EnergyForecastBasis.APPLIANCES, repository.energySummary().forecastBasis)
+    }
+
+    @Test
+    fun periodKwhAppliancesAreRescaledToTheActualNextBillingDays() {
+        val repository = Repository()
+        repository.setBills(
+            listOf(
+                BillPeriod(
+                    monthLabel = "May–Jul 26",
+                    amountMxn = 1_000,
+                    consumptionKwh = 300,
+                    periodStartEpochDay = 20_584,
+                    periodEndEpochDay = 20_646,
+                ),
+            ),
+        )
+        val state = ReciboZenSessionState(
+            customAppliances = listOf(
+                Appliance(
+                    id = "fixed",
+                    name = "Equipo medido",
+                    room = "Hogar",
+                    costMxn = 0,
+                    kwh = 60,
+                    unitKwh = 60.0,
+                    referencePeriodDays = 30,
+                    sharePercent = 0,
+                    hoursPerWeek = null,
+                    usageModel = ApplianceUsageModel.PERIOD_KWH,
+                    confidence = ConfidenceLevel.HIGH,
+                ),
+            ),
+        )
+
+        assertEquals(124, repository.energySummary(state).applianceProjectedKwh)
+        assertEquals(62, repository.appliances(state).single().referencePeriodDays)
+    }
+
+    private companion object {
+        fun localMillis(epochDay: Long): Long = LocalDate.ofEpochDay(epochDay)
+            .atStartOfDay(ZoneId.systemDefault())
+            .toInstant()
+            .toEpochMilli()
     }
 }

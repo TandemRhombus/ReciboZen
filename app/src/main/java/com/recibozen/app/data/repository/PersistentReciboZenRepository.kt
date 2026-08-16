@@ -36,6 +36,7 @@ import com.recibozen.app.core.notifications.ReadingReminderScheduler
 import com.recibozen.app.core.notifications.ReadingReminderStore
 import com.recibozen.app.demo.data.DemoReciboZenData
 import com.recibozen.app.core.calculation.TariffCalibration
+import com.recibozen.app.core.calculation.TariffCatalog
 import com.recibozen.app.demo.repository.DemoReciboZenRepository
 import com.recibozen.app.demo.repository.ReciboZenSessionState
 import com.recibozen.app.demo.repository.TariffCalibrationState
@@ -210,6 +211,7 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
                     season = item.optString("season"),
                     quantityKwh = item.optDouble("quantityKwh").takeIf { !it.isNaN() },
                     unitRateMxn = item.optDouble("unitRateMxn").takeIf { !it.isNaN() },
+                    amountMxn = item.optDouble("amountMxn").takeIf { !it.isNaN() },
                 )
             }
         }.getOrDefault(emptyList())
@@ -236,6 +238,12 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
     override fun setTariff(tariff: String) {
         super.setTariff(tariff)
         persistService(mutableSession.value.activeServiceId)
+    }
+
+    override fun setDacReferenceTariff(tariff: String) {
+        super.setDacReferenceTariff(tariff)
+        // Session persistence observes mutableSession; no service column is
+        // changed because this is the pre-DAC locality reference, not its live tariff.
     }
 
     override fun premiumSubject(): String = premiumAccessStore.subject
@@ -276,8 +284,15 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
         }
         val existingMatch = dao.findService(bill.serviceNumber, bill.rmu)
         val activeCurrent = dao.service(mutableSession.value.activeServiceId)
+        val previousDomesticTariff = (existingMatch?.tariffCode ?: activeCurrent?.tariffCode)
+            ?.let(TariffCatalog::normalize)
+            ?.takeIf { TariffCatalog.find(it)?.highConsumptionLimitKwhPerMonth != null }
         val service = when {
-            existingMatch != null -> existingMatch
+            existingMatch != null -> existingMatch.copy(
+                tariffCode = bill.tariffCode,
+                billingCycle = if (bill.periodEnd.toEpochDay() - bill.periodStart.toEpochDay() > 45) "Bimestral" else "Mensual",
+                wireCount = bill.wireCount ?: existingMatch.wireCount,
+            )
             activeCurrent != null && activeCurrent.serviceNumber == null && activeCurrent.rmu == null -> activeCurrent.copy(
                 displayAlias = serviceAliasForBill(activeCurrent.displayAlias, bill.serviceNumber),
                 serviceNumber = bill.serviceNumber,
@@ -404,6 +419,9 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
                 val mergedReadings = (it.readings + pdfReadings)
                     .distinctBy { reading -> reading.kwh to reading.timestampEpochMillis }
                     .sortedByDescending { reading -> reading.timestampEpochMillis ?: Long.MIN_VALUE }
+                val references = if (bill.tariffCode == "DAC" && previousDomesticTariff != null) {
+                    it.dacReferenceTariffsByService + (service.id to previousDomesticTariff)
+                } else it.dacReferenceTariffsByService
                 it.copy(
                     activeServiceId = service.id,
                     serviceAlias = service.displayAlias,
@@ -411,6 +429,7 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
                     rmu = bill.rmu.orEmpty(),
                     meterNumber = bill.meterNumber,
                     tariff = bill.tariffCode,
+                    dacReferenceTariffsByService = references,
                     billingCycle = service.billingCycle,
                     lastConfirmedReadingKwh = maxOf(it.lastConfirmedReadingKwh, bill.currentReadingKwh),
                     readings = mergedReadings,
@@ -511,6 +530,7 @@ internal object SessionJsonCodec {
         put("activeServiceId", state.activeServiceId)
         put("location", state.location)
         put("tariff", state.tariff)
+        put("dacReferenceTariffsByService", JSONObject(state.dacReferenceTariffsByService))
         put("billingCycle", state.billingCycle)
         put("goalMxn", state.goalMxn)
         put("meterType", state.meterType)
@@ -629,6 +649,8 @@ internal object SessionJsonCodec {
                 tariff = json.optString("tariff", defaults.tariff).let {
                     if (migrateFixtureState && serviceNumber.isBlank() && it == DemoReciboZenData.TARIFF) "" else it
                 },
+                dacReferenceTariffsByService = json.optJSONObject("dacReferenceTariffsByService")
+                    .toStringMap(defaults.dacReferenceTariffsByService),
                 billingCycle = json.optString("billingCycle", defaults.billingCycle).let {
                     if (migrateFixtureState && serviceNumber.isBlank() && it == DemoReciboZenData.BILLING_CYCLE) "" else it
                 },
@@ -675,6 +697,13 @@ internal object SessionJsonCodec {
     private fun JSONObject?.toIntMap(fallback: Map<String, Int>): Map<String, Int> {
         if (this == null) return fallback
         return keys().asSequence().associateWith { key -> optInt(key, fallback[key] ?: 0).coerceIn(0, 168) }
+    }
+
+    private fun JSONObject?.toStringMap(fallback: Map<String, String>): Map<String, String> {
+        if (this == null) return fallback
+        return keys().asSequence().mapNotNull { key ->
+            optString(key).takeIf { it.isNotBlank() }?.let { key to it }
+        }.toMap()
     }
 
     private fun JSONArray?.toIntList(fallback: List<Int>): List<Int> {

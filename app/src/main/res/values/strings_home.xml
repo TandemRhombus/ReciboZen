@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="home_chart_start">inicio</string>
-    <string name="home_chart_today">hoy</string>
+    <string name="home_chart_today">última lectura</string>
     <string name="home_chart_axis_max">%1$d kWh</string>
     <string name="home_chart_axis_unit">acumulado</string>
     <string name="home_chart_axis_zero">0 kWh</string>
@@ -32,9 +32,10 @@
     <string name="home_appliance_data_empty">Todavía no agregas aparatos; no atribuiremos consumo a equipos ficticios.</string>
     <string name="home_appliance_forecast_title">Pronóstico por uso de aparatos</string>
     <string name="home_appliance_forecast_badge">Inventario</string>
-    <string name="home_appliance_forecast_meter_label">Ritmo del medidor</string>
-    <string name="home_appliance_forecast_inventory_label">Horarios declarados</string>
-    <string name="home_appliance_forecast_coverage">Los aparatos registrados explican aproximadamente %1$d%% de la proyección del medidor.</string>
+    <string name="home_appliance_forecast_meter_label">Medidor hasta la lectura</string>
+    <string name="home_appliance_forecast_inventory_label">Aparatos en esos días</string>
+    <string name="home_appliance_forecast_coverage">Los aparatos registrados explican aproximadamente %1$d%% de lo medido hasta ahora.</string>
+    <string name="home_appliance_forecast_daily_basis">Prorrateo del inventario: %1$s kWh/día × %2$d días observados = %3$d kWh. Para el periodo completo de %4$d días proyecta %5$d kWh.</string>
     <string name="home_appliance_forecast_comparison_note">Son dos estimaciones del mismo consumo: no las sumamos. La lectura del medidor sigue siendo la referencia principal y el inventario ayuda a explicar de dónde viene y a probar cambios de uso.</string>
     <string name="home_appliance_forecast_kwh_period">%1$d kWh en %2$d días</string>
     <string name="home_appliance_forecast_bill_note">Este sería el consumo del siguiente periodo si mantuvieras los horarios registrados. Cuando agregues una lectura del periodo actual lo compararemos contra el medidor.</string>
@@ -43,6 +44,8 @@
 
     <!-- Recibo proyectado card -->
     <string name="home_projected_period_label">Recibo proyectado · %1$s</string>
+    <string name="home_projected_period_dates">Periodo estimado: %1$s · aproximadamente %2$d días desde hoy hasta el cierre. Última lectura: %3$s.</string>
+    <string name="home_latest_reading_unknown">fecha no disponible</string>
     <string name="home_current_period_fallback">periodo actual</string>
     <string name="home_projection_chip">Proyección</string>
     <string name="home_currency_suffix">MXN</string>
@@ -52,7 +55,7 @@
     <string name="home_stat_goal_label">Tu meta</string>
     <string name="home_stat_days_label">Faltan</string>
     <string name="home_stat_days_value">%1$d días</string>
-    <string name="home_stat_observed_label">Observado hoy</string>
+    <string name="home_stat_observed_label">Hasta la lectura</string>
     <string name="home_stat_observed_value">%1$d kWh</string>
     <string name="home_previous_bill_context">Último recibo real: %1$s · %2$d kWh · $%3$d</string>
 
@@ -140,8 +143,10 @@
     <string name="home_dac_setup_body">El límite depende de la tarifa asignada a tu localidad. Configúrala o importa un recibo.</string>
     <string name="home_dac_import_body">Tu tarifa tiene un límite de %1$d kWh/mes. Importa historial para calcular el promedio móvil.</string>
     <string name="home_dac_partial_body">Tendencia: %1$d de %2$d kWh/mes, con aproximadamente %3$d meses cubiertos. Aún no afirmamos riesgo definitivo.</string>
-    <string name="home_dac_projection_risk_body">Proyectamos %1$d kWh para el siguiente recibo; procura %2$d kWh o menos para mantener el promedio bajo el límite.</string>
+    <string name="home_dac_projection_risk_body">Tarifa %5$s: tu año móvil va en aproximadamente %3$d de %4$d kWh. Proyectamos %1$d kWh para el siguiente recibo; procura %2$d kWh o menos.</string>
     <string name="home_dac_margin_body">Promedio móvil: %1$d de %2$d kWh/mes.</string>
+    <string name="home_dac_annual_margin_body">Tarifa %4$s: año móvil de aproximadamente %1$d de %2$d kWh. Te quedan cerca de %3$d kWh de margen.</string>
+    <string name="home_dac_annual_over_body">Tarifa %4$s: año móvil de aproximadamente %1$d de %2$d kWh, cerca de %3$d kWh por encima de la referencia.</string>
     <string name="home_dac_action">Ver margen y próximo recibo →</string>
 
     <!-- Footer -->

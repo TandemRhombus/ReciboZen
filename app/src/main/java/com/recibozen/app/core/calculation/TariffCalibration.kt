@@ -22,6 +22,7 @@ object TariffCalibration {
         val season: String,
         val quantityKwh: Double?,
         val unitRateMxn: Double?,
+        val amountMxn: Double? = null,
     )
 
     /** How much of the resulting snapshot came from the bill vs. the generic fallback. */
@@ -61,6 +62,17 @@ object TariffCalibration {
         fixedChargeMxn: Double = DEFAULT_FIXED_CHARGE_MXN,
         taxRate: Double = DEFAULT_TAX_RATE,
     ): Result {
+        if (TariffCatalog.normalize(tariffCode) == "DAC") {
+            return fromDacCharges(
+                tariffCode = tariffCode,
+                effectivePeriod = effectivePeriod,
+                charges = charges,
+                sourceBillId = sourceBillId,
+                fallbackBlocks = fallbackBlocks,
+                fixedChargeMxn = fixedChargeMxn,
+                taxRate = taxRate,
+            )
+        }
         val usable = charges.filter { charge ->
             charge.type.uppercase() in TIER_ORDER &&
                 (charge.unitRateMxn ?: 0.0) > 0.0
@@ -135,6 +147,46 @@ object TariffCalibration {
         return Result(
             TariffRateSnapshot(tariffCode, effectivePeriod, blocks, fixedChargeMxn, taxRate, sourceBillId),
             coverage,
+        )
+    }
+
+    private fun fromDacCharges(
+        tariffCode: String,
+        effectivePeriod: String,
+        charges: List<CalibrationCharge>,
+        sourceBillId: String?,
+        fallbackBlocks: List<TariffBlock>,
+        fixedChargeMxn: Double,
+        taxRate: Double,
+    ): Result {
+        val energyRows = charges.filter { charge ->
+            charge.type.uppercase() in setOf("ENERGY", "ENERGIA", "BASICO", "INTERMEDIO", "EXCEDENTE") &&
+                (charge.quantityKwh ?: 0.0) > 0.0 &&
+                ((charge.unitRateMxn ?: 0.0) > 0.0 || (charge.amountMxn ?: 0.0) > 0.0)
+        }
+        if (energyRows.isEmpty()) {
+            return Result(
+                TariffRateSnapshot(tariffCode, effectivePeriod, fallbackBlocks, fixedChargeMxn, taxRate, sourceBillId),
+                Coverage.NONE,
+            )
+        }
+        var runningLimit = 0
+        val blocks = energyRows.mapIndexed { index, charge ->
+            val quantity = charge.quantityKwh ?: 0.0
+            val rate = charge.unitRateMxn ?: ((charge.amountMxn ?: 0.0) / quantity)
+            runningLimit += quantity.toInt()
+            TariffBlock(
+                limitKwh = runningLimit.takeIf { index < energyRows.lastIndex },
+                rateMxnPerKwh = rate,
+            )
+        }
+        val billFixedCharge = charges.firstOrNull { it.type.uppercase() == "FIXED" }
+            ?.amountMxn
+            ?.takeIf { it >= 0.0 }
+            ?: fixedChargeMxn
+        return Result(
+            TariffRateSnapshot(tariffCode, effectivePeriod, blocks, billFixedCharge, taxRate, sourceBillId),
+            Coverage.FULL,
         )
     }
 

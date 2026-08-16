@@ -24,6 +24,9 @@ import com.recibozen.app.core.calculation.TariffCatalog
 import com.recibozen.app.demo.data.DemoReciboZenData
 import kotlin.math.roundToInt
 import java.text.SimpleDateFormat
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
@@ -45,11 +48,29 @@ open class DemoReciboZenRepository : ReciboZenRepository {
     override val tariffCalibration: StateFlow<TariffCalibrationState?> = mutableTariffCalibration.asStateFlow()
 
     /**
-     * The engine every estimate goes through: the user's own bill rates when a
-     * bill has been imported, the generic progressive blocks otherwise.
+     * Never price DAC with the generic 1C blocks. A legible DAC breakdown wins;
+     * otherwise the latest DAC bill supplies an all-in effective rate that is
+     * refreshed at every import. It is an estimate, but it preserves the actual
+     * tariff jump instead of silently reverting to subsidized domestic blocks.
      */
-    protected fun activeTariffEngine(): TariffEngine =
-        mutableTariffCalibration.value?.snapshot?.engine() ?: defaultTariffEngine
+    protected fun activeTariffEngine(): TariffEngine {
+        val calibration = mutableTariffCalibration.value
+        if (calibration?.isCalibrated == true) return calibration.snapshot.engine()
+        if (TariffCatalog.normalize(mutableSession.value.tariff) == "DAC") {
+            val latest = mutableImportedBillHistory.value.lastOrNull()
+            val effectiveRate = latest
+                ?.takeIf { it.consumptionKwh > 0 && it.amountMxn > 0 }
+                ?.let { it.amountMxn.toDouble() / it.consumptionKwh }
+            if (effectiveRate != null) {
+                return TariffEngine(
+                    blocks = listOf(com.recibozen.app.core.calculation.TariffBlock(null, effectiveRate)),
+                    fixedChargeMxn = 0.0,
+                    taxRate = 0.0,
+                )
+            }
+        }
+        return defaultTariffEngine
+    }
 
     protected val mutableSession = MutableStateFlow(ReciboZenSessionState())
     private val _session get() = mutableSession
@@ -60,8 +81,8 @@ open class DemoReciboZenRepository : ReciboZenRepository {
     override val importedBillHistory: StateFlow<List<BillPeriod>> = mutableImportedBillHistory.asStateFlow()
 
     override fun appliances(state: ReciboZenSessionState): List<Appliance> {
-        val adjusted = adjustedAppliances(state)
         val energy = energySummary(state)
+        val adjusted = adjustedAppliances(state, energy.billingDays)
         val shareBasisKwh = when {
             energy.hasCurrentMeterProjection && energy.meterProjectedKwh > 0 -> energy.meterProjectedKwh
             energy.forecastBasis == EnergyForecastBasis.CLOSED_BILL && energy.projectedKwh > 0 -> energy.projectedKwh
@@ -95,14 +116,16 @@ open class DemoReciboZenRepository : ReciboZenRepository {
     }
 
     /** Applies persisted schedule and quantity data without consulting [energySummary], avoiding a forecast cycle. */
-    private fun adjustedAppliances(state: ReciboZenSessionState): List<Appliance> =
+    private fun adjustedAppliances(state: ReciboZenSessionState, targetPeriodDays: Int = 0): List<Appliance> =
         state.customAppliances
             .distinctBy { it.id }
             .map { appliance ->
                 val quantity = appliance.quantity.coerceIn(1, 999)
                 val hours = state.applianceHoursPerWeek[appliance.id] ?: appliance.hoursPerWeek
                 val isScheduled = appliance.usageModel == ApplianceUsageModel.POWER_SCHEDULE && hours != null
-                val referenceDays = appliance.referencePeriodDays.coerceAtLeast(1)
+                val storedReferenceDays = appliance.referencePeriodDays.coerceAtLeast(1)
+                val referenceDays = targetPeriodDays.takeIf { it > 0 } ?: storedReferenceDays
+                val periodScale = referenceDays.toDouble() / storedReferenceDays
                 val legacyUnitKwh = appliance.kwh.toDouble() / appliance.quantity.coerceAtLeast(1)
                 val storedUnitKwh = appliance.unitKwh ?: legacyUnitKwh
                 val unitActiveKwh: Double
@@ -114,10 +137,10 @@ open class DemoReciboZenRepository : ReciboZenRepository {
                     } ?: 0.0
                 } else if (isScheduled && appliance.hoursPerWeek?.let { it > 0 } == true) {
                     val ratio = hours.toDouble() / appliance.hoursPerWeek.coerceAtLeast(1)
-                    unitActiveKwh = storedUnitKwh * ratio
+                    unitActiveKwh = storedUnitKwh * periodScale * ratio
                     unitStandbyKwh = 0.0
                 } else {
-                    unitActiveKwh = storedUnitKwh.coerceAtLeast(0.0)
+                    unitActiveKwh = (storedUnitKwh * periodScale).coerceAtLeast(0.0)
                     unitStandbyKwh = 0.0
                 }
                 val unitTotalKwh = unitActiveKwh + unitStandbyKwh
@@ -127,6 +150,7 @@ open class DemoReciboZenRepository : ReciboZenRepository {
                     hoursPerWeek = if (isScheduled) hours else null,
                     kwh = totalKwh,
                     unitKwh = unitTotalKwh,
+                    referencePeriodDays = referenceDays,
                     standbySharePercent = if (unitTotalKwh > 0 && unitStandbyKwh > 0) {
                         (unitStandbyKwh * 100 / unitTotalKwh).roundToInt().coerceIn(0, 100)
                     } else null,
@@ -163,11 +187,14 @@ open class DemoReciboZenRepository : ReciboZenRepository {
 
     override fun energySummary(state: ReciboZenSessionState): EnergySummary {
         val latestBill = importedBillHistory.value.lastOrNull()
-        val latestBillEndMillis = latestBill?.periodEndEpochDay?.times(MILLIS_PER_DAY)
+        val latestBillEndEpochDay = latestBill?.periodEndEpochDay
         val timedReadings = state.readings.filter { it.timestampEpochMillis != null }
-        val newest = if (latestBillEndMillis != null) {
+        val newest = if (latestBillEndEpochDay != null) {
             timedReadings
-                .filter { it.method != ReadingMethod.PDF && it.timestampEpochMillis!! > latestBillEndMillis }
+                .filter {
+                    it.method != ReadingMethod.PDF &&
+                        (it.localEpochDay() ?: Long.MIN_VALUE) > latestBillEndEpochDay
+                }
                 .maxByOrNull { it.timestampEpochMillis!! }
         } else {
             timedReadings.filter { it.method != ReadingMethod.PDF }.maxByOrNull { it.timestampEpochMillis!! }
@@ -176,9 +203,9 @@ open class DemoReciboZenRepository : ReciboZenRepository {
         // several intermediate readings exist, using only the last two would
         // incorrectly turn "consumed this period" into "consumed since the
         // previous check" and make the projection jump backwards.
-        val baseline = if (latestBillEndMillis != null) {
+        val baseline = if (latestBillEndEpochDay != null) {
             timedReadings
-                .filter { it.timestampEpochMillis!! <= latestBillEndMillis }
+                .filter { (it.localEpochDay() ?: Long.MAX_VALUE) <= latestBillEndEpochDay }
                 .maxByOrNull { it.timestampEpochMillis!! }
         } else {
             timedReadings
@@ -188,7 +215,12 @@ open class DemoReciboZenRepository : ReciboZenRepository {
         val elapsedMillis = if (newest?.timestampEpochMillis != null && baseline?.timestampEpochMillis != null) {
             newest.timestampEpochMillis - baseline.timestampEpochMillis
         } else 0L
-        val measuredDays = (elapsedMillis / 86_400_000.0).coerceAtLeast(0.0)
+        val newestEpochDay = newest?.localEpochDay()
+        val measuredDays = when {
+            latestBillEndEpochDay != null && newestEpochDay != null ->
+                (newestEpochDay - latestBillEndEpochDay).toDouble().coerceAtLeast(0.0)
+            else -> (elapsedMillis / MILLIS_PER_DAY.toDouble()).coerceAtLeast(0.0)
+        }
         val measuredKwh = (newest?.kwh ?: 0) - (baseline?.kwh ?: 0)
         // The two endpoints imported from a PDF describe a bill that already
         // closed; they must not be mistaken for a live reading pair. Once the
@@ -206,7 +238,7 @@ open class DemoReciboZenRepository : ReciboZenRepository {
             else -> 0
         }
         val observedDays = when {
-            hasReliablePair -> measuredDays.roundToInt().coerceAtLeast(1)
+            hasReliablePair -> measuredDays.toInt().coerceAtLeast(1)
             latestBill != null -> billingDays
             else -> 0
         }
@@ -220,7 +252,7 @@ open class DemoReciboZenRepository : ReciboZenRepository {
             (dailyAverage * billingDays).roundToInt().coerceAtLeast(observedKwh)
         } else 0
         val engine = activeTariffEngine()
-        val applianceProjectedKwh = adjustedAppliances(state).sumOf { it.kwh }.coerceAtLeast(0)
+        val applianceProjectedKwh = adjustedAppliances(state, billingDays).sumOf { it.kwh }.coerceAtLeast(0)
         val applianceProjectedCost = if (applianceProjectedKwh > 0) {
             if (mutableTariffCalibration.value == null && latestBill?.consumptionKwh?.let { it > 0 } == true) {
                 (applianceProjectedKwh * latestBill.amountMxn.toDouble() / latestBill.consumptionKwh)
@@ -257,7 +289,15 @@ open class DemoReciboZenRepository : ReciboZenRepository {
             observedKwh = observedKwh,
             observedDays = observedDays,
             billingDays = billingDays,
-            daysRemaining = if (hasReliablePair) (billingDays - observedDays).coerceAtLeast(0) else 0,
+            daysRemaining = if (hasReliablePair) {
+                val estimatedEndEpochDay = latestBillEndEpochDay?.plus(billingDays)
+                if (estimatedEndEpochDay != null && newestEpochDay != null) {
+                    val asOfEpochDay = maxOf(currentEpochDay(), newestEpochDay)
+                    (estimatedEndEpochDay - asOfEpochDay).toInt().coerceAtLeast(0)
+                } else {
+                    (billingDays - observedDays).coerceAtLeast(0)
+                }
+            } else 0,
             dailyAverageKwh = dailyAverage,
             projectedKwh = projectedKwh,
             costToDateMxn = costToDate,
@@ -273,6 +313,18 @@ open class DemoReciboZenRepository : ReciboZenRepository {
     private companion object {
         const val MILLIS_PER_DAY = 86_400_000L
     }
+
+    private fun HistoryReadingEntry.localEpochDay(): Long? {
+        val timestamp = timestampEpochMillis ?: return null
+        return if (method == ReadingMethod.PDF) {
+            Math.floorDiv(timestamp, MILLIS_PER_DAY)
+        } else {
+            Instant.ofEpochMilli(timestamp).atZone(ZoneId.systemDefault()).toLocalDate().toEpochDay()
+        }
+    }
+
+    /** Local calendar date keeps "days remaining" stable across DST and time-of-day changes. */
+    protected open fun currentEpochDay(): Long = LocalDate.now(ZoneId.systemDefault()).toEpochDay()
 
     override fun billHistory(state: ReciboZenSessionState): List<BillPeriod> {
         val projection = billProjection(state)
@@ -412,7 +464,9 @@ open class DemoReciboZenRepository : ReciboZenRepository {
         activeTariffEngine().estimate(kwh.coerceAtLeast(0)).totalMxn
 
     override fun activeTariffBlocks() =
-        mutableTariffCalibration.value?.snapshot?.blocks ?: TariffEngine.DEFAULT_1C_BIMONTHLY_BLOCKS
+        mutableTariffCalibration.value?.takeIf { it.isCalibrated }?.snapshot?.blocks
+            ?: if (TariffCatalog.normalize(mutableSession.value.tariff) == "DAC") emptyList()
+            else TariffEngine.DEFAULT_1C_BIMONTHLY_BLOCKS
 
     override fun premiumSubject(): String = "demo-install"
 
@@ -595,11 +649,27 @@ open class DemoReciboZenRepository : ReciboZenRepository {
 
     open override fun setTariff(tariff: String) {
         val normalized = TariffCatalog.find(tariff)?.code ?: return
-        _session.update { it.copy(tariff = normalized) }
+        _session.update { state ->
+            val previousDomestic = TariffCatalog.normalize(state.tariff)
+                .takeIf { TariffCatalog.find(it)?.highConsumptionLimitKwhPerMonth != null }
+            val references = if (normalized == "DAC" && previousDomestic != null && state.activeServiceId.isNotBlank()) {
+                state.dacReferenceTariffsByService + (state.activeServiceId to previousDomestic)
+            } else state.dacReferenceTariffsByService
+            state.copy(tariff = normalized, dacReferenceTariffsByService = references)
+        }
         mutableElectricServices.update { services ->
             services.map { service ->
                 if (service.id == _session.value.activeServiceId) service.copy(tariffCode = normalized) else service
             }
+        }
+    }
+
+    override fun setDacReferenceTariff(tariff: String) {
+        val normalized = TariffCatalog.normalize(tariff)
+        if (TariffCatalog.find(normalized)?.highConsumptionLimitKwhPerMonth == null) return
+        _session.update { state ->
+            val serviceKey = state.activeServiceId.takeIf { it.isNotBlank() } ?: "current"
+            state.copy(dacReferenceTariffsByService = state.dacReferenceTariffsByService + (serviceKey to normalized))
         }
     }
 
@@ -701,7 +771,7 @@ open class DemoReciboZenRepository : ReciboZenRepository {
         _session.update { state ->
             val now = System.currentTimeMillis()
             val difference = kwh - state.lastConfirmedReadingKwh
-            val label = SimpleDateFormat("d MMM, h:mm a", Locale("es", "MX")).format(Date(now))
+            val label = SimpleDateFormat("d MMM, h:mm a", Locale.forLanguageTag("es-MX")).format(Date(now))
             state.copy(
                 lastConfirmedReadingKwh = kwh,
                 readings = listOf(

@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlin.math.roundToInt
 
 class HomeViewModel(private val repository: ReciboZenRepository) : ViewModel() {
 
@@ -28,11 +29,7 @@ class HomeViewModel(private val repository: ReciboZenRepository) : ViewModel() {
             val energy = repository.energySummary(state)
             val appliances = repository.appliances(state)
             val latestBill = importedBills.lastOrNull()
-            val latestBillEndMillis = latestBill?.periodEndEpochDay?.times(86_400_000L)
-            val hasReadingAfterBill = latestBillEndMillis != null && state.readings.any { reading ->
-                reading.method != com.recibozen.app.core.model.ReadingMethod.PDF &&
-                    (reading.timestampEpochMillis ?: Long.MIN_VALUE) > latestBillEndMillis
-            }
+            val hasReadingAfterBill = energy.hasCurrentMeterProjection
             val dataMode = when {
                 latestBill != null && !hasReadingAfterBill -> HomeDataMode.BILL_REFERENCE
                 energy.forecastBasis == EnergyForecastBasis.APPLIANCES -> HomeDataMode.APPLIANCE_FORECAST
@@ -45,6 +42,8 @@ class HomeViewModel(private val repository: ReciboZenRepository) : ViewModel() {
             val minisplitAction = state.planActions.find { it.id == DemoReciboZenData.MINISPLIT_ACTION_ID }
             val liveReadings = state.readings.count { it.method != ReadingMethod.PDF }
             val currentPeriod = BillingPeriodTimeline.after(latestBill, energy.billingDays)
+            val applianceExpectedToDate =
+                (energy.applianceProjectedKwh * energy.observedWindowFraction).roundToInt().coerceAtLeast(0)
             val paceGoal = ConsumptionPaceCalculator.goal(
                 goalMxn = state.goalMxn,
                 observedKwh = energy.observedKwh,
@@ -82,8 +81,12 @@ class HomeViewModel(private val repository: ReciboZenRepository) : ViewModel() {
                 goalKwh = paceGoal.goalKwh,
                 applianceProjectedKwh = energy.applianceProjectedKwh,
                 applianceProjectedMxn = energy.applianceProjectedCostMxn,
-                applianceCoveragePercent = if (energy.meterProjectedKwh > 0) {
-                    (energy.applianceProjectedKwh * 100f / energy.meterProjectedKwh)
+                applianceExpectedToDateKwh = applianceExpectedToDate,
+                applianceDailyAverageKwh = if (energy.billingDays > 0) {
+                    energy.applianceProjectedKwh.toDouble() / energy.billingDays
+                } else 0.0,
+                applianceCoveragePercent = if (energy.observedKwh > 0) {
+                    (applianceExpectedToDate * 100f / energy.observedKwh)
                         .toInt()
                         .coerceIn(0, 100)
                 } else 0,

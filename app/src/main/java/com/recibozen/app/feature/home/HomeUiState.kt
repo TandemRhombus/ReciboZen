@@ -41,6 +41,8 @@ data class HomeUiState(
     val goalKwh: Int = 0,
     val applianceProjectedKwh: Int = 0,
     val applianceProjectedMxn: Int = 0,
+    val applianceExpectedToDateKwh: Int = 0,
+    val applianceDailyAverageKwh: Double = 0.0,
     val applianceCoveragePercent: Int = 0,
     val hasCurrentMeterProjection: Boolean = false,
 

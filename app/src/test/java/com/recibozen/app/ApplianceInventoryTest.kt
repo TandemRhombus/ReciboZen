@@ -126,6 +126,17 @@ class ApplianceInventoryTest {
             .mapNotNull { it.brand }
             .toSet()
         assertTrue(entertainmentBrands.containsAll(setOf("Microsoft", "Sony", "Nintendo", "Valve")))
+        val xbox = ApplianceCatalog.find("model_xbox_series_x")!!
+        val ps5 = ApplianceCatalog.find("model_sony_ps5_cfi2016")!!
+        val switch2 = ApplianceCatalog.find("model_nintendo_switch2")!!
+        assertEquals(122, xbox.typicalWatts)
+        assertEquals(217, ps5.typicalWatts)
+        assertEquals(19, switch2.typicalWatts)
+        assertTrue(listOf(xbox, ps5, switch2).all { it.sourceLabel?.contains("promedio", ignoreCase = true) == true })
+        assertTrue(
+            ApplianceCatalog.find("pc_gaming_entusiasta")?.sourceLabel
+                ?.contains("no es potencia máxima", ignoreCase = true) == true,
+        )
     }
 
     @Test

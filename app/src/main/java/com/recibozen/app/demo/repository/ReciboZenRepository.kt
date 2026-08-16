@@ -84,6 +84,7 @@ interface ReciboZenRepository {
     fun setMeterType(meterType: String)
     fun updateProfile(userName: String, householdName: String, location: String, goalMxn: Int)
     fun setTariff(tariff: String)
+    fun setDacReferenceTariff(tariff: String)
     fun updateElectricService(alias: String, serviceNumber: String, rmu: String, meterNumber: String, tariffCode: String)
     fun addElectricService(alias: String, serviceNumber: String, rmu: String, meterNumber: String, tariffCode: String): ServiceCreationResult
     fun selectElectricService(serviceId: String)

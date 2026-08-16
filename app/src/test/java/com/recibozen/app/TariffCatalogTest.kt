@@ -24,6 +24,20 @@ class TariffCatalogTest {
     }
 
     @Test
+    fun dacLimitsAreDefinedPerDomesticTariff() {
+        val limits = TariffCatalog.supported.associate { it.code to it.highConsumptionLimitKwhPerMonth }
+
+        assertEquals(250, limits["1"])
+        assertEquals(300, limits["1A"])
+        assertEquals(400, limits["1B"])
+        assertEquals(850, limits["1C"])
+        assertEquals(1_000, limits["1D"])
+        assertEquals(2_000, limits["1E"])
+        assertEquals(2_500, limits["1F"])
+        assertEquals(null, limits["DAC"])
+    }
+
+    @Test
     fun validatesOptionalTwelveDigitServiceNumber() {
         assertTrue(ElectricServiceValidator.isValidServiceNumber(""))
         assertTrue(ElectricServiceValidator.isValidServiceNumber("5102 2110 5026"))

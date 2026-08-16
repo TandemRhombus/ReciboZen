@@ -24,6 +24,8 @@ data class ReciboZenSessionState(
     val entitlementTier: EntitlementTier = EntitlementTier.FREE,
     val location: String = "",
     val tariff: String = "",
+    /** Last domestic tariff for each service, needed to calculate a DAC exit target. */
+    val dacReferenceTariffsByService: Map<String, String> = emptyMap(),
     val billingCycle: String = "",
     val goalMxn: Int = 0,
     val meterType: String = "",

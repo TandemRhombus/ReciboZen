@@ -149,12 +149,23 @@ class CfeBillTextParser {
                 )
             }
         }
-        if (tariff == "PDBT") {
+        if (tariff == "PDBT" || tariff == "DAC") {
             Regex("(?m)^CARGO\\s+FIJO[^0-9]*([0-9,]+(?:\\.\\d+)?)").find(text)?.let { match ->
                 charges += ParsedBillCharge("FIXED", "NONE", null, null, match.groupValues[1].toMoney(), "Cargo fijo")
             }
-            Regex("(?m)^ENERGIA\\s+([0-9,]+(?:\\.\\d+)?)\\s*$").find(text)?.let { match ->
-                charges += ParsedBillCharge("ENERGY", "NONE", null, null, match.groupValues[1].toMoney(), "Energía")
+            Regex("(?m)^ENERGIA\\s+([^\\r\\n]+)").findAll(text).forEach { match ->
+                val values = Regex("[0-9,]+(?:\\.\\d+)?")
+                    .findAll(match.groupValues[1])
+                    .map { it.value.toMoney() }
+                    .toList()
+                when {
+                    values.size >= 3 -> charges += ParsedBillCharge(
+                        "ENERGY", "NONE", values[0], values[1], values[2], "Energía",
+                    )
+                    tariff == "PDBT" && values.size == 1 -> charges += ParsedBillCharge(
+                        "ENERGY", "NONE", null, null, values[0], "Energía",
+                    )
+                }
             }
         }
         return charges

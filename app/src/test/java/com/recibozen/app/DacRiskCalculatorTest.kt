@@ -17,6 +17,8 @@ class DacRiskCalculatorTest {
         assertEquals(250, result.monthlyLimitKwh)
         assertEquals(3_000, result.annualEquivalentLimitKwh)
         assertEquals(240.0, result.monthlyAverageKwh ?: 0.0, 1.0)
+        assertEquals(2_880.0, result.rollingWindowKwh ?: 0.0, 1.0)
+        assertEquals(120.0, result.annualMarginKwh ?: 0.0, 1.0)
         assertEquals(DacRiskLevel.RISK, result.level)
     }
 
@@ -48,6 +50,29 @@ class DacRiskCalculatorTest {
 
         assertTrue(result.hasCompleteHistory)
         assertEquals(3_650.0 / 12.0, result.monthlyAverageKwh ?: 0.0, 0.5)
+    }
+
+    @Test
+    fun nextBillShowsTheFutureRollingTotalAndRemainingAnnualMargin() {
+        val result = DacRiskCalculator.calculate(
+            history = yearOfMonthlyBills(200),
+            tariffCode = "1",
+            projectedNextBillKwh = 500,
+            projectedBillingDays = 31,
+        )
+
+        assertEquals(800, result.recommendedNextBillMaxKwh)
+        assertEquals(2_700.0, result.projectedRollingWindowKwh ?: 0.0, 1.0)
+        assertEquals(300.0, result.projectedAnnualMarginKwh ?: 0.0, 1.0)
+        assertFalse(result.wouldExceedWithProjection)
+    }
+
+    @Test
+    fun duplicateImportedPeriodsDoNotDoubleTheRollingConsumption() {
+        val history = yearOfMonthlyBills(200)
+        val result = DacRiskCalculator.calculate(history + history, "1")
+
+        assertEquals(2_400.0, result.rollingWindowKwh ?: 0.0, 1.0)
     }
 
     private fun yearOfMonthlyBills(kwh: Int): List<BillPeriod> {
