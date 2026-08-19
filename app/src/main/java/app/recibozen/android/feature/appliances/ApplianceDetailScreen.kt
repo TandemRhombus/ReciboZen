@@ -50,12 +50,20 @@ import app.recibozen.android.core.designsystem.RzTheme
 import app.recibozen.android.core.designsystem.ReciboZenTheme
 import app.recibozen.android.core.model.Appliance
 import app.recibozen.android.core.model.ApplianceDataSource
+import app.recibozen.android.core.calculation.EvidenceResolution
+import app.recibozen.android.core.calculation.EvidenceResolver
+import app.recibozen.android.core.calculation.declaredEvidence
 import app.recibozen.android.core.model.ConfidenceLevel
+import app.recibozen.android.core.model.DeviceEvidence
+import app.recibozen.android.core.model.EvidenceMethodology
+import app.recibozen.android.core.model.EvidenceMetric
+import app.recibozen.android.core.model.EvidenceSource
 import app.recibozen.android.core.model.PlanAction
 import app.recibozen.android.core.model.PlanActionStatus
 import app.recibozen.android.demo.repository.ReciboZenRepository
 import app.recibozen.android.navigation.Routes
 import app.recibozen.android.navigation.rzViewModel
+import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -212,6 +220,7 @@ fun ApplianceDetailScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = RzSpacing.xs),
                 )
+                EvidenceProvenance(appliance)
                 if (appliance.marketMexicoVerified == false) {
                     Text(
                         stringResource(R.string.appliances_detail_market_unverified),
@@ -598,6 +607,65 @@ private fun ApplianceDetailScreenPreview() {
             onToggleRecommendation = {},
             onHowWeCalculate = {},
             onEditData = {},
+        )
+    }
+}
+
+/**
+ * How the reference figure was obtained, and whether anything contradicts it.
+ *
+ * Reads the resolved evidence rather than the flat fields on [Appliance], so the
+ * day a NOM label or a model suggestion becomes a second source for the same
+ * appliance, the disagreement surfaces here instead of being silently overwritten.
+ */
+@Composable
+private fun EvidenceProvenance(appliance: Appliance) {
+    // Nothing the app stores today carries a retrieval date, so there is nothing
+    // to age; a clock gets threaded in when the NOM label capture starts
+    // recording when the user read it.
+    val resolution = remember(appliance) {
+        EvidenceResolver.resolve(
+            appliance.declaredEvidence(),
+            EvidenceMetric.ANNUAL_KWH,
+            asOfEpochDay = null,
+        )
+    }
+    val winner: DeviceEvidence = when (resolution) {
+        is EvidenceResolution.Settled -> resolution.winner
+        is EvidenceResolution.Conflicted -> resolution.winner
+        EvidenceResolution.None -> return
+    }
+    Text(
+        stringResource(
+            when (winner.methodology) {
+                EvidenceMethodology.METERED -> R.string.appliances_evidence_method_metered
+                EvidenceMethodology.STANDARD_TEST -> R.string.appliances_evidence_method_standard_test
+                EvidenceMethodology.NAMEPLATE -> R.string.appliances_evidence_method_nameplate
+                EvidenceMethodology.MODELED -> R.string.appliances_evidence_method_modeled
+                EvidenceMethodology.DECLARED -> R.string.appliances_evidence_method_declared
+            },
+        ),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = RzSpacing.xs),
+    )
+    if (winner.source == EvidenceSource.AI_SUGGESTION) {
+        Text(
+            stringResource(R.string.appliances_evidence_ai_unconfirmed),
+            style = MaterialTheme.typography.bodySmall,
+            color = RzTheme.extendedColors.warningText,
+            modifier = Modifier.padding(top = RzSpacing.xs),
+        )
+    }
+    if (resolution is EvidenceResolution.Conflicted) {
+        Text(
+            stringResource(
+                R.string.appliances_evidence_conflict,
+                (resolution.disagreementFraction * 100).roundToInt(),
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = RzTheme.extendedColors.warningText,
+            modifier = Modifier.padding(top = RzSpacing.xs),
         )
     }
 }
