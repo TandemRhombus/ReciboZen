@@ -31,7 +31,14 @@ data class DacRiskSnapshot(
     val hasCompleteHistory: Boolean = false,
     val level: DacRiskLevel = DacRiskLevel.UNKNOWN,
     val projectedNextBillKwh: Int? = null,
+    /** Ceiling for the billing period currently in progress. */
     val recommendedNextBillMaxKwh: Int? = null,
+    /**
+     * Ceiling for the period after the one in progress, assuming the current one
+     * closes at [projectedNextBillKwh] and the next one lasts the same days.
+     * Null without a projection: a ceiling built on nothing is a guess.
+     */
+    val recommendedFollowingBillMaxKwh: Int? = null,
     /** Billed energy that will age out when the projected next period closes. */
     val expiringBeforeNextBillKwh: Double? = null,
     /** Historical energy that remains before adding the projected next bill. */
@@ -124,6 +131,21 @@ object DacRiskCalculator {
         } else null
         val annualLimit = limit * 12.0
 
+        // Ceiling for the period after the one in progress. It can only be built
+        // on top of two assumptions -- that the current period closes at its
+        // projection, and that the next one lasts the same number of days -- so
+        // it stays null whenever there is no projection to stand on.
+        val recommendedFollowingMax = if (hasCompleteHistory && nextDays > 0 && safeProjection != null) {
+            val projectedPeriod = DatedConsumption(asOf, asOf + nextDays, safeProjection)
+            val followingWindowEnd = asOf + nextDays * 2L
+            val retainedFollowingKwh = consumptionInWindow(
+                dated + projectedPeriod,
+                followingWindowEnd - WINDOW_DAYS,
+                followingWindowEnd,
+            ).kwh
+            floor(annualLimit - retainedFollowingKwh).toInt().coerceAtLeast(0)
+        } else null
+
         return DacRiskSnapshot(
             tariffCode = normalizedTariff,
             monthlyLimitKwh = limit,
@@ -140,6 +162,7 @@ object DacRiskCalculator {
             level = level,
             projectedNextBillKwh = safeProjection,
             recommendedNextBillMaxKwh = recommendedMax,
+            recommendedFollowingBillMaxKwh = recommendedFollowingMax,
             expiringBeforeNextBillKwh = expiringKwh,
             retainedBeforeNextBillKwh = retainedKwh.takeIf { nextDays > 0 },
             projectedRollingWindowKwh = projectedRollingWindow,

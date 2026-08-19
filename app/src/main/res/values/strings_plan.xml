@@ -84,26 +84,38 @@
     <string name="dac_title">Prevención DAC</string>
     <string name="dac_no_data_title">Todavía no tenemos datos suficientes</string>
     <string name="dac_no_data_body">Importa un recibo real o registra lecturas del medidor para calcular tu promedio móvil y compararlo con la referencia de tu tarifa.</string>
-    <string name="dac_headline_over">Tu promedio está por encima del límite de referencia</string>
-    <string name="dac_headline_unknown">Tu tendencia DAC todavía necesita más historial</string>
-    <string name="dac_headline_normal">Tu promedio tiene un margen saludable</string>
-    <string name="dac_headline_watch">Tu promedio comienza a acercarse al límite DAC</string>
-    <string name="dac_headline_risk">Tu promedio está cerca del límite DAC</string>
-    <string name="dac_rolling_average_label">Promedio móvil</string>
-    <string name="dac_reference_limit_label">Límite de referencia</string>
-    <string name="dac_kwh_per_month">%1$d kWh/mes</string>
-    <string name="dac_margin_below">Tu margen estimado es de %1$d kWh por mes antes del límite.</string>
-    <string name="dac_margin_above">La tendencia estimada está %1$d kWh por mes por encima del límite.</string>
-    <string name="dac_annual_equivalent">En tarifa %2$s, el límite equivale a %1$d kWh en 12 meses. No es un año calendario fijo: CFE usa una ventana móvil.</string>
+
+    <!-- Bloque principal: una cifra grande y una barra. -->
+    <string name="dac_hero_label_left">Margen antes del límite</string>
+    <string name="dac_hero_label_over">Por encima del límite</string>
+    <string name="dac_hero_label_unknown">Acumulado en tu año móvil</string>
+    <string name="dac_kwh_unit">kWh</string>
+    <string name="dac_hero_window">%1$s de %2$s kWh en tu año móvil</string>
+    <string name="dac_hero_unknown_body">Llevas alrededor de %1$d de 12 meses de historial. Importa más recibos para tener un veredicto.</string>
+    <string name="dac_over_reason">Pasarte no es DAC automático: CFE evalúa su propia ventana de 12 meses al facturar y es quien reclasifica.</string>
+    <string name="dac_prediction_disclaimer">Es una prevención con tus recibos. La clasificación final la determina CFE.</string>
+
+    <!-- Cuánto puedes gastar: cifras, sin prosa. -->
+    <string name="dac_next_bill_title">Cuánto puedes gastar</string>
+    <string name="dac_ledger_expiring">Salen del año móvil</string>
+    <string name="dac_ledger_projected">Proyección de este periodo</string>
+    <string name="dac_ledger_result">Colchón después</string>
+    <string name="dac_kwh_value">%1$s kWh</string>
+    <string name="dac_ledger_recommended">Máximo recomendado: %1$s kWh</string>
+    <string name="dac_max_title">Máximo recomendado</string>
+    <string name="dac_max_current">Periodo actual</string>
+    <string name="dac_max_following">Próximo periodo</string>
+    <string name="dac_max_following_note">El máximo del próximo periodo supone que este cierra en la proyección y que dura los mismos días.</string>
+    <string name="dac_next_bill_need_reading">Registra una lectura del medidor para proyectar este periodo.</string>
+
+    <string name="dac_opportunities_title">Lo que más podría ayudarte</string>
+
+    <!-- Detalle plegado: "¿Cómo se calcula?" -->
+    <string name="dac_how_title">¿Cómo se calcula?</string>
     <string name="dac_rolling_year_title">Tu año móvil facturado</string>
     <string name="dac_rolling_year_dates">Ventana del %1$s al %2$s; termina en el cierre de tu recibo más reciente.</string>
-    <string name="dac_rolling_year_accumulated">Acumulado en la ventana</string>
-    <string name="dac_rolling_year_maximum">Máximo anual de referencia</string>
-    <string name="dac_rolling_year_margin_left">Te quedan aproximadamente %1$d kWh de margen en el año móvil.</string>
-    <string name="dac_rolling_year_margin_over">La tendencia anual está aproximadamente %1$d kWh sobre la referencia.</string>
     <string name="dac_rolling_year_annualized">Como hay %1$d días cubiertos, la comparación DAC anualiza la tendencia a %2$d kWh para no regalar margen por huecos del historial.</string>
     <string name="dac_rolling_year_explanation">Al entrar un recibo nuevo, salen de la ventana los días más antiguos y entran los nuevos. Por eso el margen no se reinicia en enero.</string>
-    <string name="dac_kwh_value">%1$d kWh</string>
     <string name="dac_limits_by_tariff_title">El límite cambia según la tarifa</string>
     <string name="dac_limits_by_tariff_body">CFE asigna la tarifa doméstica según la localidad y su temperatura. ReciboZen usa la tarifa de tu suministro, no un límite universal.</string>
     <string name="dac_tariff_selected">Tarifa %1$s · tu suministro</string>
@@ -113,31 +125,16 @@
     <string name="dac_history_complete">Historial cubierto: aproximadamente %1$d de 12 meses. Ya podemos evaluar la tendencia anual.</string>
     <string name="dac_history_incomplete">Historial cubierto: aproximadamente %1$d de 12 meses. Por ahora es una tendencia, no una predicción de reclasificación.</string>
 
-    <string name="dac_opportunities_title">Lo que más podría ayudarte</string>
-    <string name="dac_opportunity_dynamic">• %1$s: alrededor de %2$d kWh/mes configurados. Revisa sus horas antes de recortar.</string>
-    <string name="dac_next_bill_title">Tu próximo recibo</string>
-    <string name="dac_next_bill_need_history">Importa recibos de cerca de 12 meses para saber cuánto puedes consumir sin pasar el límite.</string>
-    <string name="dac_next_bill_need_reading">Registra una lectura posterior al último recibo para comparar tu ritmo actual con el máximo recomendado.</string>
-    <string name="dac_next_bill_risk">A este ritmo proyectamos %1$d kWh. Si el recibo cierra así, tu promedio podría superar el límite. Para mantenerte debajo, procura cerrar en %2$d kWh o menos.</string>
-    <string name="dac_next_bill_ok">Tu proyección es de %1$d kWh y el máximo recomendado es %2$d kWh para este siguiente periodo.</string>
-    <string name="dac_next_bill_limit">Con el historial disponible, procura que el siguiente recibo cierre en %1$d kWh o menos.</string>
-    <string name="dac_next_bill_rolling_ok">Con esa proyección, la nueva ventana quedaría cerca de %1$d de %2$d kWh, con unos %3$d kWh de margen.</string>
-    <string name="dac_next_bill_rolling_over">Con esa proyección, la nueva ventana quedaría cerca de %1$d de %2$d kWh: aproximadamente %3$d kWh por encima.</string>
-    <string name="dac_next_bill_expiring">Cuando cierre el próximo recibo, aproximadamente %1$d kWh antiguos saldrán del año móvil y permanecerán %2$d kWh antes de sumar el nuevo consumo.</string>
-    <string name="dac_prediction_disclaimer">Es una prevención con tus recibos. La clasificación final la determina CFE.</string>
+    <!-- Ya clasificado como DAC: la pregunta es cuánto bajar para salir. -->
     <string name="dac_already_title">Tu recibo ya indica tarifa DAC</string>
-    <string name="dac_already_body">La salida se mide con tu promedio de los últimos 12 meses. Nosotros calculamos la meta; CFE confirma.</string>
     <string name="dac_exit_reference_prompt">¿Qué tarifa doméstica tenía este suministro antes de DAC?</string>
-    <string name="dac_exit_need_history">Importa recibos de cerca de 12 meses para calcular tu meta de salida sin suponer los meses que faltan.</string>
-    <string name="dac_exit_below_target">Vas en %1$d kWh/mes, debajo del límite de %2$d de la tarifa %3$s. Mantén el ritmo y confirma con CFE.</string>
-    <string name="dac_exit_above_target">Aún necesitas bajar aproximadamente %1$d kWh/mes del promedio móvil para quedar debajo de %2$d, límite de la tarifa %3$s.</string>
-    <string name="dac_exit_next_bill_over">Proyectamos %1$d kWh. Para avanzar hacia la salida de DAC, este recibo debería cerrar en %2$d kWh o menos: reduce al menos %3$d kWh frente a la proyección.</string>
-    <string name="dac_exit_next_bill_ok">Proyectamos %1$d kWh, dentro de la meta de %2$d kWh para que la siguiente ventana móvil quede bajo el límite.</string>
-    <string name="dac_exit_next_bill_limit">Para que la siguiente ventana móvil quede bajo el límite, procura cerrar este recibo en %1$d kWh o menos.</string>
+    <string name="dac_exit_below_target">Vas %1$d kWh/mes debajo del límite de la tarifa %2$s. Mantén el ritmo.</string>
+    <string name="dac_exit_above_target">Baja alrededor de %1$d kWh/mes del promedio para quedar bajo la tarifa %2$s.</string>
     <string name="dac_exit_actions_title">Plan intensivo para salir de DAC</string>
     <string name="dac_exit_actions_body">Empieza por las cargas de mayor impacto. No desconectes refrigeración, salud ni seguridad.</string>
     <string name="dac_exit_device_load">%1$s · cerca de %2$d kWh/mes configurados</string>
     <string name="dac_exit_measured_saving">Ahorro cuantificable estimado: %1$.1f kWh por periodo.</string>
+
     <string name="dac_missing_tariff_title">Configura tu tarifa doméstica</string>
     <string name="dac_missing_tariff_body">El límite depende de tu tarifa. Elígela en tu suministro (1, 1A, 1B, 1C, 1D, 1E o 1F) o importa un recibo.</string>
 
