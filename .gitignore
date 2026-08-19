@@ -41,5 +41,3 @@ local.properties
 
 # Claude Design export working copy: large, regenerable from the .zip.
 /design_src/
-# Promo art that still shows the owner name and service address.
-/play_assets/capturas/_BLOQUEADAS_datos_personales/
