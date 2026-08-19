@@ -6,11 +6,24 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-// The design file specifies Manrope (headlines) + Inter (body) via Google
-// Fonts. This build has no network access to fetch them and ships no bundled
-// .ttf, so both aliases resolve to the platform default (Roboto) at the same
-// weights/sizes/tracking as the mock. Swap the FontFamily here once real font
-// files are added to res/font.
+// DELIBERATE: the app renders in whatever typeface the reader has chosen on
+// their device. This is not a pending task -- do not "fix" it by bundling a
+// font.
+//
+// The design file and the Play Store artwork use Manrope (headlines) + Inter
+// (body); that is the *marketing* typography and it stays there. Inside the
+// app, honouring the system family means a reader who set a larger, rounder or
+// higher-contrast face for accessibility keeps it here too, instead of ReciboZen
+// overriding the choice they made for every other app on the phone.
+//
+// The cost is accepted knowingly: the app does not look identical across
+// devices, and it will not match the store screenshots on a phone with a custom
+// system font. The weights, sizes and tracking below still come from the mock,
+// so the hierarchy survives whatever family is applied.
+//
+// The consequence that does need testing: because the family is the reader's,
+// the size is too. Every layout must survive a large font scale -- nothing here
+// overrides fontScale, and nothing should.
 val DisplayFontFamily = FontFamily.Default
 val BodyFontFamily = FontFamily.Default
 
