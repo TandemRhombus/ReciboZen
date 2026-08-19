@@ -1,3 +1,7 @@
+// Explicit import: inside a Gradle Kotlin script `java` resolves to the Java
+// plugin extension, not the package, so `java.util.Properties` does not compile.
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -16,14 +20,28 @@ val apiBaseUrl = providers.gradleProperty("RECIBOZEN_API_BASE_URL")
 val playCloudProjectNumber = providers.gradleProperty("RECIBOZEN_PLAY_CLOUD_PROJECT_NUMBER")
     .orElse("0")
 
+// Upload-key material for release builds. It lives in keystore.properties, which
+// is git-ignored: neither the .jks nor its passwords may ever reach the
+// repository, and losing that key means never being able to update the app on
+// Play again. When the file is absent the release build still assembles
+// unsigned, so the project keeps building on a machine that does not hold it.
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        keystorePropertiesFile.inputStream().use { load(it) }
+    }
+}
+val hasUploadKey = keystorePropertiesFile.exists() &&
+    keystoreProperties.getProperty("storeFile").isNullOrBlank().not()
+
 android {
-    namespace = "com.recibozen.app"
+    namespace = "app.recibozen.android"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.recibozen.app"
+        applicationId = "app.recibozen.android"
         minSdk = 28
         targetSdk = 37
         versionCode = 1
@@ -55,12 +73,29 @@ android {
         )
     }
 
+    signingConfigs {
+        if (hasUploadKey) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+                // Play requires v2 at minimum; v1 stays on for sideloaded APKs
+                // on the oldest devices this app still supports.
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+            }
+        }
+    }
+
     buildTypes {
         debug {
             buildConfigField("boolean", "PREMIUM_SECURITY_ENFORCED", "false")
             buildConfigField("boolean", "OFFICIAL_INSTALL_REQUIRED", "false")
         }
         release {
+            signingConfig = signingConfigs.findByName("release")
             isDebuggable = false
             isJniDebuggable = false
             isMinifyEnabled = true

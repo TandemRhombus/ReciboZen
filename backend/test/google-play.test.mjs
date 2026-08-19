@@ -60,7 +60,7 @@ test("verifier requires fresh integrity, matching account and active Google subs
   };
   let acknowledgementCalls = 0;
   const verifier = new GooglePlayPurchaseVerifier({
-    packageName: "com.recibozen.app",
+    packageName: "app.recibozen.android",
     productTiers: { recibozen_plus_monthly: "PLUS" },
     expectedCertificateDigests: ["release-cert-digest"],
     tokenProvider: { async accessToken() { return "access-token"; } },
@@ -70,13 +70,13 @@ test("verifier requires fresh integrity, matching account and active Google subs
         return new Response(JSON.stringify({
           tokenPayloadExternal: {
             requestDetails: {
-              requestPackageName: "com.recibozen.app",
+              requestPackageName: "app.recibozen.android",
               requestHash: purchaseRequestHash(input),
               timestampMillis: String(now - 5_000),
             },
             appIntegrity: {
               appRecognitionVerdict: "PLAY_RECOGNIZED",
-              packageName: "com.recibozen.app",
+              packageName: "app.recibozen.android",
               certificateSha256Digest: ["release-cert-digest"],
             },
             accountDetails: { appLicensingVerdict: "LICENSED" },
@@ -116,7 +116,7 @@ test("verifier rejects a purchase bound to another installation", async () => {
     integrityToken: "integrity-token-that-is-long-enough",
   };
   const verifier = new GooglePlayPurchaseVerifier({
-    packageName: "com.recibozen.app",
+    packageName: "app.recibozen.android",
     productTiers: { recibozen_plus_monthly: "PLUS" },
     expectedCertificateDigests: ["release-cert-digest"],
     tokenProvider: { async accessToken() { return "access-token"; } },
@@ -124,8 +124,8 @@ test("verifier rejects a purchase bound to another installation", async () => {
     fetchImpl: async (url) => {
       if (url.includes(":decodeIntegrityToken")) {
         return new Response(JSON.stringify({ tokenPayloadExternal: {
-          requestDetails: { requestPackageName: "com.recibozen.app", requestHash: purchaseRequestHash(input), timestampMillis: String(now) },
-          appIntegrity: { appRecognitionVerdict: "PLAY_RECOGNIZED", packageName: "com.recibozen.app", certificateSha256Digest: ["release-cert-digest"] },
+          requestDetails: { requestPackageName: "app.recibozen.android", requestHash: purchaseRequestHash(input), timestampMillis: String(now) },
+          appIntegrity: { appRecognitionVerdict: "PLAY_RECOGNIZED", packageName: "app.recibozen.android", certificateSha256Digest: ["release-cert-digest"] },
           accountDetails: { appLicensingVerdict: "LICENSED" },
           deviceIntegrity: { deviceRecognitionVerdict: ["MEETS_DEVICE_INTEGRITY"] },
         } }), { status: 200 });

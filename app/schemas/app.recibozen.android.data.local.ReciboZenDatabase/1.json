@@ -1,0 +1,899 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "6e0b91fc7216beda01ed8bd80b0640ff",
+    "entities": [
+      {
+        "tableName": "households",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `displayName` TEXT NOT NULL, `city` TEXT NOT NULL, `stateCode` TEXT, `addressEncrypted` BLOB, `createdAtEpochMillis` INTEGER NOT NULL, `archivedAtEpochMillis` INTEGER, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "displayName",
+            "columnName": "displayName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "city",
+            "columnName": "city",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "stateCode",
+            "columnName": "stateCode",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "addressEncrypted",
+            "columnName": "addressEncrypted",
+            "affinity": "BLOB"
+          },
+          {
+            "fieldPath": "createdAtEpochMillis",
+            "columnName": "createdAtEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archivedAtEpochMillis",
+            "columnName": "archivedAtEpochMillis",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "electric_services",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `householdId` TEXT NOT NULL, `displayAlias` TEXT NOT NULL, `serviceNumber` TEXT, `rmu` TEXT, `tariffCode` TEXT NOT NULL, `billingCycle` TEXT NOT NULL, `wireCount` INTEGER, `isActive` INTEGER NOT NULL, `createdAtEpochMillis` INTEGER NOT NULL, `archivedAtEpochMillis` INTEGER, PRIMARY KEY(`id`), FOREIGN KEY(`householdId`) REFERENCES `households`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "householdId",
+            "columnName": "householdId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "displayAlias",
+            "columnName": "displayAlias",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "serviceNumber",
+            "columnName": "serviceNumber",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "rmu",
+            "columnName": "rmu",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "tariffCode",
+            "columnName": "tariffCode",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "billingCycle",
+            "columnName": "billingCycle",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "wireCount",
+            "columnName": "wireCount",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "isActive",
+            "columnName": "isActive",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAtEpochMillis",
+            "columnName": "createdAtEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archivedAtEpochMillis",
+            "columnName": "archivedAtEpochMillis",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_electric_services_householdId",
+            "unique": false,
+            "columnNames": [
+              "householdId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_electric_services_householdId` ON `${TABLE_NAME}` (`householdId`)"
+          },
+          {
+            "name": "index_electric_services_serviceNumber",
+            "unique": true,
+            "columnNames": [
+              "serviceNumber"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_electric_services_serviceNumber` ON `${TABLE_NAME}` (`serviceNumber`)"
+          },
+          {
+            "name": "index_electric_services_rmu",
+            "unique": true,
+            "columnNames": [
+              "rmu"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_electric_services_rmu` ON `${TABLE_NAME}` (`rmu`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "households",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "householdId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "meters",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `electricServiceId` TEXT NOT NULL, `meterNumber` TEXT NOT NULL, `multiplier` INTEGER NOT NULL, `validFromEpochDay` INTEGER, `validUntilEpochDay` INTEGER, `isCurrent` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`electricServiceId`) REFERENCES `electric_services`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "electricServiceId",
+            "columnName": "electricServiceId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "meterNumber",
+            "columnName": "meterNumber",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "multiplier",
+            "columnName": "multiplier",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "validFromEpochDay",
+            "columnName": "validFromEpochDay",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "validUntilEpochDay",
+            "columnName": "validUntilEpochDay",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "isCurrent",
+            "columnName": "isCurrent",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_meters_electricServiceId",
+            "unique": false,
+            "columnNames": [
+              "electricServiceId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_meters_electricServiceId` ON `${TABLE_NAME}` (`electricServiceId`)"
+          },
+          {
+            "name": "index_meters_meterNumber",
+            "unique": false,
+            "columnNames": [
+              "meterNumber"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_meters_meterNumber` ON `${TABLE_NAME}` (`meterNumber`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "electric_services",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "electricServiceId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "bills",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `electricServiceId` TEXT NOT NULL, `periodStartEpochDay` INTEGER NOT NULL, `periodEndEpochDay` INTEGER NOT NULL, `dueDateEpochDay` INTEGER, `cutoffDateEpochDay` INTEGER, `currentReadingKwh` INTEGER, `previousReadingKwh` INTEGER, `consumptionKwh` INTEGER NOT NULL, `amountMxnMinor` INTEGER NOT NULL, `tariffCode` TEXT NOT NULL, `tariffSnapshotJson` TEXT, `source` TEXT NOT NULL, `sourceFileHash` TEXT, `parseConfidence` REAL NOT NULL, `importedAtEpochMillis` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`electricServiceId`) REFERENCES `electric_services`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "electricServiceId",
+            "columnName": "electricServiceId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "periodStartEpochDay",
+            "columnName": "periodStartEpochDay",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "periodEndEpochDay",
+            "columnName": "periodEndEpochDay",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dueDateEpochDay",
+            "columnName": "dueDateEpochDay",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "cutoffDateEpochDay",
+            "columnName": "cutoffDateEpochDay",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "currentReadingKwh",
+            "columnName": "currentReadingKwh",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "previousReadingKwh",
+            "columnName": "previousReadingKwh",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "consumptionKwh",
+            "columnName": "consumptionKwh",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "amountMxnMinor",
+            "columnName": "amountMxnMinor",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tariffCode",
+            "columnName": "tariffCode",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tariffSnapshotJson",
+            "columnName": "tariffSnapshotJson",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceFileHash",
+            "columnName": "sourceFileHash",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "parseConfidence",
+            "columnName": "parseConfidence",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "importedAtEpochMillis",
+            "columnName": "importedAtEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_bills_electricServiceId",
+            "unique": false,
+            "columnNames": [
+              "electricServiceId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_bills_electricServiceId` ON `${TABLE_NAME}` (`electricServiceId`)"
+          },
+          {
+            "name": "index_bills_electricServiceId_periodStartEpochDay_periodEndEpochDay",
+            "unique": true,
+            "columnNames": [
+              "electricServiceId",
+              "periodStartEpochDay",
+              "periodEndEpochDay"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_bills_electricServiceId_periodStartEpochDay_periodEndEpochDay` ON `${TABLE_NAME}` (`electricServiceId`, `periodStartEpochDay`, `periodEndEpochDay`)"
+          },
+          {
+            "name": "index_bills_sourceFileHash",
+            "unique": true,
+            "columnNames": [
+              "sourceFileHash"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_bills_sourceFileHash` ON `${TABLE_NAME}` (`sourceFileHash`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "electric_services",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "electricServiceId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "bill_charges",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `billId` TEXT NOT NULL, `type` TEXT NOT NULL, `season` TEXT NOT NULL, `quantityKwh` REAL, `unitRateMxn` REAL, `amountMxnMinor` INTEGER, `labelFromDocument` TEXT NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`billId`) REFERENCES `bills`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "billId",
+            "columnName": "billId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "season",
+            "columnName": "season",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "quantityKwh",
+            "columnName": "quantityKwh",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "unitRateMxn",
+            "columnName": "unitRateMxn",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "amountMxnMinor",
+            "columnName": "amountMxnMinor",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "labelFromDocument",
+            "columnName": "labelFromDocument",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_bill_charges_billId",
+            "unique": false,
+            "columnNames": [
+              "billId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_bill_charges_billId` ON `${TABLE_NAME}` (`billId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "bills",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "billId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "bill_history_summaries",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`electricServiceId` TEXT NOT NULL, `periodStartEpochDay` INTEGER NOT NULL, `periodEndEpochDay` INTEGER NOT NULL, `consumptionKwh` INTEGER NOT NULL, `amountMxnMinor` INTEGER NOT NULL, `paidMxnMinor` INTEGER, `pendingMxnMinor` INTEGER, `sourceBillId` TEXT NOT NULL, PRIMARY KEY(`electricServiceId`, `periodStartEpochDay`, `periodEndEpochDay`), FOREIGN KEY(`electricServiceId`) REFERENCES `electric_services`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`sourceBillId`) REFERENCES `bills`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "electricServiceId",
+            "columnName": "electricServiceId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "periodStartEpochDay",
+            "columnName": "periodStartEpochDay",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "periodEndEpochDay",
+            "columnName": "periodEndEpochDay",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "consumptionKwh",
+            "columnName": "consumptionKwh",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "amountMxnMinor",
+            "columnName": "amountMxnMinor",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "paidMxnMinor",
+            "columnName": "paidMxnMinor",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "pendingMxnMinor",
+            "columnName": "pendingMxnMinor",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "sourceBillId",
+            "columnName": "sourceBillId",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "electricServiceId",
+            "periodStartEpochDay",
+            "periodEndEpochDay"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_bill_history_summaries_sourceBillId",
+            "unique": false,
+            "columnNames": [
+              "sourceBillId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_bill_history_summaries_sourceBillId` ON `${TABLE_NAME}` (`sourceBillId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "electric_services",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "electricServiceId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "bills",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "sourceBillId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "reference_datasets",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `kind` TEXT NOT NULL, `version` TEXT NOT NULL, `sourceName` TEXT NOT NULL, `sha256` TEXT NOT NULL, `schemaVersion` INTEGER NOT NULL, `rowCount` INTEGER NOT NULL, `importedAtEpochMillis` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "version",
+            "columnName": "version",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceName",
+            "columnName": "sourceName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sha256",
+            "columnName": "sha256",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "schemaVersion",
+            "columnName": "schemaVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rowCount",
+            "columnName": "rowCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "importedAtEpochMillis",
+            "columnName": "importedAtEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_reference_datasets_kind_version",
+            "unique": true,
+            "columnNames": [
+              "kind",
+              "version"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_reference_datasets_kind_version` ON `${TABLE_NAME}` (`kind`, `version`)"
+          },
+          {
+            "name": "index_reference_datasets_sha256",
+            "unique": true,
+            "columnNames": [
+              "sha256"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_reference_datasets_sha256` ON `${TABLE_NAME}` (`sha256`)"
+          }
+        ]
+      },
+      {
+        "tableName": "appliance_references",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`datasetId` TEXT NOT NULL, `externalId` TEXT NOT NULL, `name` TEXT NOT NULL, `category` TEXT NOT NULL, `powerMinWatts` INTEGER, `powerTypicalWatts` INTEGER, `powerMaxWatts` INTEGER, `typicalKwhPerCycle` REAL, `typicalKwhPer30Days` REAL, `standbyWatts` REAL, `sourceUrl` TEXT, `evidenceNote` TEXT, PRIMARY KEY(`datasetId`, `externalId`), FOREIGN KEY(`datasetId`) REFERENCES `reference_datasets`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "datasetId",
+            "columnName": "datasetId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "externalId",
+            "columnName": "externalId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "powerMinWatts",
+            "columnName": "powerMinWatts",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "powerTypicalWatts",
+            "columnName": "powerTypicalWatts",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "powerMaxWatts",
+            "columnName": "powerMaxWatts",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "typicalKwhPerCycle",
+            "columnName": "typicalKwhPerCycle",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "typicalKwhPer30Days",
+            "columnName": "typicalKwhPer30Days",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "standbyWatts",
+            "columnName": "standbyWatts",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "sourceUrl",
+            "columnName": "sourceUrl",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "evidenceNote",
+            "columnName": "evidenceNote",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "datasetId",
+            "externalId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_appliance_references_datasetId",
+            "unique": false,
+            "columnNames": [
+              "datasetId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_appliance_references_datasetId` ON `${TABLE_NAME}` (`datasetId`)"
+          },
+          {
+            "name": "index_appliance_references_category",
+            "unique": false,
+            "columnNames": [
+              "category"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_appliance_references_category` ON `${TABLE_NAME}` (`category`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "reference_datasets",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "datasetId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "tariff_rate_references",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `datasetId` TEXT NOT NULL, `tariffCode` TEXT NOT NULL, `regionCode` TEXT, `effectiveYearMonth` TEXT NOT NULL, `season` TEXT NOT NULL, `blockOrder` INTEGER NOT NULL, `blockLabel` TEXT NOT NULL, `limitKwh` INTEGER, `rateMxnPerKwh` REAL, `fixedChargeMxn` REAL, `demandRateMxnPerKw` REAL, `sourceUrl` TEXT, PRIMARY KEY(`id`), FOREIGN KEY(`datasetId`) REFERENCES `reference_datasets`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "datasetId",
+            "columnName": "datasetId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tariffCode",
+            "columnName": "tariffCode",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "regionCode",
+            "columnName": "regionCode",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "effectiveYearMonth",
+            "columnName": "effectiveYearMonth",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "season",
+            "columnName": "season",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "blockOrder",
+            "columnName": "blockOrder",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "blockLabel",
+            "columnName": "blockLabel",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "limitKwh",
+            "columnName": "limitKwh",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "rateMxnPerKwh",
+            "columnName": "rateMxnPerKwh",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "fixedChargeMxn",
+            "columnName": "fixedChargeMxn",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "demandRateMxnPerKw",
+            "columnName": "demandRateMxnPerKw",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "sourceUrl",
+            "columnName": "sourceUrl",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_tariff_rate_references_datasetId",
+            "unique": false,
+            "columnNames": [
+              "datasetId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_tariff_rate_references_datasetId` ON `${TABLE_NAME}` (`datasetId`)"
+          },
+          {
+            "name": "index_tariff_rate_references_tariffCode_regionCode_effectiveYearMonth_season_blockOrder",
+            "unique": true,
+            "columnNames": [
+              "tariffCode",
+              "regionCode",
+              "effectiveYearMonth",
+              "season",
+              "blockOrder"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_tariff_rate_references_tariffCode_regionCode_effectiveYearMonth_season_blockOrder` ON `${TABLE_NAME}` (`tariffCode`, `regionCode`, `effectiveYearMonth`, `season`, `blockOrder`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "reference_datasets",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "datasetId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '6e0b91fc7216beda01ed8bd80b0640ff')"
+    ]
+  }
+}

@@ -85,6 +85,8 @@
     <string name="appliances_catalog_all">Todos</string>
     <string name="appliances_catalog_category">Categoría</string>
     <string name="appliances_catalog_no_results">No encontramos ese aparato. Puedes registrarlo como personalizado al final.</string>
+    <string name="appliances_catalog_brand_missing">Todavía no tenemos %1$s</string>
+    <string name="appliances_catalog_brand_missing_hint">Preferimos decírtelo a darte el consumo de otra marca. Registra tu aparato y captura los kWh/año de su etiqueta de eficiencia energética.</string>
     <string name="appliances_catalog_market_unverified">Venta en México no verificada</string>
     <string name="appliances_catalog_market_unverified_detail">El consumo fue certificado por ENERGY STAR, pero la fuente no confirma que este SKU se comercialice en México.</string>
     <string name="appliances_catalog_model_family">Familia de modelos</string>

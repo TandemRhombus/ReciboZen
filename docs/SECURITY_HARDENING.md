@@ -69,7 +69,7 @@ base64url(payload_utf8).base64url(firma_der_ecdsa)
 Payload canónico:
 
 ```text
-1|com.recibozen.app|subject|PLUS|issuedAt|expiresAt|minVersionCode|tokenId
+1|app.recibozen.android|subject|PLUS|issuedAt|expiresAt|minVersionCode|tokenId
 ```
 
 - `subject`: hash/ID opaco de la cuenta autenticada; debe coincidir con la sesión. El valor esperado debe provenir de la identidad autenticada del backend, nunca del propio token o de preferencias locales.

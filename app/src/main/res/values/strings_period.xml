@@ -34,4 +34,18 @@
     <string name="period_curve_legend_real">Real</string>
     <string name="period_curve_legend_projection">Proyección</string>
     <string name="period_curve_legend_goal">Meta</string>
+    <string name="period_change_title_up">Tu recibo subió $%1$d</string>
+    <string name="period_change_title_down">Tu recibo bajó $%1$d</string>
+    <string name="period_change_subtitle">%1$s: $%2$d · %3$s: $%4$d</string>
+    <string name="period_change_amount_up">+$%1$d</string>
+    <string name="period_change_amount_down">−$%1$d</string>
+    <string name="period_change_factor_length">El periodo duró más días</string>
+    <string name="period_change_factor_usage">Cambió tu consumo diario</string>
+    <string name="period_change_factor_step">Cruzaste al escalón caro</string>
+    <string name="period_change_factor_rates">Cambiaron las tarifas</string>
+    <string name="period_change_factor_unexplained">No lo podemos explicar</string>
+    <string name="period_change_detail_length">%1$d días de diferencia</string>
+    <string name="period_change_detail_usage">%1$d kWh de diferencia</string>
+    <string name="period_change_detail_step">Antes esos kWh costaban $%1$.2f</string>
+    <string name="period_change_tariff_changed">La tarifa cambió entre los dos recibos. No podemos separar cuánto fue por eso, así que queda dentro de lo que no podemos explicar.</string>
 </resources>

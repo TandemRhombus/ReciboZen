@@ -19,6 +19,13 @@ local.properties
 /backend/secrets/
 /backend/.env
 
-# Scratch folder used to move files in and out of the repo.
-/tmp/_transfer/
-/tmp/_to_delete/
+# Upload key for Google Play. Losing this file means the app can never be
+# updated again; committing it means anyone can publish in your name. Keep a
+# backup somewhere outside the repository.
+/keystore.properties
+*.jks
+*.keystore
+
+# Local scratch: transfer folders, staged deletions and throwaway archives.
+# Never part of a build; keep them out of the history.
+/tmp/

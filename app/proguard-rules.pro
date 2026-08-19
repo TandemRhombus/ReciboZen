@@ -8,7 +8,7 @@
 
 # Room generates direct implementations. Keep only the database class name used
 # by Room's generated lookup; entities and business/security logic remain obfuscated.
--keepnames class com.recibozen.app.data.local.ReciboZenDatabase
+-keepnames class app.recibozen.android.data.local.ReciboZenDatabase
 
 # Preserve enum valueOf()/values() contracts used by persisted non-sensitive state.
 -keepclassmembers,allowoptimization,allowobfuscation enum * {
