@@ -133,6 +133,20 @@ fun Appliance.declaredEvidence(): List<DeviceEvidence> {
             marketMexicoVerified = marketMexicoVerified,
         )
     }
+    // What the user's own configuration implies for a year. Comparing it against
+    // the model's published figure is the check that catches hours typed wrong or
+    // an appliance that is not the model it claims to be. Annualising a period
+    // figure assumes the schedule repeats all year, which is why this is MODELED
+    // and reads as low confidence -- a fan used only in summer will diverge for a
+    // perfectly good reason, and the screen says so instead of picking a culprit.
+    unitKwh?.takeIf { it > 0 && referencePeriodDays > 0 }?.let { periodKwh ->
+        items += DeviceEvidence(
+            metric = EvidenceMetric.ANNUAL_KWH,
+            value = periodKwh / referencePeriodDays * DAYS_PER_YEAR,
+            source = EvidenceSource.USER_CONFIGURED,
+            methodology = EvidenceMethodology.MODELED,
+        )
+    }
     powerWatts?.takeIf { it > 0 }?.let { watts ->
         items += DeviceEvidence(
             metric = EvidenceMetric.ACTIVE_WATTS,
@@ -157,3 +171,6 @@ fun Appliance.declaredEvidence(): List<DeviceEvidence> {
     }
     return items
 }
+
+/** Mean Gregorian year, matching the window the DAC rule uses. */
+private const val DAYS_PER_YEAR = 365.2425

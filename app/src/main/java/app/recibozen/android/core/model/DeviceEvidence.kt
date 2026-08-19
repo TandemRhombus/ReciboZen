@@ -35,19 +35,28 @@ enum class EvidenceUnit { KWH_PER_YEAR, KWH_PER_CYCLE, WATTS }
  */
 enum class EvidenceSource(val trustRank: Int) {
     /** The user metered this appliance themselves. */
-    USER_MEASURED(5),
+    USER_MEASURED(60),
 
     /** Read off the NOM-015 energy label physically attached to the appliance. */
-    NOM_LABEL(4),
+    NOM_LABEL(50),
 
     /** Manufacturer specification sheet or manual. */
-    MANUFACTURER_SPEC(3),
+    MANUFACTURER_SPEC(40),
 
     /** A certification dataset such as ENERGY STAR. */
-    CERTIFICATION_CATALOG(2),
+    CERTIFICATION_CATALOG(30),
 
     /** Generic per-category default shipped with the app. */
-    CATEGORY_DEFAULT(1),
+    CATEGORY_DEFAULT(20),
+
+    /**
+     * Computed from the hours and power the user configured for their own unit.
+     * Ranked low on purpose: as a claim about *the device* it is the weakest
+     * thing in this list except a model's guess, because the hours were typed,
+     * not measured. It earns its place by being a check on the others, never
+     * the number they get overruled by.
+     */
+    USER_CONFIGURED(10),
 
     /** Produced by a language model. Never outranks a real measurement. */
     AI_SUGGESTION(0),
@@ -112,7 +121,9 @@ data class DeviceEvidence(
         var score = when (source) {
             EvidenceSource.USER_MEASURED, EvidenceSource.NOM_LABEL -> HIGH_SCORE
             EvidenceSource.MANUFACTURER_SPEC, EvidenceSource.CERTIFICATION_CATALOG -> MEDIUM_SCORE
-            EvidenceSource.CATEGORY_DEFAULT, EvidenceSource.AI_SUGGESTION -> LOW_SCORE
+            EvidenceSource.CATEGORY_DEFAULT,
+            EvidenceSource.USER_CONFIGURED,
+            EvidenceSource.AI_SUGGESTION -> LOW_SCORE
         }
         if (methodology in WEAK_METHODOLOGIES) score--
         // A missing date is not evidence of staleness, so it costs nothing. Only a

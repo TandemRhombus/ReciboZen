@@ -211,6 +211,7 @@
     <string name="appliances_evidence_method_modeled">Estimado a partir de equipos comparables.</string>
     <string name="appliances_evidence_method_declared">Capturado a mano, sin medición que lo respalde.</string>
     <string name="appliances_evidence_ai_unconfirmed">Sugerido por IA. No está confirmado contra una etiqueta ni una medición.</string>
+    <string name="appliances_evidence_config_mismatch">Tu configuración da %1$d kWh/año y la ficha del modelo %2$d. Puede ser que las horas estén mal capturadas, que no sea ese modelo, o que lo uses más que la prueba estándar.</string>
     <string name="appliances_evidence_conflict">Dos fuentes no coinciden, con %1$d%% de diferencia. Mostramos la de mayor respaldo; no promediamos valores que se contradicen.</string>
     <string name="appliances_detail_market_unverified">Disponibilidad en México no verificada por la fuente.</string>
     <string name="appliances_detail_model_family">Es una familia de modelos; confirma que el código completo coincida con tu etiqueta.</string>

@@ -658,11 +658,24 @@ private fun EvidenceProvenance(appliance: Appliance) {
         )
     }
     if (resolution is EvidenceResolution.Conflicted) {
+        // The user's own schedule disagreeing with the model's published figure is
+        // a specific, actionable situation, so it gets its own wording instead of
+        // the generic "two sources disagree".
+        val configured = resolution.dissenting
+            .firstOrNull { it.source == EvidenceSource.USER_CONFIGURED }
         Text(
-            stringResource(
-                R.string.appliances_evidence_conflict,
-                (resolution.disagreementFraction * 100).roundToInt(),
-            ),
+            if (configured != null) {
+                stringResource(
+                    R.string.appliances_evidence_config_mismatch,
+                    configured.value.roundToInt(),
+                    winner.value.roundToInt(),
+                )
+            } else {
+                stringResource(
+                    R.string.appliances_evidence_conflict,
+                    (resolution.disagreementFraction * 100).roundToInt(),
+                )
+            },
             style = MaterialTheme.typography.bodySmall,
             color = RzTheme.extendedColors.warningText,
             modifier = Modifier.padding(top = RzSpacing.xs),

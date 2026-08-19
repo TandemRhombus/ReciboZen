@@ -332,6 +332,94 @@ class DeviceEvidenceTest {
         assertEquals(ConfidenceLevel.LOW, items.single().confidenceAsOf(TODAY))
     }
 
+    // --- The user's own configuration, checked against the model's figure ---
+
+    @Test
+    fun theScheduleTheUserConfiguredBecomesItsOwnAnnualAssertion() {
+        val items = appliance(
+            dataSource = ApplianceDataSource.MANUFACTURER_LABEL,
+            referenceAnnualKwh = 340.0,
+            unitKwh = 30.0,
+            referencePeriodDays = 30,
+        ).declaredEvidence()
+
+        val configured = items.single { it.source == EvidenceSource.USER_CONFIGURED }
+        // 30 kWh over 30 days, held all year: 365.2425 kWh.
+        assertEquals(365.2, configured.value, 0.1)
+        assertEquals(EvidenceMetric.ANNUAL_KWH, configured.metric)
+        assertEquals(EvidenceMethodology.MODELED, configured.methodology)
+    }
+
+    @Test
+    fun aScheduleFarFromTheModelFigureSurfacesAsADisagreement() {
+        val items = appliance(
+            dataSource = ApplianceDataSource.MANUFACTURER_LABEL,
+            referenceAnnualKwh = 340.0,
+            unitKwh = 50.0,
+            referencePeriodDays = 30,
+        ).declaredEvidence()
+
+        val resolution = EvidenceResolver.resolve(items, EvidenceMetric.ANNUAL_KWH, TODAY)
+            as EvidenceResolution.Conflicted
+
+        // The published figure is what the card keeps showing; the configuration
+        // is what gets questioned, never the other way round.
+        assertEquals(EvidenceSource.MANUFACTURER_SPEC, resolution.winner.source)
+        assertEquals(340.0, resolution.winner.value, 0.001)
+        assertEquals(EvidenceSource.USER_CONFIGURED, resolution.dissenting.single().source)
+        assertEquals(608.7, resolution.dissenting.single().value, 0.1)
+    }
+
+    @Test
+    fun aScheduleThatMatchesTheModelFigureRaisesNoAlarm() {
+        val items = appliance(
+            dataSource = ApplianceDataSource.MANUFACTURER_LABEL,
+            referenceAnnualKwh = 350.0,
+            unitKwh = 30.0,
+            referencePeriodDays = 30,
+        ).declaredEvidence()
+
+        val resolution = EvidenceResolver.resolve(items, EvidenceMetric.ANNUAL_KWH, TODAY)
+
+        assertTrue(resolution is EvidenceResolution.Settled)
+    }
+
+    @Test
+    fun aTypedScheduleNeverOverridesALabelOrAMeasurement() {
+        val configured = evidence(
+            source = EvidenceSource.USER_CONFIGURED,
+            methodology = EvidenceMethodology.MODELED,
+            value = 900.0,
+        )
+        val measured = evidence(
+            source = EvidenceSource.USER_MEASURED,
+            methodology = EvidenceMethodology.METERED,
+            value = 300.0,
+        )
+
+        val resolution = EvidenceResolver.resolve(
+            listOf(configured, measured),
+            EvidenceMetric.ANNUAL_KWH,
+            TODAY,
+        ) as EvidenceResolution.Conflicted
+
+        assertEquals(300.0, resolution.winner.value, 0.001)
+    }
+
+    @Test
+    fun aScheduleStillOutranksSomethingAModelInvented() {
+        val guess = evidence(source = EvidenceSource.AI_SUGGESTION, value = 900.0)
+        val configured = evidence(source = EvidenceSource.USER_CONFIGURED, value = 300.0)
+
+        val resolution = EvidenceResolver.resolve(
+            listOf(guess, configured),
+            EvidenceMetric.ANNUAL_KWH,
+            TODAY,
+        ) as EvidenceResolution.Conflicted
+
+        assertEquals(EvidenceSource.USER_CONFIGURED, resolution.winner.source)
+    }
+
     @Test
     fun anApplianceWithNoReferenceDataAssertsNothingRatherThanAssertingZero() {
         assertTrue(appliance().declaredEvidence().isEmpty())
@@ -361,6 +449,8 @@ class DeviceEvidenceTest {
         referenceAnnualKwh: Double? = null,
         powerWatts: Int? = null,
         standbyWatts: Int? = null,
+        unitKwh: Double? = null,
+        referencePeriodDays: Int = 30,
     ) = Appliance(
         id = "test",
         name = "Refrigerador",
@@ -374,6 +464,8 @@ class DeviceEvidenceTest {
         referenceAnnualKwh = referenceAnnualKwh,
         powerWatts = powerWatts,
         standbyWatts = standbyWatts,
+        unitKwh = unitKwh,
+        referencePeriodDays = referencePeriodDays,
     )
 
     private companion object {
