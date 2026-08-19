@@ -23,6 +23,8 @@ local.properties
 # updated again; committing it means anyone can publish in your name. Keep a
 # backup somewhere outside the repository.
 /keystore.properties
+# Backups and editor copies of the same file carry the same passwords.
+/keystore.properties.*
 *.jks
 *.keystore
 
