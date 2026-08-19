@@ -35,3 +35,6 @@ local.properties
 # Local clone of the public legal site (TandemRhombus/recibozen-legal).
 # The published policy lives there; a copy here would only drift.
 /site/privacidad/recibozen-legal/
+
+# Device screenshots: they carry the owner's real bills, name and address.
+/capturas/
