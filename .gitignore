@@ -38,3 +38,8 @@ local.properties
 
 # Device screenshots: they carry the owner's real bills, name and address.
 /capturas/
+
+# Claude Design export working copy: large, regenerable from the .zip.
+/design_src/
+# Promo art that still shows the owner name and service address.
+/play_assets/capturas/_BLOQUEADAS_datos_personales/
