@@ -31,3 +31,7 @@ local.properties
 # Local scratch: transfer folders, staged deletions and throwaway archives.
 # Never part of a build; keep them out of the history.
 /tmp/
+
+# Local clone of the public legal site (TandemRhombus/recibozen-legal).
+# The published policy lives there; a copy here would only drift.
+/site/privacidad/recibozen-legal/
