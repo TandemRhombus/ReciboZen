@@ -30,6 +30,8 @@ import app.recibozen.android.core.components.RzSecondaryButton
 import app.recibozen.android.core.designsystem.ReciboZenTheme
 import app.recibozen.android.core.designsystem.RzIcons
 import app.recibozen.android.core.designsystem.RzSpacing
+import app.recibozen.android.core.calculation.MeterDelta
+import app.recibozen.android.core.calculation.MeterProfile
 import app.recibozen.android.core.model.ReadingMethod
 import app.recibozen.android.demo.repository.ReciboZenRepository
 import app.recibozen.android.navigation.Routes
@@ -49,34 +51,64 @@ import kotlin.math.roundToInt
 data class ReadingConfirmUiState(
     val readingKwh: Int = 0,
     val previousReadingKwh: Int = 0,
-    val consumptionSinceKwh: Int = 0,
-    val averagePerDay: Double = 0.0,
+    /** Null when the readings do not establish a consumption; never 0 as a stand-in. */
+    val consumptionSinceKwh: Int? = null,
+    /** Null when there is no established consumption to divide. */
+    val averagePerDay: Double? = null,
     val isAbnormal: Boolean = false,
     val warningMessage: String? = null,
     val method: ReadingMethod = ReadingMethod.DIAL,
 )
+
+/** Above this daily rate the reading is questioned rather than accepted quietly. */
+private const val IMPLAUSIBLE_DAILY_KWH = 20.0
+
+/** Shown instead of a number the readings do not establish. */
+private const val UNKNOWN_VALUE = "—"
 
 class ReadingConfirmViewModel(private val repository: ReciboZenRepository) : ViewModel() {
     val uiState: StateFlow<ReadingConfirmUiState> = repository.session
         .map { state ->
             val reading = state.pendingReadingKwh ?: repository.dialReading(state).valueKwh
             val method = state.pendingReadingMethod ?: ReadingMethod.DIAL
-            val difference = reading - state.lastConfirmedReadingKwh
             val latestTimestamp = state.readings.firstOrNull()?.timestampEpochMillis
             val elapsedDays = latestTimestamp?.let { (System.currentTimeMillis() - it) / 86_400_000.0 }
                 ?.coerceAtLeast(0.25) ?: (76.0 / 24.0)
-            val average = difference / elapsedDays
-            val abnormal = difference < 0 || difference == 0 || average > 20.0
+            // The subtraction that used to live here produced a negative number
+            // when the register wrapped, and the screen rendered it as a
+            // measurement. MeterDelta either establishes the consumption or says
+            // it cannot, and the screen has to show which of the two happened.
+            val delta = MeterDelta.consumption(
+                previousKwh = state.lastConfirmedReadingKwh,
+                currentKwh = reading,
+                elapsedDays = elapsedDays,
+                capacityKwh = MeterProfile.capacity(state.meterType),
+            )
+            val measured = (delta as? MeterDelta.Measured)?.kwh
+            val average = measured?.let { it / elapsedDays }
+            val abnormal = measured == null || measured == 0 || (average ?: 0.0) > IMPLAUSIBLE_DAILY_KWH
             val warning = when {
-                difference < 0 -> "Esta lectura es menor que la anterior. Revisa el número o confirma si cambió el medidor."
-                difference == 0 -> "Tu lectura no cambió desde el último registro. Puedes guardarla si es correcta."
-                average > 20.0 -> "Esta lectura implicaría ${average.roundToInt()} kWh diarios, muy por encima de tu consumo habitual."
+                delta is MeterDelta.Undecidable -> when (delta.reason) {
+                    MeterDelta.Reason.WENT_BACKWARDS ->
+                        "Esta lectura es menor que la anterior. Puede ser que tu medidor haya dado la vuelta al pasar de su número máximo, que la hayas capturado mal, o que hayan cambiado el medidor. No podemos saber cuál sin que nos digas."
+                    MeterDelta.Reason.CAPACITY_UNKNOWN ->
+                        "Esta lectura es menor que la anterior. Para saber si tu medidor dio la vuelta necesitamos cuántos dígitos muestra, y todavía no nos lo has dicho."
+                    MeterDelta.Reason.READING_EXCEEDS_CAPACITY ->
+                        "Esta lectura tiene más dígitos de los que tiene tu medidor. Revisa el número o corrige el tipo de medidor en tu perfil."
+                    MeterDelta.Reason.WRAP_POSSIBLE ->
+                        "Pasó suficiente tiempo desde tu última lectura como para que el medidor haya dado la vuelta. Si lo hizo, el consumo real es mayor que el que muestra la resta."
+                    MeterDelta.Reason.RATE_IMPLAUSIBLE ->
+                        "Esta lectura implicaría un consumo diario muy por encima de lo habitual en tu casa."
+                }
+                measured == 0 -> "Tu lectura no cambió desde el último registro. Puedes guardarla si es correcta."
+                average != null && average > IMPLAUSIBLE_DAILY_KWH ->
+                    "Esta lectura implicaría ${average.roundToInt()} kWh diarios, muy por encima de tu consumo habitual."
                 else -> null
             }
             ReadingConfirmUiState(
                 readingKwh = reading,
                 previousReadingKwh = state.lastConfirmedReadingKwh,
-                consumptionSinceKwh = difference,
+                consumptionSinceKwh = measured,
                 averagePerDay = average,
                 isAbnormal = abnormal,
                 warningMessage = warning,
@@ -154,10 +186,12 @@ fun ReadingConfirmScreen(
                     )
                     ConfirmRow(
                         label = stringResource(R.string.reading_confirm_consumption_since),
-                        value = stringResource(
-                            R.string.reading_confirm_consumption_value,
-                            String.format(Locale("es", "MX"), "%,d", uiState.consumptionSinceKwh),
-                        ),
+                        value = uiState.consumptionSinceKwh?.let { kwh ->
+                            stringResource(
+                                R.string.reading_confirm_consumption_value,
+                                String.format(Locale("es", "MX"), "%,d", kwh),
+                            )
+                        } ?: UNKNOWN_VALUE,
                     )
                     ConfirmRow(
                         label = stringResource(R.string.reading_confirm_elapsed_time),
@@ -165,10 +199,12 @@ fun ReadingConfirmScreen(
                     )
                     ConfirmRow(
                         label = stringResource(R.string.reading_confirm_daily_average),
-                        value = stringResource(
-                            R.string.reading_confirm_daily_average_value,
-                            formatOneDecimal(uiState.averagePerDay),
-                        ),
+                        value = uiState.averagePerDay?.let { average ->
+                            stringResource(
+                                R.string.reading_confirm_daily_average_value,
+                                formatOneDecimal(average),
+                            )
+                        } ?: UNKNOWN_VALUE,
                     )
                 }
             }

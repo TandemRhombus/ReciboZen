@@ -23,6 +23,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import app.recibozen.android.core.calculation.MeterProfile
 import app.recibozen.android.core.designsystem.RzExtraShapes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -65,7 +66,7 @@ data class ReadingDialUiState(
 class ReadingDialViewModel(private val repository: ReciboZenRepository) : ViewModel() {
     val uiState: StateFlow<ReadingDialUiState> = repository.session
         .map { state ->
-            val faceIndices = if (state.meterType.contains("4")) listOf(1, 2, 3, 4) else state.dialAngles.indices.toList()
+            val faceIndices = MeterProfile.faceIndices(state.meterType)
             val selected = faceIndices.indexOf(state.dialSelectedIndex).takeIf { it >= 0 } ?: 0
             val backingSelected = faceIndices[selected]
             // The two candidate digits bracket the *raw* (fractional) value at the

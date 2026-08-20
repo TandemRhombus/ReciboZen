@@ -1,6 +1,7 @@
 package app.recibozen.android.demo.repository
 
 import app.recibozen.android.core.designsystem.AppThemeMode
+import app.recibozen.android.core.calculation.MeterProfile
 import app.recibozen.android.core.calculation.ApplianceAdviceEngine
 import app.recibozen.android.core.calculation.ApplianceAdviceEvidence
 import app.recibozen.android.core.calculation.ApplianceAdvicePriority
@@ -431,7 +432,7 @@ open class DemoReciboZenRepository : ReciboZenRepository {
 
     override fun dialReading(state: ReciboZenSessionState): DialReadingResult {
         val allDigits = MeterDialMath.digits(state.dialAngles, state.dialDirections)
-        val digits = if (state.meterType.contains("4")) allDigits.takeLast(4) else allDigits
+        val digits = MeterProfile.trimDigits(state.meterType, allDigits)
         val value = digits.joinToString("").toInt()
         val diff = value - state.lastConfirmedReadingKwh
         val rate = diff / 76.0 * 24.0
@@ -801,7 +802,7 @@ open class DemoReciboZenRepository : ReciboZenRepository {
     override fun setMeterType(meterType: String) {
         _session.update { state ->
             if (state.meterType == meterType) state else {
-                val firstFace = if (meterType.contains("4")) 1 else 0
+                val firstFace = MeterProfile.firstFaceIndex(meterType)
                 state.copy(
                     meterType = meterType,
                     meterTypeByService = state.withActiveService(state.meterTypeByService, meterType),
