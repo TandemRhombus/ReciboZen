@@ -1,6 +1,7 @@
 package app.recibozen.android.demo.repository
 
 import app.recibozen.android.core.designsystem.AppThemeMode
+import app.recibozen.android.core.calculation.MeterDelta
 import app.recibozen.android.core.calculation.MeterProfile
 import app.recibozen.android.core.calculation.ApplianceAdviceEngine
 import app.recibozen.android.core.calculation.ApplianceAdviceEvidence
@@ -293,14 +294,28 @@ open class DemoReciboZenRepository : ReciboZenRepository {
                     .toDouble().coerceAtLeast(0.0)
             else -> intervalDays
         }
-        val measuredKwh = (newest?.kwh ?: 0) - (baseline?.kwh ?: 0)
+        // Plain subtraction here produced a negative number whenever the register
+        // wrapped past its capacity, which then failed the sign guard below and
+        // dropped the whole pair without telling anyone. MeterDelta either
+        // establishes the consumption or names what it cannot tell apart, and
+        // that name travels to the screen so the fallback stops being silent.
+        val meterDelta = if (newest != null && baseline != null) {
+            MeterDelta.consumption(
+                previousKwh = baseline.kwh,
+                currentKwh = newest.kwh,
+                elapsedDays = intervalDays,
+                capacityKwh = MeterProfile.capacity(state.meterType),
+            )
+        } else null
+        val measuredKwh = (meterDelta as? MeterDelta.Measured)?.kwh ?: 0
+        val meterPaceBlockedBy = (meterDelta as? MeterDelta.Undecidable)?.reason
         val measuredDailyKwh = if (intervalDays > 0.0) measuredKwh / intervalDays else 0.0
         // The two endpoints imported from a PDF describe a bill that already
         // closed; they must not be mistaken for a live reading pair. Once the
         // user records a new reading, comparing it with the PDF endpoint is
         // valid and starts the current-period projection.
         val hasReliablePair = newest?.method != ReadingMethod.PDF &&
-            baseline != null && measuredDays >= 0.5 && measuredKwh >= 0
+            baseline != null && measuredDays >= 0.5 && meterDelta is MeterDelta.Measured
         val hasUsageEvidence = hasReliablePair || latestBill != null
         val billingDays = when {
             latestBill?.periodStartEpochDay != null && latestBill.periodEndEpochDay != null ->
@@ -389,6 +404,7 @@ open class DemoReciboZenRepository : ReciboZenRepository {
             applianceProjectedKwh = applianceProjectedKwh,
             applianceProjectedCostMxn = applianceProjectedCost,
             forecastBasis = forecastBasis,
+            meterPaceBlockedBy = meterPaceBlockedBy,
             currentPeriod = currentPeriod,
         )
     }

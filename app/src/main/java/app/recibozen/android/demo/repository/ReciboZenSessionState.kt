@@ -109,6 +109,12 @@ data class EnergySummary(
     val applianceProjectedCostMxn: Int = 0,
     val forecastBasis: EnergyForecastBasis = EnergyForecastBasis.NONE,
     /**
+     * Why the meter pace could not be used, when it could not. Non-null means the
+     * projection fell back to a bill or to the inventory, and the screen must say
+     * so instead of presenting the fallback as if it were the current pace.
+     */
+    val meterPaceBlockedBy: app.recibozen.android.core.calculation.MeterDelta.Reason? = null,
+    /**
      * The billing period the household is living right now, chained forward from
      * the latest imported bill. Single source for every "period" label and for
      * [daysRemaining], so Home, Análisis del periodo and DAC cannot disagree.

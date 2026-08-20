@@ -26,6 +26,8 @@ data class HomeUiState(
     val userInitial: String = "?",
     val profileConfigured: Boolean = false,
     val dataMode: HomeDataMode = HomeDataMode.EMPTY,
+    /** Why this projection is not using the meter pace, when it is not. */
+    val meterPaceBlockedBy: app.recibozen.android.core.calculation.MeterDelta.Reason? = null,
 
     val periodLabel: String = "",
     val currentPeriodLabel: String = "",

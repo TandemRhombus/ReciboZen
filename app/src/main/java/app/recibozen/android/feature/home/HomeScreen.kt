@@ -65,6 +65,7 @@ import app.recibozen.android.core.designsystem.RzIcons
 import app.recibozen.android.core.designsystem.RzPalette
 import app.recibozen.android.core.designsystem.RzSpacing
 import app.recibozen.android.core.designsystem.RzTheme
+import app.recibozen.android.core.calculation.MeterDelta
 import app.recibozen.android.core.calculation.DacRiskLevel
 import app.recibozen.android.core.calculation.ConsumptionPaceRelation
 import app.recibozen.android.demo.repository.ReciboZenRepository
@@ -598,6 +599,26 @@ private fun ProjectedBillCard(uiState: HomeUiState) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 2.dp),
         )
+
+        // The projection silently fell back to a closed bill or the inventory
+        // because the meter pace could not be established. Saying which is the
+        // difference between a fallback and a wrong number.
+        uiState.meterPaceBlockedBy?.let { reason ->
+            Text(
+                stringResource(
+                    when (reason) {
+                        MeterDelta.Reason.WENT_BACKWARDS -> R.string.home_meter_pace_backwards
+                        MeterDelta.Reason.CAPACITY_UNKNOWN -> R.string.home_meter_pace_capacity_unknown
+                        MeterDelta.Reason.READING_EXCEEDS_CAPACITY -> R.string.home_meter_pace_exceeds
+                        MeterDelta.Reason.WRAP_POSSIBLE -> R.string.home_meter_pace_wrap_possible
+                        MeterDelta.Reason.RATE_IMPLAUSIBLE -> R.string.home_meter_pace_rate
+                    },
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = RzTheme.extendedColors.warningText,
+                modifier = Modifier.padding(top = RzSpacing.sm),
+            )
+        }
 
         if (uiState.goalMxn > 0) {
             val statusText = if (uiState.isWithinGoal) {

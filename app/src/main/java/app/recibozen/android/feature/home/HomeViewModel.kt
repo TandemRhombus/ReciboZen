@@ -122,6 +122,7 @@ class HomeViewModel(private val repository: ReciboZenRepository) : ViewModel() {
                     importedBills.isNotEmpty() || liveReadings > 0 -> ConfidenceLevel.MEDIUM
                     else -> ConfidenceLevel.LOW
                 },
+                meterPaceBlockedBy = energy.meterPaceBlockedBy,
                 topAppliances = topAppliances,
                 hasHouseholdTotal = hasHouseholdTotal && rankedAppliances.isNotEmpty(),
                 unidentifiedSharePercent = if (hasHouseholdTotal) {
