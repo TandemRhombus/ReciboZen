@@ -53,6 +53,7 @@ import app.recibozen.android.core.designsystem.RzIcons
 import app.recibozen.android.core.designsystem.RzSpacing
 import app.recibozen.android.core.designsystem.RzTheme
 import app.recibozen.android.core.model.ReadingMethod
+import app.recibozen.android.core.calculation.MeterProfile
 import app.recibozen.android.core.ocr.MeterReadingParser
 import app.recibozen.android.demo.repository.ReciboZenRepository
 import app.recibozen.android.navigation.Routes
@@ -100,7 +101,12 @@ class ReadingPhotoViewModel(private val repository: ReciboZenRepository) : ViewM
         }
         recognizer.process(image)
             .addOnSuccessListener { text ->
-                val reading = MeterReadingParser.parse(text.text, repository.session.value.lastConfirmedReadingKwh)
+                val session = repository.session.value
+                val reading = MeterReadingParser.parse(
+                    text = text.text,
+                    previousReadingKwh = session.lastConfirmedReadingKwh,
+                    meterDigitCount = MeterProfile.digitCount(session.meterType),
+                )
                 if (reading != null) {
                     repository.prepareReading(reading, ReadingMethod.PHOTO)
                     _uiState.update { it.copy(detectedReadingKwh = reading, isProcessing = false, errorMessage = null) }
