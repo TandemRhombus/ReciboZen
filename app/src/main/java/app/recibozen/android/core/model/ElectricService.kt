@@ -14,11 +14,13 @@ data class ElectricServiceIdentity(
 enum class EntitlementTier { FREE, PLUS, FAMILY }
 
 object EntitlementPolicy {
-    fun activeServiceLimit(tier: EntitlementTier): Int = when (tier) {
-        EntitlementTier.FREE -> 1
-        EntitlementTier.PLUS -> 2
-        EntitlementTier.FAMILY -> 5
-    }
+    /** Resolves through [Paywall], so the gate lifts everywhere at once. */
+    fun activeServiceLimit(tier: EntitlementTier, enforced: Boolean = Paywall.ENFORCED): Int =
+        when (Paywall.effective(tier, enforced)) {
+            EntitlementTier.FREE -> 1
+            EntitlementTier.PLUS -> 2
+            EntitlementTier.FAMILY -> 5
+        }
 }
 
 data class ServiceCreationResult(

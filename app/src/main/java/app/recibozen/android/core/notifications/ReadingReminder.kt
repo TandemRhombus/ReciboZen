@@ -17,6 +17,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import app.recibozen.android.R
 import app.recibozen.android.core.model.EntitlementTier
+import app.recibozen.android.core.model.Paywall
 import app.recibozen.android.core.security.PremiumAccessStore
 import java.util.concurrent.TimeUnit
 
@@ -31,7 +32,9 @@ data class ReadingReminderSettings(
 }
 
 object PremiumFeaturePolicy {
-    fun notificationsAllowed(tier: EntitlementTier): Boolean = tier != EntitlementTier.FREE
+    /** Resolves through [Paywall], so the gate lifts everywhere at once. */
+    fun notificationsAllowed(tier: EntitlementTier, enforced: Boolean = Paywall.ENFORCED): Boolean =
+        Paywall.effective(tier, enforced) != EntitlementTier.FREE
 }
 
 class ReadingReminderStore(context: Context) {
