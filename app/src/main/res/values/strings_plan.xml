@@ -121,6 +121,8 @@
     <string name="dac_tariff_selected">Tarifa %1$s · tu suministro</string>
     <string name="dac_tariff_plain">Tarifa %1$s</string>
     <string name="dac_tariff_limit_pair">%1$s kWh/mes · %2$s kWh/12 meses</string>
+    <string name="dac_source_cfe">Ver los límites y cuotas publicados por CFE →</string>
+    <string name="dac_source_cfe_url">https://app.cfe.mx/Aplicaciones/CCFE/Tarifas/TarifasCREHogar/Tarifas</string>
     <string name="dac_limits_strictly_above">Solo te reclasifican si el promedio pasa el límite. Estar justo en el límite todavía no cuenta.</string>
     <string name="dac_history_complete">Historial cubierto: aproximadamente %1$d de 12 meses. Ya podemos evaluar la tendencia anual.</string>
     <string name="dac_history_incomplete">Historial cubierto: aproximadamente %1$d de 12 meses. Por ahora es una tendencia, no una predicción de reclasificación.</string>

@@ -1,6 +1,7 @@
 package app.recibozen.android.feature.support
 
 import android.content.Context
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.navigation.NavHostController
@@ -111,6 +113,11 @@ fun LegalScreen(
             LegalSection(R.string.legal_permissions_title, R.string.legal_permissions_body)
             LegalSection(R.string.legal_rights_title, R.string.legal_rights_body)
             LegalSection(R.string.legal_disclaimer_title, R.string.legal_disclaimer_body)
+            // Google Play requires a reachable link to the original source of any
+            // government information an app presents. The tariffs, their blocks
+            // and the DAC limits are all published by CFE; showing them without
+            // citing where they come from is what got the listing rejected.
+            SourcesSection()
         }
     }
 }
@@ -133,5 +140,34 @@ private fun LegalSection(titleRes: Int, bodyRes: Int) {
 private fun LegalScreenPreview() {
     ReciboZenTheme {
         LegalScreen(onBack = {}, deletedCount = null, onDeletePhotos = {})
+    }
+}
+
+@Composable
+private fun SourcesSection() {
+    val uriHandler = LocalUriHandler.current
+    RzCard(modifier = Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.legal_sources_title), style = MaterialTheme.typography.titleMedium)
+        Text(
+            stringResource(R.string.legal_sources_body),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = RzSpacing.xs),
+        )
+        listOf(
+            R.string.legal_sources_cfe to R.string.legal_sources_cfe_url,
+            R.string.legal_sources_cre to R.string.legal_sources_cre_url,
+            R.string.legal_sources_nasa to R.string.legal_sources_nasa_url,
+        ).forEach { (labelRes, urlRes) ->
+            val url = stringResource(urlRes)
+            Text(
+                stringResource(labelRes),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .padding(top = RzSpacing.sm)
+                    .clickable { runCatching { uriHandler.openUri(url) } },
+            )
+        }
     }
 }

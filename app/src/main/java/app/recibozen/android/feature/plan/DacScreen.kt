@@ -31,6 +31,7 @@ import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -530,6 +531,18 @@ private fun DacHowCard(uiState: DacUiState) {
                 uiState.limitReferences.forEach { reference -> DacLimitRow(reference) }
             }
             DacNote(stringResource(R.string.dac_limits_strictly_above))
+            // These limits are published by CFE. Google Play requires the original
+            // source to be reachable from wherever the app presents government data.
+            val uriHandler = LocalUriHandler.current
+            val cfeUrl = stringResource(R.string.dac_source_cfe_url)
+            Text(
+                stringResource(R.string.dac_source_cfe),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .padding(top = RzSpacing.sm)
+                    .clickable { runCatching { uriHandler.openUri(cfeUrl) } },
+            )
         }
     }
 }
