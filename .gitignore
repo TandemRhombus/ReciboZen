@@ -19,6 +19,25 @@ local.properties
 /backend/secrets/
 /backend/.env
 
-# Scratch folder used to move files in and out of the repo.
-/tmp/_transfer/
-/tmp/_to_delete/
+# Upload key for Google Play. Losing this file means the app can never be
+# updated again; committing it means anyone can publish in your name. Keep a
+# backup somewhere outside the repository.
+/keystore.properties
+# Backups and editor copies of the same file carry the same passwords.
+/keystore.properties.*
+*.jks
+*.keystore
+
+# Local scratch: transfer folders, staged deletions and throwaway archives.
+# Never part of a build; keep them out of the history.
+/tmp/
+
+# Local clone of the public legal site (TandemRhombus/recibozen-legal).
+# The published policy lives there; a copy here would only drift.
+/site/privacidad/recibozen-legal/
+
+# Device screenshots: they carry the owner's real bills, name and address.
+/capturas/
+
+# Claude Design export working copy: large, regenerable from the .zip.
+/design_src/

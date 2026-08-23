@@ -347,7 +347,7 @@ async function run() {
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean);
-  const packageName = process.env.ANDROID_PACKAGE_NAME ?? "com.recibozen.app";
+  const packageName = process.env.ANDROID_PACKAGE_NAME ?? "app.recibozen.android";
   if (privateKeyPem && entitlementKey) {
     const privateDerivedDer = createPublicKey(privateKeyPem).export({ type: "spki", format: "der" });
     const privateDerivedKeyId = createHash("sha256").update(privateDerivedDer).digest("base64url").slice(0, 22);

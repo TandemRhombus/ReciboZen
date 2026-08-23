@@ -72,7 +72,18 @@ Nunca enviamos tus recibos, lecturas, número de servicio ni fotos.</string>
     <string name="legal_rights_body">Puedes borrar las fotos desde aquí y el resto desinstalando la app. Para cualquier duda o solicitud, escríbenos desde Reportar un problema.</string>
 
     <string name="legal_disclaimer_title">Sobre las estimaciones</string>
-    <string name="legal_disclaimer_body">ReciboZen es independiente y no está afiliada a CFE. Los montos, la prevención DAC y el preestudio solar son estimaciones para orientarte, no cotizaciones oficiales. Tu recibo real lo determina CFE.</string>
+    <string name="legal_disclaimer_body">ReciboZen es una aplicación independiente. NO representa, no está afiliada ni respaldada por la Comisión Federal de Electricidad ni por ninguna entidad gubernamental. Los montos, la prevención DAC y el preestudio solar son estimaciones para orientarte, no cotizaciones oficiales. Tu recibo real lo determina CFE.</string>
+
+    <!-- Google Play exige citar la fuente original de toda informacion gubernamental
+         que la app muestre, con un enlace accesible. Sin esto la app se retira. -->
+    <string name="legal_sources_title">De dónde salen las tarifas</string>
+    <string name="legal_sources_body">Las tarifas domésticas, sus escalones y los límites de la tarifa DAC provienen de la publicación oficial de la Comisión Federal de Electricidad. Consulta siempre esa fuente y tu recibo.</string>
+    <string name="legal_sources_cfe">Tarifas domésticas CFE (fuente oficial)</string>
+    <string name="legal_sources_cfe_url">https://app.cfe.mx/Aplicaciones/CCFE/Tarifas/TarifasCREHogar/Tarifas</string>
+    <string name="legal_sources_cre">Comisión Reguladora de Energía</string>
+    <string name="legal_sources_cre_url">https://www.gob.mx/cre</string>
+    <string name="legal_sources_nasa">Radiación solar: NASA POWER</string>
+    <string name="legal_sources_nasa_url">https://power.larc.nasa.gov</string>
 
     <string name="profile_row_legal">Privacidad y términos</string>
 </resources>

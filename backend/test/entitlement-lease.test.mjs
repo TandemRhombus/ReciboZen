@@ -8,7 +8,7 @@ test("issuer creates a short ECDSA lease compatible with the Android verifier fo
   const now = 1_800_000_000;
   const issuer = new EntitlementLeaseIssuer({
     privateKeyPem: privateKey.export({ type: "pkcs8", format: "pem" }),
-    audience: "com.recibozen.app",
+    audience: "app.recibozen.android",
     now: () => now,
   });
   const token = issuer.issue({
@@ -20,7 +20,7 @@ test("issuer creates a short ECDSA lease compatible with the Android verifier fo
   const payload = Buffer.from(payloadPart, "base64url");
   const fields = payload.toString("utf8").split("|");
   assert.equal(fields.length, 8);
-  assert.deepEqual(fields.slice(0, 4), ["1", "com.recibozen.app", "install-subject-1234", "PLUS"]);
+  assert.deepEqual(fields.slice(0, 4), ["1", "app.recibozen.android", "install-subject-1234", "PLUS"]);
   assert.equal(Number(fields[4]), now);
   assert.equal(Number(fields[5]), now + 24 * 60 * 60);
   assert.equal(verify("sha256", payload, publicKey, Buffer.from(signaturePart, "base64url")), true);

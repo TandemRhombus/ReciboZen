@@ -1,7 +1,24 @@
+# Billing overlay. Always deploy with BOTH files:
+#   docker compose -f compose.yaml -f compose.billing.yaml up -d --no-deps api
+# A plain `docker compose up` silently drops everything below and the API goes
+# back to answering 503 play_verification_not_configured.
+#
+# HOST PREREQUISITE -- the two secrets mounted here must be readable by the
+# container, which runs as UID/GID 10001 (see Dockerfile: `USER 10001:10001`).
+# They are owned by the unprivileged host account, so mode 600 is not enough and
+# the API crash-loops with EACCES. Grant access by group, not by widening the
+# mode and not by changing the container user (it owns /var/lib/recibozen as
+# 10001 and would lose write access to the tariff catalog):
+#
+#   sudo chgrp 10001 secrets/entitlement-private.pem secrets/google-play-service-account.json
+#   sudo chmod 640   secrets/entitlement-private.pem secrets/google-play-service-account.json
+#
+# That leaves them readable by the owner and the container, and unreadable by
+# every other local user.
 services:
   api:
     environment:
-      ANDROID_PACKAGE_NAME: com.recibozen.app
+      ANDROID_PACKAGE_NAME: app.recibozen.android
       ENTITLEMENT_PRIVATE_KEY_FILE: /run/recibozen-secrets/entitlement-private.pem
       GOOGLE_SERVICE_ACCOUNT_FILE: /run/recibozen-secrets/google-play-service-account.json
       PREMIUM_PRODUCTS_JSON: '{"recibozen_plus_monthly":"PLUS","recibozen_family_monthly":"FAMILY"}'

@@ -40,7 +40,7 @@ Este proyecto comenzó como la conversión visual del prototipo **ReciboZen V2**
 ## Estructura de carpetas
 
 ```
-com.recibozen.app
+app.recibozen.android
 ├── ReciboZenApp.kt, MainActivity.kt        — punto de entrada, Scaffold raíz (bottom nav + NavHost)
 ├── navigation/
 │   ├── Routes.kt                           — TODAS las rutas de la app (constantes de string)
