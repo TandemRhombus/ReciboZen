@@ -51,6 +51,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import app.recibozen.android.R
+import app.recibozen.android.core.calculation.MeterProfile
 import app.recibozen.android.core.calculation.TariffCatalog
 import app.recibozen.android.core.components.RzBannerTone
 import app.recibozen.android.core.components.RzCard
@@ -80,6 +81,10 @@ data class OnboardingUiState(
     val location: String = "",
     val goalMxn: Int = 0,
     val meterType: String = "",
+    /** Digits the household declared, or null while nothing establishes them. */
+    val meterDigitCount: Int? = null,
+    /** What the chosen meter type states on its own; null means the question is still open. */
+    val meterInferredDigitCount: Int? = null,
     val tariff: String = "",
     val hasImportedBill: Boolean = false,
     val latestBillAmountMxn: Int = 0,
@@ -101,6 +106,8 @@ class OnboardingViewModel(private val repository: ReciboZenRepository) : ViewMod
             location = session.location,
             goalMxn = session.goalMxn,
             meterType = session.meterType,
+            meterDigitCount = session.meterDigitCount,
+            meterInferredDigitCount = MeterProfile.inferredDigitCount(session.meterType),
             tariff = session.tariff,
             hasImportedBill = latestBill != null,
             latestBillAmountMxn = latestBill?.amountMxn ?: 0,
@@ -114,6 +121,7 @@ class OnboardingViewModel(private val repository: ReciboZenRepository) : ViewMod
     fun previousStep() = repository.setOnboardingStep(repository.session.value.onboardingStep - 1)
     fun complete() = repository.completeOnboarding()
     fun setMeterType(meterType: String) = repository.setMeterType(meterType)
+    fun setMeterDigitCount(digitCount: Int?) = repository.setMeterDigitCount(digitCount)
     fun updateProfile(userName: String, householdName: String, location: String, goalMxn: Int) =
         repository.updateProfile(userName, householdName, location, goalMxn)
     fun updateGoal(goalMxn: Int) {
@@ -143,6 +151,7 @@ fun OnboardingRoute(navController: NavHostController, repository: ReciboZenRepos
         onImportBill = { navController.navigate(Routes.BillImport) },
         onPrimaryClick = { if (uiState.step >= 3) goHome() else viewModel.advanceStep() },
         onMeterTypeSelected = viewModel::setMeterType,
+        onMeterDigitCountChanged = viewModel::setMeterDigitCount,
         onProfileChanged = viewModel::updateProfile,
         onGoalChanged = viewModel::updateGoal,
         onTariffChanged = viewModel::updateTariff,
@@ -157,6 +166,7 @@ fun OnboardingScreen(
     onImportBill: () -> Unit,
     onPrimaryClick: () -> Unit,
     onMeterTypeSelected: (String) -> Unit = {},
+    onMeterDigitCountChanged: (Int?) -> Unit = {},
     onProfileChanged: (String, String, String, Int) -> Unit = { _, _, _, _ -> },
     onGoalChanged: (Int) -> Unit = {},
     onTariffChanged: (String) -> Unit = {},
@@ -190,7 +200,7 @@ fun OnboardingScreen(
                 when (uiState.step) {
                     0 -> ProfileStep(uiState, onProfileChanged)
                     1 -> ReceiptStep(uiState, onImportBill)
-                    2 -> MeterStep(uiState.meterType, onMeterTypeSelected)
+                    2 -> MeterStep(uiState, onMeterTypeSelected, onMeterDigitCountChanged)
                     else -> ResultStep(uiState, onGoalChanged, onTariffChanged)
                 }
             }
@@ -396,7 +406,12 @@ private val meterOptions = listOf(
 )
 
 @Composable
-private fun MeterStep(selectedMeterType: String, onMeterTypeSelected: (String) -> Unit) {
+private fun MeterStep(
+    uiState: OnboardingUiState,
+    onMeterTypeSelected: (String) -> Unit,
+    onMeterDigitCountChanged: (Int?) -> Unit,
+) {
+    val selectedMeterType = uiState.meterType
     val labels = meterOptions.map { stringResource(it.labelRes) }
     var selectedIndex by rememberSaveable(selectedMeterType) {
         mutableIntStateOf(labels.indexOfFirst { it == selectedMeterType })
@@ -427,6 +442,48 @@ private fun MeterStep(selectedMeterType: String, onMeterTypeSelected: (String) -
                         Text(stringResource(option.labelRes), modifier = Modifier.weight(1f))
                         if (selected) Icon(RzIcons.CheckCircle, stringResource(R.string.onboarding_meter_selected_desc), tint = MaterialTheme.colorScheme.primary)
                     }
+                }
+            }
+        }
+        // Only asked when the chosen type leaves it open. "4 carátulas" already
+        // states four, and asking again would invite a contradiction between two
+        // answers the household gave one screen apart.
+        if (selectedMeterType.isNotBlank() && uiState.meterInferredDigitCount == null) {
+            var digits by rememberSaveable(selectedMeterType) {
+                mutableStateOf(uiState.meterDigitCount?.toString().orEmpty())
+            }
+            val digitsValue = digits.toIntOrNull()?.takeIf { it in MeterProfile.DECLARABLE_DIGITS }
+            RzCard(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    stringResource(R.string.onboarding_meter_digits_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    stringResource(R.string.onboarding_meter_digits_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = RzSpacing.xs),
+                )
+                OutlinedTextField(
+                    value = digits,
+                    onValueChange = {
+                        digits = it.filter(Char::isDigit).take(1)
+                        onMeterDigitCountChanged(digits.toIntOrNull()?.takeIf { d -> d in MeterProfile.DECLARABLE_DIGITS })
+                    },
+                    label = { Text(stringResource(R.string.onboarding_meter_digits_label)) },
+                    isError = digits.isNotBlank() && digitsValue == null,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.md),
+                )
+                digitsValue?.let { count ->
+                    Text(
+                        stringResource(R.string.onboarding_meter_digits_capacity, "9".repeat(count), "0".repeat(count)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = RzSpacing.xs),
+                    )
                 }
             }
         }

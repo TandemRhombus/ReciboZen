@@ -46,6 +46,7 @@ import app.recibozen.android.R
 import app.recibozen.android.core.components.RzCard
 import app.recibozen.android.core.components.RzFlowTopBar
 import app.recibozen.android.core.components.RzFilterChip
+import app.recibozen.android.core.calculation.MeterProfile
 import app.recibozen.android.core.calculation.TariffCatalog
 import app.recibozen.android.core.model.ElectricServiceValidator
 import app.recibozen.android.core.model.EntitlementTier
@@ -79,7 +80,16 @@ data class ProfileUiState(
     val goalMxn: Int = 0,
     val activeServiceId: String = "",
     val entitlementTier: EntitlementTier = EntitlementTier.FREE,
-)
+    val meterType: String = "",
+    /** What the household declared, or null while they have not. */
+    val meterDeclaredDigitCount: Int? = null,
+    /** What [meterType] establishes on its own. Null for a digital meter. */
+    val meterInferredDigitCount: Int? = null,
+    val meterMultiplier: Int = 1,
+) {
+    /** The digit count in force, from either source. Null means the app does not know. */
+    val meterDigitCount: Int? get() = meterDeclaredDigitCount ?: meterInferredDigitCount
+}
 
 class ProfileViewModel(private val repository: ReciboZenRepository) : ViewModel() {
     val uiState: StateFlow<ProfileUiState> = repository.session
@@ -98,9 +108,18 @@ class ProfileViewModel(private val repository: ReciboZenRepository) : ViewModel(
                 goalMxn = state.goalMxn,
                 activeServiceId = state.activeServiceId,
                 entitlementTier = state.entitlementTier,
+                meterType = state.meterType,
+                meterDeclaredDigitCount = state.meterDigitCount,
+                meterInferredDigitCount = MeterProfile.inferredDigitCount(state.meterType),
+                meterMultiplier = state.meterMultiplier,
             )
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ProfileUiState())
+
+    fun updateMeter(digitCount: Int?, multiplier: Int) {
+        repository.setMeterDigitCount(digitCount)
+        repository.setMeterMultiplier(multiplier)
+    }
 
     fun update(userName: String, householdName: String, location: String, goalMxn: Int) =
         repository.updateProfile(userName, householdName, location, goalMxn)
@@ -134,6 +153,7 @@ fun ProfileRoute(navController: NavHostController, repository: ReciboZenReposito
         onNavigateServices = { navController.navigate(Routes.Services) },
         onUpdateProfile = viewModel::update,
         onUpdateService = viewModel::updateService,
+        onUpdateMeter = viewModel::updateMeter,
         onReplayTutorial = {
             viewModel.replayTutorial()
             // Pop back to the Inicio entry already on the stack instead of
@@ -160,9 +180,11 @@ fun ProfileScreen(
     onNavigateLegal: () -> Unit = {},
     onUpdateProfile: (String, String, String, Int) -> Unit,
     onUpdateService: (String, String, String, String, String) -> Unit,
+    onUpdateMeter: (Int?, Int) -> Unit = { _, _ -> },
 ) {
     var showEditDialog by remember { mutableStateOf(false) }
     var showServiceDialog by remember { mutableStateOf(false) }
+    var showMeterDialog by remember { mutableStateOf(false) }
     Scaffold(topBar = { RzFlowTopBar(title = stringResource(R.string.profile_title), onBack = onBack) }) { padding ->
         Column(
             modifier = Modifier
@@ -240,6 +262,15 @@ fun ProfileScreen(
                         stringResource(R.string.profile_service_not_added)
                     } else uiState.serviceAlias,
                     onClick = { showServiceDialog = true },
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                ProfileRow(
+                    icon = RzIcons.Schedule,
+                    label = stringResource(R.string.profile_row_meter),
+                    trailing = uiState.meterDigitCount
+                        ?.let { stringResource(R.string.profile_row_meter_summary, it, uiState.meterMultiplier) }
+                        ?: stringResource(R.string.profile_row_meter_undeclared),
+                    onClick = { showMeterDialog = true },
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 ProfileRow(
@@ -332,6 +363,97 @@ fun ProfileScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showEditDialog = false }) { Text(stringResource(R.string.action_cancel)) }
+            },
+        )
+    }
+
+    if (showMeterDialog) {
+        // Seeded from the count in force, whatever its source: a four-dial user
+        // sees 4 already filled in and only has to change it if the label was
+        // wrong. Keyed on the dialog being open so an unrelated state emission
+        // cannot wipe what is being typed.
+        var digits by remember(showMeterDialog) {
+            mutableStateOf(uiState.meterDigitCount?.toString().orEmpty())
+        }
+        var multiplier by remember(showMeterDialog) { mutableStateOf(uiState.meterMultiplier.toString()) }
+        val digitsValue = digits.toIntOrNull()?.takeIf { it in MeterProfile.DECLARABLE_DIGITS }
+        val multiplierValue = multiplier.toIntOrNull()?.takeIf { it >= 1 }
+        AlertDialog(
+            onDismissRequest = { showMeterDialog = false },
+            title = { Text(stringResource(R.string.profile_meter_title)) },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(RzSpacing.sm),
+                ) {
+                    Text(
+                        stringResource(R.string.profile_meter_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    OutlinedTextField(
+                        digits,
+                        { digits = it.filter(Char::isDigit).take(1) },
+                        label = { Text(stringResource(R.string.profile_meter_digits_label)) },
+                        supportingText = { Text(stringResource(R.string.profile_meter_digits_help)) },
+                        isError = digits.isNotBlank() && digitsValue == null,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                    )
+                    // Says where the current answer comes from, so a declaration
+                    // that merely repeats the label does not look like new
+                    // information and a digital meter's silence is named.
+                    Text(
+                        text = uiState.meterInferredDigitCount
+                            ?.let { stringResource(R.string.profile_meter_digits_from_type, it) }
+                            ?: stringResource(
+                                R.string.profile_meter_digits_unknown,
+                                uiState.meterType.ifBlank { stringResource(R.string.profile_missing_meter_type) },
+                            ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    digitsValue?.let { count ->
+                        Text(
+                            stringResource(
+                                R.string.profile_meter_capacity,
+                                count,
+                                "9".repeat(count),
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    OutlinedTextField(
+                        multiplier,
+                        { multiplier = it.filter(Char::isDigit).take(5) },
+                        label = { Text(stringResource(R.string.profile_meter_multiplier_label)) },
+                        supportingText = {
+                            Text(
+                                if (multiplierValue == null) stringResource(R.string.profile_meter_multiplier_error)
+                                else stringResource(R.string.profile_meter_multiplier_help),
+                            )
+                        },
+                        isError = multiplierValue == null,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    // A blank digit field is allowed and means "I am clearing
+                    // this", which is a legitimate answer. A filled-in but
+                    // invalid one is not.
+                    enabled = multiplierValue != null && (digits.isBlank() || digitsValue != null),
+                    onClick = {
+                        onUpdateMeter(digitsValue, multiplierValue ?: 1)
+                        showMeterDialog = false
+                    },
+                ) { Text(stringResource(R.string.profile_edit_save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showMeterDialog = false }) { Text(stringResource(R.string.action_cancel)) }
             },
         )
     }

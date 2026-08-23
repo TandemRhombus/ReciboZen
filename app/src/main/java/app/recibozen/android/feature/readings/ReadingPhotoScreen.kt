@@ -105,7 +105,7 @@ class ReadingPhotoViewModel(private val repository: ReciboZenRepository) : ViewM
                 val reading = MeterReadingParser.parse(
                     text = text.text,
                     previousReadingKwh = session.lastConfirmedReadingKwh,
-                    meterDigitCount = MeterProfile.digitCount(session.meterType),
+                    meterDigitCount = MeterProfile.digitCount(session.meterType, session.meterDigitCount),
                 )
                 if (reading != null) {
                     repository.prepareReading(reading, ReadingMethod.PHOTO)

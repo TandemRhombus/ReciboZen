@@ -66,7 +66,7 @@ data class ReadingDialUiState(
 class ReadingDialViewModel(private val repository: ReciboZenRepository) : ViewModel() {
     val uiState: StateFlow<ReadingDialUiState> = repository.session
         .map { state ->
-            val faceIndices = MeterProfile.faceIndices(state.meterType)
+            val faceIndices = MeterProfile.faceIndices(state.meterType, state.meterDigitCount)
             val selected = faceIndices.indexOf(state.dialSelectedIndex).takeIf { it >= 0 } ?: 0
             val backingSelected = faceIndices[selected]
             // The two candidate digits bracket the *raw* (fractional) value at the

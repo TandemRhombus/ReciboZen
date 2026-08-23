@@ -76,7 +76,28 @@
     <string name="reading_confirm_consumption_since">Consumo desde entonces</string>
     <string name="reading_confirm_consumption_value">%1$s kWh</string>
     <string name="reading_confirm_elapsed_time">Tiempo transcurrido</string>
-    <string name="reading_confirm_elapsed_time_value">3 días y 4 horas</string>
+    <string name="reading_confirm_elapsed_time_days">%1$s días</string>
+    <plurals name="reading_confirm_elapsed_time_hours">
+        <item quantity="one">%1$d hora</item>
+        <item quantity="other">%1$d horas</item>
+    </plurals>
+    <string name="reading_confirm_elapsed_time_minutes">menos de 1 hora</string>
+    <string name="reading_confirm_wrap_title">¿Tu medidor dio la vuelta?</string>
+    <string name="reading_confirm_wrap_body_backwards">Tu lectura (%1$s) es menor que la anterior (%2$s). Un medidor de %3$d dígitos vuelve a cero al pasar de %4$s, y entonces consumiste más de lo que sugiere la resta. Dinos qué pasó:</string>
+    <string name="reading_confirm_wrap_body_possible">Pasó suficiente tiempo desde tu última lectura como para que el medidor haya dado la vuelta sin que se note. Dinos qué pasó:</string>
+    <string name="reading_confirm_wrap_option_none">No dio la vuelta</string>
+    <string name="reading_confirm_wrap_option_one">Dio la vuelta 1 vez</string>
+    <plurals name="reading_confirm_wrap_option_many">
+        <item quantity="one">Dio la vuelta %1$d vez</item>
+        <item quantity="other">Dio la vuelta %1$d veces</item>
+    </plurals>
+    <string name="reading_confirm_wrap_option_detail">%1$s kWh · %2$s kWh/día</string>
+    <string name="reading_confirm_wrap_option_detail_no_rate">%1$s kWh</string>
+    <string name="reading_confirm_wrap_misread">Ninguna: capturé mal la lectura</string>
+    <string name="reading_confirm_wrap_chosen">Tú indicaste: %1$s</string>
+    <string name="reading_confirm_wrap_change">Elegir otra opción</string>
+    <string name="reading_confirm_wrap_attested_note">Este consumo se apoya en lo que tú nos dijiste, no solo en la resta de las dos lecturas.</string>
+    <string name="reading_confirm_wrap_swap_note">Si te cambiaron el medidor, todavía no podemos registrarlo. Guarda la lectura y repórtalo desde Ayuda.</string>
     <string name="reading_confirm_daily_average">Promedio del intervalo</string>
     <string name="reading_confirm_daily_average_value">%1$s kWh/día</string>
     <string name="reading_confirm_review_dial">Revisar las manecillas</string>

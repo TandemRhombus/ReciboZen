@@ -76,6 +76,7 @@
     <string name="balance_overnight_expected">Tus aparatos registrados justifican %1$.1f kWh (%2$d W).</string>
     <string name="balance_overnight_unexplained">Sobran %1$.1f kWh sin explicar. Busca algo encendido que no tengas registrado.</string>
     <string name="balance_overnight_matches">Cuadra con lo registrado. No hay consumo fantasma a la vista.</string>
+    <string name="balance_overnight_attested">Esta cifra cuenta la vuelta que nos dijiste que dio tu medidor esa noche. Sin ese dato la prueba no se podría medir.</string>
     <string name="balance_overnight_footnote">Puede ser un aparato que no tenemos registrado. Si la diferencia continúa, puedes consultar a un electricista.</string>
     <string name="balance_overnight_action">Iniciar la prueba</string>
     <string name="balance_overnight_no_result">Registra una lectura antes de dormir y otra al despertar para medirlo.</string>

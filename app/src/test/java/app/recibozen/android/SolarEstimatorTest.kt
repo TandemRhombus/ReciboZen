@@ -1,5 +1,6 @@
 package app.recibozen.android
 
+import app.recibozen.android.core.calculation.MeterRegister
 import app.recibozen.android.core.calculation.SolarEstimator
 import app.recibozen.android.core.model.BillPeriod
 import app.recibozen.android.core.model.HistoryReadingEntry
@@ -8,6 +9,7 @@ import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertNull
 import org.junit.Test
 import kotlin.math.roundToInt
 
@@ -97,4 +99,53 @@ class SolarEstimatorTest {
     }
 
     private fun LocalDate.toEpochMillis(): Long = toEpochDay() * 86_400_000L
+
+    // --- Reading periods across a register wrap ---
+
+    @Test
+    fun aReadingPeriodAcrossAWrapIsUsedInsteadOfBeingSilentlyDropped() {
+        // 9,900 -> 0,150 on a four-dial meter over 30 days is 250 kWh. The old
+        // `consumed <= 0` filter dropped it, and the array was then sized on
+        // whatever evidence happened to survive -- always downwards.
+        val start = LocalDate.of(2025, 3, 1)
+        val end = start.plusDays(30)
+        val readings = listOf(
+            HistoryReadingEntry(9_900, "", ReadingMethod.MANUAL, "", start.toEpochMillis()),
+            HistoryReadingEntry(150, "", ReadingMethod.MANUAL, "", end.toEpochMillis(), wrapsSincePrevious = 1),
+        )
+
+        val estimate = SolarEstimator.estimate(
+            history = emptyList(),
+            monthlyDailyIrradiance = List(12) { 5.0 },
+            readings = readings,
+            register = MeterRegister(capacityKwh = 10_000, multiplier = 1),
+        )
+
+        assertNotNull("el periodo no debe descartarse", estimate)
+        assertEquals(30, estimate!!.manualEvidenceDays)
+        // 250 kWh in 30 days annualised: 250 * 365 / 30.
+        assertEquals(3_042, estimate.rollingAnnualConsumptionKwh)
+    }
+
+    @Test
+    fun aWrapNobodyAttestedLeavesTheSolarStudyWithoutThatPeriod() {
+        // Sizing an array on a guessed wrap would be worse than sizing it on
+        // less evidence, so the period is still dropped -- but now because the
+        // consumption is undetermined, not because a subtraction came out negative.
+        val start = LocalDate.of(2025, 3, 1)
+        val end = start.plusDays(30)
+        val readings = listOf(
+            HistoryReadingEntry(9_900, "", ReadingMethod.MANUAL, "", start.toEpochMillis()),
+            HistoryReadingEntry(150, "", ReadingMethod.MANUAL, "", end.toEpochMillis()),
+        )
+
+        val estimate = SolarEstimator.estimate(
+            history = emptyList(),
+            monthlyDailyIrradiance = List(12) { 5.0 },
+            readings = readings,
+            register = MeterRegister(capacityKwh = 10_000, multiplier = 1),
+        )
+
+        assertNull(estimate)
+    }
 }

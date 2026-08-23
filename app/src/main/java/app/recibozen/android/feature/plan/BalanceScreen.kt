@@ -29,6 +29,7 @@ import app.recibozen.android.core.components.RzFlowTopBar
 import app.recibozen.android.core.components.RzPrimaryButton
 import app.recibozen.android.core.components.RzSecondaryButton
 import app.recibozen.android.core.components.RzStackedBarRow
+import app.recibozen.android.core.calculation.MeterProfile
 import app.recibozen.android.core.calculation.OvernightBaselineCalculator
 import app.recibozen.android.core.components.RzStatusChip
 import app.recibozen.android.core.designsystem.ReciboZenTheme
@@ -65,6 +66,12 @@ data class BalanceUiState(
     val overnightHours: Int = 0,
     val overnightObservedWatts: Int = 0,
     val overnightExpectedWatts: Int = 0,
+    /**
+     * The overnight figure counts a register wrap the household attested to.
+     * Shown because it is a measurement supported by testimony, and the screen
+     * must not present it as if the subtraction alone had produced it.
+     */
+    val overnightRestsOnAttestation: Boolean = false,
 )
 
 class BalanceViewModel(repository: ReciboZenRepository) : ViewModel() {
@@ -81,7 +88,11 @@ class BalanceViewModel(repository: ReciboZenRepository) : ViewModel() {
             val explainedShare = if (observed == 0) 0 else (explained * 100f / observed).toInt().coerceIn(0, 100)
             // Phantom consumption: what the meter recorded overnight against
             // what the registered inventory can justify while nobody uses it.
-            val overnight = OvernightBaselineCalculator.evaluate(state.readings, repository.appliances(state))
+            val overnight = OvernightBaselineCalculator.evaluate(
+                readings = state.readings,
+                appliances = repository.appliances(state),
+                register = MeterProfile.register(state.meterType, state.meterDigitCount, state.meterMultiplier),
+            )
             BalanceUiState(
                 hasUsageData = energy.hasUsageEvidence,
                 explainedSharePercent = explainedShare,
@@ -103,6 +114,7 @@ class BalanceViewModel(repository: ReciboZenRepository) : ViewModel() {
                 overnightHours = overnight?.hours?.roundToInt() ?: 0,
                 overnightObservedWatts = overnight?.observedWatts?.roundToInt() ?: 0,
                 overnightExpectedWatts = overnight?.expectedWatts?.roundToInt() ?: 0,
+                overnightRestsOnAttestation = overnight?.restsOnAttestation == true,
             )
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), BalanceUiState())
@@ -299,6 +311,14 @@ fun BalanceScreen(
                         } else RzTheme.extendedColors.success,
                         modifier = Modifier.padding(top = RzSpacing.sm),
                     )
+                    if (uiState.overnightRestsOnAttestation) {
+                        Text(
+                            stringResource(R.string.balance_overnight_attested),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = RzSpacing.xs),
+                        )
+                    }
                 }
                 else Text(
                     stringResource(R.string.balance_overnight_no_result),
