@@ -156,9 +156,12 @@
     <string name="dac_tariff_title">Rango de este periodo · %1$s</string>
     <string name="dac_tariff_unavailable">Importa un recibo con el desglose legible para ver estos tramos con tus cuotas reales.</string>
     <string name="dac_tariff_effective_bill">El costo por kWh viene de tu último recibo DAC. Se actualiza cuando importes uno más reciente.</string>
-    <string name="dac_tier_basic">Básico · %1$d kWh</string>
-    <string name="dac_tier_intermediate">Intermedio · %1$d kWh</string>
+    <string name="dac_tier_basic">Básico · hasta %1$d kWh</string>
+    <string name="dac_tier_intermediate">Intermedio · de %1$d a %2$d kWh</string>
     <string name="dac_tier_excess">Excedente · desde %1$d kWh</string>
+    <string name="dac_tier_used">Llevas %1$s kWh en este tramo</string>
+    <string name="dac_tariff_basis_projection">La barra es tu consumo proyectado del periodo, %1$s kWh. El marcador es dónde vas hoy.</string>
+    <string name="dac_tariff_basis_observed">La barra es lo que llevas consumido, %1$s kWh. Sin una proyección no podemos dibujar lo que falta del periodo, así que tampoco marcamos dónde vas.</string>
     <string name="dac_today_marker">▲ hoy</string>
     <string name="dac_tariff_footnote">El rango excedente encarece el kWh dentro de este periodo. Es distinto del promedio anual de arriba.</string>
 </resources>

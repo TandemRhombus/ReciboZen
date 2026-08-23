@@ -345,4 +345,38 @@ class DacGlanceTest {
         // The fractions are the bar, so they have to add up to the whole bar.
         assertEquals(1.0f, tiers.sumOf { it.fraction.toDouble() }.toFloat(), 0.001f)
     }
+
+    @Test
+    fun everyTierKnowsWhereItEndsSoTheCardCanShowARangeAtAll() {
+        // The card is titled "Rango de este periodo" and the tier model carried
+        // no end at all: every row printed the kWh spent inside the tier, so
+        // "Básico · 87 kWh" said nothing about where básico ends -- which is the
+        // number a household can act on.
+        val blocks = listOf(
+            TariffBlock(limitKwh = 150, rateMxnPerKwh = 1.0),
+            TariffBlock(limitKwh = 280, rateMxnPerKwh = 2.0),
+            TariffBlock(limitKwh = null, rateMxnPerKwh = 3.0),
+        )
+
+        val tiers = buildTariffTiersForTest(basisKwh = 400, blocks = blocks)
+
+        assertEquals(listOf(0, 150, 280), tiers.map { it.startsAtKwh })
+        assertEquals(listOf(150, 280, null), tiers.map { it.endsAtKwh })
+        assertTrue(tiers.last().isOpenEnded)
+    }
+
+    @Test
+    fun aPartlyUsedTierStillReportsTheBoundaryAndTheUsageSeparately() {
+        val blocks = listOf(
+            TariffBlock(limitKwh = 150, rateMxnPerKwh = 1.0),
+            TariffBlock(limitKwh = null, rateMxnPerKwh = 3.0),
+        )
+
+        val tier = buildTariffTiersForTest(basisKwh = 87, blocks = blocks).first()
+
+        // 87 kWh spent inside a tier that ends at 150. Conflating the two is
+        // exactly what the row used to do.
+        assertEquals(87, tier.usedKwh)
+        assertEquals(150, tier.endsAtKwh)
+    }
 }
