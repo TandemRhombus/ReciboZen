@@ -4,6 +4,7 @@ import app.recibozen.android.core.designsystem.AppThemeMode
 import app.recibozen.android.core.calculation.MeterDelta
 import app.recibozen.android.core.calculation.MeterProfile
 import app.recibozen.android.core.calculation.ReadingInterval
+import app.recibozen.android.core.model.MeterReplacement
 import app.recibozen.android.core.calculation.ApplianceAdviceEngine
 import app.recibozen.android.core.calculation.ApplianceAdviceEvidence
 import app.recibozen.android.core.calculation.ApplianceAdvicePriority
@@ -311,6 +312,9 @@ open class DemoReciboZenRepository : ReciboZenRepository {
                 // across the span are the sum of what was attested for each
                 // interval inside it, not the newest entry's own value.
                 attestedWraps = ReadingInterval.attestedWrapsBetween(timedReadings, baseline, newest),
+                // A swap inside the span makes the two endpoints readings of
+                // different registers, so it can never be ignored here.
+                replacement = ReadingInterval.replacementForDelta(timedReadings, baseline, newest),
             )
         } else null
         val measuredKwh = (meterDelta as? MeterDelta.Measured)?.kwh ?: 0
@@ -1054,7 +1058,12 @@ open class DemoReciboZenRepository : ReciboZenRepository {
     private fun elapsedDaysSinceLastReading(state: ReciboZenSessionState, nowMillis: Long): Double =
         ReadingInterval.daysSince(state.readings, nowMillis) ?: 0.0
 
-    override fun confirmReading(kwh: Int, method: ReadingMethod, wrapsSincePrevious: Int?) {
+    override fun confirmReading(
+        kwh: Int,
+        method: ReadingMethod,
+        wrapsSincePrevious: Int?,
+        meterReplacement: MeterReplacement?,
+    ) {
         _session.update { state ->
             val now = System.currentTimeMillis()
             val label = SimpleDateFormat("d MMM, h:mm a", Locale.forLanguageTag("es-MX")).format(Date(now))
@@ -1070,8 +1079,13 @@ open class DemoReciboZenRepository : ReciboZenRepository {
                 capacityKwh = MeterProfile.capacity(state.meterType, state.meterDigitCount),
                 multiplier = state.meterMultiplier,
                 attestedWraps = wrapsSincePrevious,
+                replacement = meterReplacement,
             )
             val note = when {
+                delta is MeterDelta.Measured && delta.acrossMeterReplacement ->
+                    "+${delta.kwh} kWh, contando el medidor anterior y el nuevo"
+                meterReplacement != null && delta !is MeterDelta.Measured ->
+                    "cambiaron el medidor; falta la lectura que cierra el tramo"
                 delta is MeterDelta.Measured && delta.wraps > 0 ->
                     "+${delta.kwh} kWh, con ${delta.wraps} vuelta${if (delta.wraps == 1) "" else "s"} del medidor"
                 delta is MeterDelta.Measured -> "+${delta.kwh} kWh desde la anterior"
@@ -1087,6 +1101,7 @@ open class DemoReciboZenRepository : ReciboZenRepository {
                         note = note,
                         timestampEpochMillis = now,
                         wrapsSincePrevious = wrapsSincePrevious,
+                        meterReplacement = meterReplacement,
                     ),
                 ) + state.readings,
                 pendingReadingKwh = null,

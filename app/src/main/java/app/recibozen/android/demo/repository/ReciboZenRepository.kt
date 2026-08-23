@@ -5,6 +5,7 @@ import app.recibozen.android.core.model.Appliance
 import app.recibozen.android.core.model.BillPeriod
 import app.recibozen.android.core.model.PlanAction
 import app.recibozen.android.core.model.HistoryUnit
+import app.recibozen.android.core.model.MeterReplacement
 import app.recibozen.android.core.model.ReadingMethod
 import app.recibozen.android.core.model.ElectricServiceIdentity
 import app.recibozen.android.core.model.ServiceCreationResult
@@ -133,5 +134,10 @@ interface ReciboZenRepository {
      * interval was unambiguous or the app could not frame the question -- and it
      * travels with the entry so no later screen has to re-derive it.
      */
-    fun confirmReading(kwh: Int, method: ReadingMethod, wrapsSincePrevious: Int? = null)
+    fun confirmReading(
+        kwh: Int,
+        method: ReadingMethod,
+        wrapsSincePrevious: Int? = null,
+        meterReplacement: MeterReplacement? = null,
+    )
 }

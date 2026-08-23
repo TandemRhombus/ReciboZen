@@ -64,6 +64,7 @@ object AccumulatedConsumption {
                 capacityKwh = register.capacityKwh,
                 multiplier = register.multiplier,
                 attestedWraps = ReadingInterval.attestedWrapsBetween(readings, base.second, entry),
+                replacement = ReadingInterval.replacementForDelta(readings, base.second, entry),
                 // No pace is passed: this curve is the evidence a pace is drawn
                 // from, so measuring it against one would be circular.
                 plausibleDailyKwh = null,

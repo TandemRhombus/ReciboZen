@@ -44,6 +44,7 @@
     <string name="home_meter_pace_capacity_unknown">Tu última lectura es menor que la anterior. Para saber si tu medidor dio la vuelta necesitamos cuántos dígitos muestra.</string>
     <string name="home_meter_pace_exceeds">Tu última lectura tiene más dígitos que tu medidor, así que esta proyección no la usa. Revisa el número o el tipo de medidor.</string>
     <string name="home_meter_pace_wrap_possible">Pasó tanto tiempo desde tu lectura anterior que tu medidor pudo haber dado la vuelta. Confírmalo para que la proyección use tu ritmo real.</string>
+    <string name="home_meter_pace_replaced">Cambiaron tu medidor y todavía falta la lectura final del anterior o la inicial del nuevo. Sin esas dos no podemos cerrar el consumo de ese tramo.</string>
     <string name="home_meter_pace_rate">Tu última lectura implica un consumo diario fuera de lo habitual, así que esta proyección no la usa todavía.</string>
     <string name="home_range_text">Podría quedar entre %1$s y %2$s</string>
     <string name="home_status_over_goal">Si mantienes este ritmo, cerrarías %1$s por encima de tu meta de %2$s. Faltan %3$d días.</string>

@@ -172,6 +172,7 @@ object SolarEstimator {
                 capacityKwh = register.capacityKwh,
                 multiplier = register.multiplier,
                 attestedWraps = ReadingInterval.attestedWrapsBetween(readings, from.entry, to.entry),
+                replacement = ReadingInterval.replacementForDelta(readings, from.entry, to.entry),
                 // No pace: this function is building the very evidence a pace
                 // would come from, so measuring against one would be circular.
                 plausibleDailyKwh = null,

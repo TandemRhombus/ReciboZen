@@ -8,11 +8,19 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -31,9 +39,11 @@ import app.recibozen.android.core.components.RzSecondaryButton
 import app.recibozen.android.core.designsystem.ReciboZenTheme
 import app.recibozen.android.core.designsystem.RzIcons
 import app.recibozen.android.core.designsystem.RzSpacing
+import app.recibozen.android.core.designsystem.RzTheme
 import app.recibozen.android.core.calculation.MeterDelta
 import app.recibozen.android.core.calculation.MeterProfile
 import app.recibozen.android.core.calculation.ReadingInterval
+import app.recibozen.android.core.model.MeterReplacement
 import app.recibozen.android.core.model.ReadingMethod
 import app.recibozen.android.demo.repository.ReciboZenRepository
 import app.recibozen.android.navigation.Routes
@@ -82,9 +92,17 @@ data class ReadingConfirmUiState(
     val blockedReason: MeterDelta.Reason? = null,
     /** Digits the register shows, so the screen can name where it wraps. */
     val meterDigitCount: Int? = null,
+    /** The meter swap the household declared on this screen, if any. */
+    val meterReplacement: MeterReplacement? = null,
 ) {
     /** True when the figure shown rests on the household's testimony, not on arithmetic alone. */
     val restsOnAttestation: Boolean get() = (attestedWraps ?: 0) > 0 && consumptionSinceKwh != null
+
+    /** A swap was declared but its boundary readings are still missing. */
+    val replacementPending: Boolean get() = meterReplacement != null && !meterReplacement.isComplete
+
+    /** A swap was declared and closed, so the consumption spans two registers. */
+    val replacementResolved: Boolean get() = meterReplacement?.isComplete == true && consumptionSinceKwh != null
 }
 
 /** Above this daily rate the reading is questioned rather than accepted quietly. */
@@ -103,10 +121,18 @@ class ReadingConfirmViewModel(private val repository: ReciboZenRepository) : Vie
      */
     private val attestedWraps = MutableStateFlow<Int?>(null)
 
+    /**
+     * The meter swap declared on this screen, held here for the same reason as
+     * [attestedWraps]: it becomes a fact only when the reading it belongs to is
+     * confirmed, so backing out discards it.
+     */
+    private val meterReplacement = MutableStateFlow<MeterReplacement?>(null)
+
     val uiState: StateFlow<ReadingConfirmUiState> = combine(
         repository.session,
         attestedWraps,
-    ) { state, wraps ->
+        meterReplacement,
+    ) { state, wraps, replacement ->
         val reading = state.pendingReadingKwh ?: repository.dialReading(state).valueKwh
         val method = state.pendingReadingMethod ?: ReadingMethod.DIAL
         val elapsedDays = ReadingInterval.daysSince(state.readings, System.currentTimeMillis())
@@ -127,6 +153,7 @@ class ReadingConfirmViewModel(private val repository: ReciboZenRepository) : Vie
             multiplier = state.meterMultiplier,
             attestedWraps = wraps,
             plausibleDailyKwh = pace,
+            replacement = replacement,
         )
         val measured = (delta as? MeterDelta.Measured)?.kwh
         val average = measured?.let { kwh -> elapsedDays?.takeIf { it > 0.0 }?.let { kwh / it } }
@@ -152,6 +179,8 @@ class ReadingConfirmViewModel(private val repository: ReciboZenRepository) : Vie
                     "Pasó suficiente tiempo desde tu última lectura como para que el medidor haya dado la vuelta. Si lo hizo, el consumo real es mayor que el que muestra la resta."
                 MeterDelta.Reason.RATE_IMPLAUSIBLE ->
                     "Esta lectura implicaría un consumo diario muy por encima de lo habitual en tu casa."
+                MeterDelta.Reason.METER_REPLACED ->
+                    "Nos dijiste que cambiaron tu medidor. Para cerrar el consumo de este tramo necesitamos la última lectura del medidor anterior y con cuánto arrancó el nuevo."
             }
             measured == 0 -> "Tu lectura no cambió desde el último registro. Puedes guardarla si es correcta."
             average != null && average > IMPLAUSIBLE_DAILY_KWH ->
@@ -171,16 +200,35 @@ class ReadingConfirmViewModel(private val repository: ReciboZenRepository) : Vie
             attestedWraps = wraps,
             blockedReason = blocked,
             meterDigitCount = MeterProfile.digitCount(state.meterType, state.meterDigitCount),
+            meterReplacement = replacement,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ReadingConfirmUiState())
 
-    fun attestWraps(wraps: Int) { attestedWraps.value = wraps }
+    fun attestWraps(wraps: Int) {
+        attestedWraps.value = wraps
+        // A wrap and a swap are different answers to the same question, so
+        // picking one has to drop the other rather than leave both on record.
+        meterReplacement.value = null
+    }
 
-    fun clearAttestation() { attestedWraps.value = null }
+    fun declareMeterReplacement(replacement: MeterReplacement) {
+        meterReplacement.value = replacement
+        attestedWraps.value = null
+    }
+
+    fun clearAttestation() {
+        attestedWraps.value = null
+        meterReplacement.value = null
+    }
 
     fun confirm() {
         val current = uiState.value
-        repository.confirmReading(current.readingKwh, current.method, current.attestedWraps)
+        repository.confirmReading(
+            kwh = current.readingKwh,
+            method = current.method,
+            wrapsSincePrevious = current.attestedWraps,
+            meterReplacement = current.meterReplacement,
+        )
     }
 }
 
@@ -200,6 +248,7 @@ fun ReadingConfirmRoute(navController: NavHostController, repository: ReciboZenR
         onFix = { navController.navigate(Routes.ReadingDial) },
         onAttestWraps = viewModel::attestWraps,
         onClearAttestation = viewModel::clearAttestation,
+        onDeclareMeterReplacement = viewModel::declareMeterReplacement,
     )
 }
 
@@ -212,7 +261,9 @@ fun ReadingConfirmScreen(
     onFix: () -> Unit,
     onAttestWraps: (Int) -> Unit = {},
     onClearAttestation: () -> Unit = {},
+    onDeclareMeterReplacement: (MeterReplacement) -> Unit = {},
 ) {
+    var showReplacementDialog by remember { mutableStateOf(false) }
     Scaffold(
         topBar = { RzFlowTopBar(title = stringResource(R.string.action_register_reading), onBack = onBack) },
     ) { innerPadding ->
@@ -274,12 +325,22 @@ fun ReadingConfirmScreen(
                 }
             }
 
-            if (uiState.wrapCandidates.isNotEmpty() || uiState.restsOnAttestation) {
+            // The declared states have to keep the card on screen. Declaring a
+            // meter swap empties wrapCandidates -- MeterDelta stops offering wrap
+            // readings once it knows the registers differ -- so without these two
+            // the card vanished the moment the household answered, taking with it
+            // both the confirmation of what they said and the way to change it.
+            if (uiState.wrapCandidates.isNotEmpty() ||
+                uiState.restsOnAttestation ||
+                uiState.replacementResolved ||
+                uiState.replacementPending
+            ) {
                 WrapAttestationCard(
                     uiState = uiState,
                     onAttest = onAttestWraps,
                     onClear = onClearAttestation,
                     onFix = onFix,
+                    onDeclareReplacement = { showReplacementDialog = true },
                 )
             }
 
@@ -320,6 +381,18 @@ fun ReadingConfirmScreen(
             )
         }
     }
+
+    if (showReplacementDialog) {
+        MeterReplacementDialog(
+            previousReadingKwh = uiState.previousReadingKwh,
+            currentReadingKwh = uiState.readingKwh,
+            onDismiss = { showReplacementDialog = false },
+            onConfirm = { replacement ->
+                onDeclareMeterReplacement(replacement)
+                showReplacementDialog = false
+            },
+        )
+    }
 }
 
 @Composable
@@ -336,6 +409,9 @@ private fun ConfirmRow(label: String, value: String) {
 }
 
 private fun formatOneDecimal(value: Double): String = String.format(Locale("es", "MX"), "%.1f", value)
+
+/** Grouped kWh magnitude, e.g. `10,022`. */
+private fun formatKwh(kwh: Int): String = String.format(Locale("es", "MX"), "%,d", kwh)
 
 /**
  * Elapsed time as the readings establish it, or the unknown marker.
@@ -369,6 +445,7 @@ private fun WrapAttestationCard(
     onAttest: (Int) -> Unit,
     onClear: () -> Unit,
     onFix: () -> Unit,
+    onDeclareReplacement: () -> Unit,
 ) {
     RzCard(modifier = Modifier.fillMaxWidth()) {
         Text(
@@ -376,6 +453,25 @@ private fun WrapAttestationCard(
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurface,
         )
+        if (uiState.replacementResolved || uiState.replacementPending) {
+            Text(
+                stringResource(
+                    if (uiState.replacementResolved) R.string.reading_confirm_swap_chosen
+                    else R.string.reading_confirm_swap_pending,
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (uiState.replacementResolved) {
+                    MaterialTheme.colorScheme.onSurface
+                } else RzTheme.extendedColors.warningText,
+                modifier = Modifier.padding(top = RzSpacing.xs),
+            )
+            RzSecondaryButton(
+                text = stringResource(R.string.reading_confirm_wrap_change),
+                onClick = onClear,
+                modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.md),
+            )
+            return@RzCard
+        }
         if (uiState.restsOnAttestation) {
             Text(
                 stringResource(R.string.reading_confirm_wrap_chosen, wrapLabel(uiState.attestedWraps ?: 0)),
@@ -425,23 +521,125 @@ private fun WrapAttestationCard(
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
-            // The fourth possibility the app can act on: the number is simply
-            // wrong. A meter swap is the fifth and is not offered, because the
-            // app cannot yet record one and a button that pretends otherwise
-            // would collect an answer it throws away.
+            // The remaining two things a backwards reading can mean. Both are
+            // answerable now: the number is wrong, or the meter is a different
+            // physical device than the one the history was built on. That second
+            // button used to be a sentence telling the household to report it
+            // from Ayuda, which is a dead end dressed as an answer.
             RzSecondaryButton(
                 text = stringResource(R.string.reading_confirm_wrap_misread),
                 onClick = onFix,
                 modifier = Modifier.fillMaxWidth(),
             )
+            RzSecondaryButton(
+                text = stringResource(R.string.reading_confirm_wrap_swap),
+                onClick = onDeclareReplacement,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
-        Text(
-            stringResource(R.string.reading_confirm_wrap_swap_note),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.outline,
-            modifier = Modifier.padding(top = RzSpacing.sm),
-        )
     }
+}
+
+/**
+ * Collects the two readings that bridge a meter swap.
+ *
+ * Saving without them is deliberately allowed. A household told on the doorstep
+ * that their meter is being changed frequently never sees the final reading of
+ * the old one, and blocking until they do would leave them unable to record the
+ * swap at all -- which is the state this whole change exists to end. Marking the
+ * boundary alone already stops every later reading from being compared against a
+ * register that no longer exists; only the one interval spanning the swap stays
+ * undetermined, and it says so.
+ */
+@Composable
+private fun MeterReplacementDialog(
+    previousReadingKwh: Int,
+    currentReadingKwh: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (MeterReplacement) -> Unit,
+) {
+    var oldFinal by remember { mutableStateOf("") }
+    var newStart by remember { mutableStateOf("") }
+    val oldFinalValue = oldFinal.toIntOrNull()
+    val newStartValue = newStart.toIntOrNull()
+    val onRemoved = oldFinalValue?.minus(previousReadingKwh)
+    val onInstalled = newStartValue?.let { currentReadingKwh - it }
+    val bothGiven = onRemoved != null && onInstalled != null
+    val negative = bothGiven && (onRemoved!! < 0 || onInstalled!! < 0)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.reading_confirm_swap_title)) },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(RzSpacing.sm),
+            ) {
+                Text(
+                    stringResource(R.string.reading_confirm_swap_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedTextField(
+                    value = oldFinal,
+                    onValueChange = { oldFinal = it.filter(Char::isDigit).take(8) },
+                    label = { Text(stringResource(R.string.reading_confirm_swap_old_final)) },
+                    supportingText = {
+                        Text(
+                            stringResource(
+                                R.string.reading_confirm_swap_old_final_help,
+                                formatKwh(previousReadingKwh),
+                            ),
+                        )
+                    },
+                    isError = onRemoved != null && onRemoved!! < 0,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                )
+                OutlinedTextField(
+                    value = newStart,
+                    onValueChange = { newStart = it.filter(Char::isDigit).take(8) },
+                    label = { Text(stringResource(R.string.reading_confirm_swap_new_start)) },
+                    supportingText = { Text(stringResource(R.string.reading_confirm_swap_new_start_help)) },
+                    isError = onInstalled != null && onInstalled!! < 0,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                )
+                // The arithmetic shown before it is committed, with the two
+                // halves named: a household that mistyped one of them can only
+                // tell which by seeing which half came out wrong.
+                if (negative) {
+                    Text(
+                        stringResource(R.string.reading_confirm_swap_invalid),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = RzTheme.extendedColors.warningText,
+                    )
+                } else if (bothGiven) {
+                    Text(
+                        stringResource(
+                            R.string.reading_confirm_swap_preview,
+                            formatKwh(onRemoved!! + onInstalled!!),
+                            formatKwh(onRemoved!!),
+                            formatKwh(onInstalled!!),
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = bothGiven && !negative,
+                onClick = { onConfirm(MeterReplacement(oldFinalValue, newStartValue)) },
+            ) { Text(stringResource(R.string.reading_confirm_swap_save)) }
+        },
+        dismissButton = {
+            TextButton(onClick = { onConfirm(MeterReplacement()) }) {
+                Text(stringResource(R.string.reading_confirm_swap_skip))
+            }
+        },
+    )
 }
 
 @Composable

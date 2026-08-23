@@ -19,7 +19,44 @@ data class HistoryReadingEntry(
      * going back to reading the wrap as a reading that went backwards.
      */
     val wrapsSincePrevious: Int? = null,
+    /**
+     * Set when CFE replaced the physical meter between the previous reading and
+     * this one. Null for every ordinary reading.
+     *
+     * This is the fifth thing a reading that goes backwards can mean, and the
+     * only one the app could not record. Until it could, a household whose meter
+     * was swapped -- which CFE has been doing at scale as it moves people to
+     * digital registers -- was broken permanently: every later reading compared
+     * against a history from a device that no longer exists.
+     */
+    val meterReplacement: MeterReplacement? = null,
 )
+
+/**
+ * A meter swap, described by the two readings that bridge it.
+ *
+ * A replacement is not a rollover and must never be treated as one. A rollover
+ * is one register passing its maximum, so the capacity closes the arithmetic. A
+ * replacement is two different registers, and nothing about the new one's value
+ * can be derived from the old one's: consumption across the swap is what the
+ * removed meter still had to give plus what the installed meter has counted
+ * since.
+ *
+ * Both fields are nullable and neither is ever defaulted. A new meter usually
+ * starts at zero, and "usually" is not a reading: refurbished units are
+ * installed with a nonzero register, and assuming zero on one of those invents
+ * however much it already showed. The app asks, pre-fills nothing it did not
+ * hear, and reports the interval as undetermined until it is told.
+ */
+data class MeterReplacement(
+    /** Last value read off the meter that was removed, if the household knows it. */
+    val previousMeterFinalKwh: Int? = null,
+    /** Value the installed meter started at. Usually zero, never assumed to be. */
+    val newMeterStartKwh: Int? = null,
+) {
+    /** True once both boundary readings are known and consumption can be closed. */
+    val isComplete: Boolean get() = previousMeterFinalKwh != null && newMeterStartKwh != null
+}
 
 enum class HistoryUnit { MXN, KWH }
 

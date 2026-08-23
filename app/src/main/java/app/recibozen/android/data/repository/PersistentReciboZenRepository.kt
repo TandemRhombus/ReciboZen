@@ -15,6 +15,7 @@ import app.recibozen.android.core.model.ConfidenceLevel
 import app.recibozen.android.core.model.OpportunityLevel
 import app.recibozen.android.core.model.HistoryUnit
 import app.recibozen.android.core.model.PlanActionStatus
+import app.recibozen.android.core.model.MeterReplacement
 import app.recibozen.android.core.model.ReadingMethod
 import app.recibozen.android.core.model.EntitlementTier
 import app.recibozen.android.core.model.ElectricServiceIdentity
@@ -699,6 +700,18 @@ internal object SessionJsonCodec {
                     // nobody was asked, zero means the household said it did not
                     // wrap. Writing 0 for both would turn silence into testimony.
                     put("wrapsSincePrevious", reading.wrapsSincePrevious ?: JSONObject.NULL)
+                    // Written as an object rather than two flat keys so that
+                    // "no replacement" and "a replacement whose readings are
+                    // still missing" stay distinguishable on the way back in.
+                    put(
+                        "meterReplacement",
+                        reading.meterReplacement?.let { replacement ->
+                            JSONObject().apply {
+                                put("previousMeterFinalKwh", replacement.previousMeterFinalKwh ?: JSONObject.NULL)
+                                put("newMeterStartKwh", replacement.newMeterStartKwh ?: JSONObject.NULL)
+                            }
+                        } ?: JSONObject.NULL,
+                    )
                 })
             }
         })
@@ -909,6 +922,14 @@ internal object SessionJsonCodec {
                         timestampEpochMillis = item.optNullableLong("timestamp"),
                         wrapsSincePrevious = item.optNullableInt("wrapsSincePrevious")
                             ?.takeIf { it >= 0 },
+                        meterReplacement = item.optJSONObject("meterReplacement")?.let { replacement ->
+                            MeterReplacement(
+                                previousMeterFinalKwh = replacement.optNullableInt("previousMeterFinalKwh")
+                                    ?.takeIf { it >= 0 },
+                                newMeterStartKwh = replacement.optNullableInt("newMeterStartKwh")
+                                    ?.takeIf { it >= 0 },
+                            )
+                        },
                     ),
                 )
             }

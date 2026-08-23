@@ -1,5 +1,6 @@
 package app.recibozen.android.core.calculation
 
+import app.recibozen.android.core.model.MeterReplacement
 import kotlin.math.roundToInt
 
 /**
@@ -30,9 +31,11 @@ sealed interface MeterDelta {
         /** How many times the register wrapped. 0 for an ordinary interval. */
         val wraps: Int,
         val multiplier: Int,
+        /** True when this interval spans a meter the household said was replaced. */
+        val acrossMeterReplacement: Boolean = false,
     ) : MeterDelta {
-        /** True when this figure rests on the user attesting a wrap, not on arithmetic alone. */
-        val restsOnAttestation: Boolean get() = wraps > 0
+        /** True when this figure rests on the user attesting something, not on arithmetic alone. */
+        val restsOnAttestation: Boolean get() = wraps > 0 || acrossMeterReplacement
     }
 
     /**
@@ -60,6 +63,14 @@ sealed interface MeterDelta {
 
         /** The implied daily rate is far outside anything this household does. */
         RATE_IMPLAUSIBLE,
+
+        /**
+         * A meter replacement was declared but the two readings that bridge it
+         * were not, so the interval cannot be closed. There are no candidates to
+         * offer: unlike a wrap, nothing about the new register can be derived
+         * from the old one.
+         */
+        METER_REPLACED,
     }
 
     /** One arithmetically possible reading of events, with what it would imply. */
@@ -92,6 +103,10 @@ sealed interface MeterDelta {
          * @param plausibleDailyKwh the household's own established pace, used to
          *   rank candidates and to notice an interval long enough to hide a wrap.
          *   Null disables both checks rather than substituting a made-up pace.
+         * @param replacement set when the physical meter changed inside this
+         *   interval. It short-circuits everything else: the two readings belong
+         *   to different registers, so neither the capacity nor a wrap count
+         *   means anything across them.
          */
         fun consumption(
             previousKwh: Int,
@@ -101,8 +116,15 @@ sealed interface MeterDelta {
             multiplier: Int = 1,
             attestedWraps: Int? = null,
             plausibleDailyKwh: Double? = null,
+            replacement: MeterReplacement? = null,
         ): MeterDelta {
             val factor = multiplier.coerceAtLeast(1)
+
+            // Before every other check. A replacement makes the capacity
+            // comparison meaningless -- the readings are off two different
+            // registers, and a four-dial meter swapped for a six-digit one would
+            // otherwise trip READING_EXCEEDS_CAPACITY on a perfectly good pair.
+            if (replacement != null) return acrossReplacement(previousKwh, currentKwh, replacement, factor)
 
             // A reading at or above capacity contradicts the attested digit count.
             // Do not truncate the reading and do not widen the capacity: one of the
@@ -142,6 +164,35 @@ sealed interface MeterDelta {
                 return Undecidable(Reason.RATE_IMPLAUSIBLE)
             }
             return Measured(straight, wraps = 0, multiplier = factor)
+        }
+
+        /**
+         * Consumption across a meter swap: what the removed register still had
+         * to give, plus what the installed one has counted since.
+         *
+         * Refuses rather than guesses in both directions. Without either
+         * boundary reading there is no arithmetic to do, and a negative half
+         * means one of the two numbers is wrong -- a "final" reading below the
+         * previous one, or a starting value above the current one -- which the
+         * household has to correct, not the app.
+         */
+        private fun acrossReplacement(
+            previousKwh: Int,
+            currentKwh: Int,
+            replacement: MeterReplacement,
+            factor: Int,
+        ): MeterDelta {
+            val oldFinal = replacement.previousMeterFinalKwh ?: return Undecidable(Reason.METER_REPLACED)
+            val newStart = replacement.newMeterStartKwh ?: return Undecidable(Reason.METER_REPLACED)
+            val onRemovedMeter = oldFinal - previousKwh
+            val onInstalledMeter = currentKwh - newStart
+            if (onRemovedMeter < 0 || onInstalledMeter < 0) return Undecidable(Reason.METER_REPLACED)
+            return Measured(
+                kwh = (onRemovedMeter + onInstalledMeter) * factor,
+                wraps = 0,
+                multiplier = factor,
+                acrossMeterReplacement = true,
+            )
         }
 
         /**

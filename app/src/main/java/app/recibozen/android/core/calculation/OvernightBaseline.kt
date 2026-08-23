@@ -92,6 +92,10 @@ object OvernightBaselineCalculator {
                     capacityKwh = register.capacityKwh,
                     multiplier = register.multiplier,
                     attestedWraps = ReadingInterval.attestedWrapsBetween(readings, from.entry, to.entry),
+                    // A meter swapped overnight is not a night this test can
+                    // measure unless the household supplied both boundary
+                    // readings, and it must never be measured by subtraction.
+                    replacement = ReadingInterval.replacementForDelta(readings, from.entry, to.entry),
                     // No pace is passed on purpose. A night is shorter than the
                     // half day MeterDelta needs before a rate means anything,
                     // and the wrap-possible check would fire on the very kind of

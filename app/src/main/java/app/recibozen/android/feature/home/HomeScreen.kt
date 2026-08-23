@@ -612,6 +612,7 @@ private fun ProjectedBillCard(uiState: HomeUiState) {
                         MeterDelta.Reason.READING_EXCEEDS_CAPACITY -> R.string.home_meter_pace_exceeds
                         MeterDelta.Reason.WRAP_POSSIBLE -> R.string.home_meter_pace_wrap_possible
                         MeterDelta.Reason.RATE_IMPLAUSIBLE -> R.string.home_meter_pace_rate
+                        MeterDelta.Reason.METER_REPLACED -> R.string.home_meter_pace_replaced
                     },
                 ),
                 style = MaterialTheme.typography.bodySmall,

@@ -1,6 +1,7 @@
 package app.recibozen.android.core.calculation
 
 import app.recibozen.android.core.model.HistoryReadingEntry
+import app.recibozen.android.core.model.MeterReplacement
 
 /**
  * How much time a pair of readings actually covers.
@@ -68,13 +69,83 @@ object ReadingInterval {
         after: HistoryReadingEntry,
         upTo: HistoryReadingEntry,
     ): Int? {
-        val from = after.timestampEpochMillis ?: return null
-        val to = upTo.timestampEpochMillis ?: return null
-        val span = readings.filter { entry ->
-            val at = entry.timestampEpochMillis ?: return@filter false
-            at > from && at <= to
-        }
+        val span = spanBetween(readings, after, upTo) ?: return null
         if (span.none { it.wrapsSincePrevious != null }) return null
         return span.sumOf { it.wrapsSincePrevious ?: 0 }
     }
+
+    /**
+     * The meter replacement declared inside the span, when there is exactly one
+     * and it is complete.
+     *
+     * Returns null when nothing was replaced, and [Ambiguous] when something was
+     * but the span cannot be closed: a replacement missing one of its boundary
+     * readings, or two swaps inside the same span. The caller must not treat
+     * that as "no replacement" -- the readings at either end came off different
+     * physical registers and subtracting them is meaningless.
+     */
+    fun replacementBetween(
+        readings: List<HistoryReadingEntry>,
+        after: HistoryReadingEntry,
+        upTo: HistoryReadingEntry,
+    ): ReplacementInSpan {
+        val span = spanBetween(readings, after, upTo) ?: return ReplacementInSpan.None
+        val declared = span.mapNotNull { it.meterReplacement }
+        return when {
+            declared.isEmpty() -> ReplacementInSpan.None
+            // Two swaps between the same pair of endpoints would need both
+            // meters' boundary readings chained, and the app has never asked for
+            // a chain. Refusing keeps it from silently using one of the two.
+            declared.size > 1 -> ReplacementInSpan.Ambiguous
+            declared.single().isComplete -> ReplacementInSpan.Declared(declared.single())
+            else -> ReplacementInSpan.Ambiguous
+        }
+    }
+
+    /**
+     * What to hand [MeterDelta.consumption] as its `replacement` for this span.
+     *
+     * The three-way answer collapses to two values there, and getting the
+     * collapse wrong is the dangerous part: an ambiguous span must arrive as an
+     * *incomplete* replacement so MeterDelta refuses, never as null, which would
+     * quietly subtract a reading off one register from a reading off another.
+     */
+    fun replacementForDelta(
+        readings: List<HistoryReadingEntry>,
+        after: HistoryReadingEntry,
+        upTo: HistoryReadingEntry,
+    ): MeterReplacement? = when (val found = replacementBetween(readings, after, upTo)) {
+        ReplacementInSpan.None -> null
+        is ReplacementInSpan.Declared -> found.replacement
+        ReplacementInSpan.Ambiguous -> MeterReplacement()
+    }
+
+    /** Readings strictly after [after] and up to [upTo], or null if either lacks a timestamp. */
+    private fun spanBetween(
+        readings: List<HistoryReadingEntry>,
+        after: HistoryReadingEntry,
+        upTo: HistoryReadingEntry,
+    ): List<HistoryReadingEntry>? {
+        val from = after.timestampEpochMillis ?: return null
+        val to = upTo.timestampEpochMillis ?: return null
+        return readings.filter { entry ->
+            val at = entry.timestampEpochMillis ?: return@filter false
+            at > from && at <= to
+        }
+    }
+}
+
+/** What a span of readings says about the meter having been replaced inside it. */
+sealed interface ReplacementInSpan {
+    /** Same physical meter at both ends. Ordinary arithmetic applies. */
+    data object None : ReplacementInSpan
+
+    /** One replacement, with both boundary readings known. */
+    data class Declared(val replacement: MeterReplacement) : ReplacementInSpan
+
+    /**
+     * A meter changed in here and the span cannot be closed. Not the same as
+     * [None]: the two endpoints belong to different registers.
+     */
+    data object Ambiguous : ReplacementInSpan
 }
