@@ -146,6 +146,18 @@ private val dacIntegerFormat: NumberFormat = NumberFormat.getIntegerInstance(Loc
 fun dacKwh(kwh: Int): String = dacIntegerFormat.format(kwh)
 
 /**
+ * A daily allowance, e.g. `18.4` or `240`.
+ *
+ * Kept to one decimal below a hundred and rounded above it. A household pacing
+ * at 7.5 kWh a day needs the half; one pacing at 240 does not, and the extra
+ * digit would only suggest a precision the underlying ceiling does not have.
+ */
+fun dacDaily(kwh: Double): String = when {
+    kwh >= 100.0 -> dacIntegerFormat.format(kwh.roundToInt())
+    else -> String.format(Locale.forLanguageTag("es-MX"), "%.1f", kwh)
+}
+
+/**
  * Grouped magnitude with an explicit sign, e.g. `+410` / `−340`. Uses U+2212, not
  * a hyphen, so the ledger column reads as arithmetic instead of as a dash.
  */

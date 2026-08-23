@@ -40,6 +40,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import app.recibozen.android.R
+import app.recibozen.android.core.calculation.DacDailyBudget
 import app.recibozen.android.core.calculation.DacRiskCalculator
 import app.recibozen.android.core.calculation.DacRiskLevel
 import app.recibozen.android.core.calculation.DacRiskSnapshot
@@ -91,6 +92,13 @@ data class DacLimitReference(
 
 data class DacUiState(
     val risk: DacRiskSnapshot = DacRiskSnapshot(),
+    /**
+     * The period ceiling turned into a rate someone can act on. Kept beside the
+     * snapshot rather than inside [DacGlance] because it rests on two facts the
+     * rolling-year rule does not carry: what this period has already used and
+     * how many days are left.
+     */
+    val dailyBudget: DacDailyBudget = DacDailyBudget.Unavailable(DacDailyBudget.Reason.NO_LIMIT),
     val tariff: String = "",
     val tariffTiers: List<DacTariffTier> = emptyList(),
     val tariffCalibrated: Boolean = false,
@@ -191,6 +199,15 @@ class DacViewModel(private val repository: ReciboZenRepository) : ViewModel() {
         }
         return DacUiState(
             risk = risk,
+            dailyBudget = DacDailyBudget.of(
+                snapshot = risk,
+                consumedKwh = energy.observedKwh,
+                daysRemaining = energy.daysRemaining,
+                // Only a live meter pace means the consumed figure was measured
+                // during this period. A closed bill or an appliance estimate is
+                // an assumption, and a budget built on it has to say so.
+                consumptionIsMeasured = energy.hasCurrentMeterProjection,
+            ),
             tariff = state.tariff,
             tariffTiers = tiers,
             tariffCalibrated = tariffCalibrated,
@@ -250,6 +267,7 @@ fun DacScreen(
                         if (uiState.risk.referenceDomesticTariffCode != null) DacEmptyCard(hasTariff = true)
                     } else {
                         DacHeroCard(uiState, glance)
+                        DacDailyBudgetCard(uiState.dailyBudget)
                         DacNextBillCard(glance)
                         DacExitActionsCard(uiState)
                         DacExitReferenceCard(uiState, onSelectDacReferenceTariff)
@@ -265,6 +283,7 @@ fun DacScreen(
 
                 else -> {
                     DacHeroCard(uiState, glance)
+                    DacDailyBudgetCard(uiState.dailyBudget)
                     DacNextBillCard(glance)
                     DacOpportunitiesCard(uiState)
                     DacHowCard(uiState)
@@ -272,6 +291,118 @@ fun DacScreen(
                 }
             }
         }
+    }
+}
+
+/**
+ * The period ceiling as a daily rate.
+ *
+ * A bimester total is not something anyone rations by. This is the same number
+ * divided by the days that are actually left, after subtracting what the period
+ * has already used -- which is why it moves as the household consumes, and why
+ * it stops being a rate at all once the ceiling is spent.
+ */
+@Composable
+private fun DacDailyBudgetCard(budget: DacDailyBudget) {
+    when (budget) {
+        // Nothing to say, and no card. The screen already explains elsewhere
+        // that the tariff has no limit or that the year is not complete; the one
+        // case worth its own line is a reader who has the history but is between
+        // periods, and the incomplete-history case, which is actionable advice.
+        is DacDailyBudget.Unavailable -> when (budget.reason) {
+            DacDailyBudget.Reason.INCOMPLETE_HISTORY -> DacInfoCard(stringResource(R.string.dac_daily_incomplete))
+            DacDailyBudget.Reason.PERIOD_CLOSED -> DacInfoCard(stringResource(R.string.dac_daily_period_closed))
+            DacDailyBudget.Reason.NO_LIMIT, DacDailyBudget.Reason.PERIOD_LENGTH_UNKNOWN -> Unit
+        }
+
+        is DacDailyBudget.Exhausted -> RzCard(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                stringResource(R.string.dac_daily_exhausted_title),
+                style = MaterialTheme.typography.titleSmall,
+                color = RzTheme.extendedColors.warningText,
+            )
+            Text(
+                stringResource(
+                    R.string.dac_daily_exhausted_body,
+                    dacKwh(budget.consumedKwh),
+                    dacKwh(budget.periodCeilingKwh),
+                    dacKwh(budget.overshootKwh),
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = RzSpacing.xs),
+            )
+            if (!budget.basedOnMeasuredConsumption) {
+                Text(
+                    stringResource(R.string.dac_daily_unmeasured, dacKwh(budget.consumedKwh)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.padding(top = RzSpacing.sm),
+                )
+            }
+        }
+
+        is DacDailyBudget.Available -> RzCard(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                stringResource(
+                    if (budget.isExitBudget) R.string.dac_daily_title_exit else R.string.dac_daily_title,
+                ),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                stringResource(R.string.dac_daily_value, dacDaily(budget.dailyKwh)),
+                style = MaterialTheme.typography.displaySmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+            Text(
+                text = if (budget.daysRemaining == 1) {
+                    stringResource(
+                        R.string.dac_daily_detail_one_day,
+                        dacKwh(budget.remainingKwh),
+                        dacKwh(budget.periodCeilingKwh),
+                    )
+                } else {
+                    stringResource(
+                        R.string.dac_daily_detail,
+                        dacKwh(budget.remainingKwh),
+                        dacKwh(budget.periodCeilingKwh),
+                        budget.daysRemaining,
+                    )
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = RzSpacing.sm),
+            )
+            Text(
+                stringResource(
+                    if (budget.isExitBudget) R.string.dac_daily_body_exit else R.string.dac_daily_body,
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = RzSpacing.xs),
+            )
+            if (!budget.basedOnMeasuredConsumption) {
+                Text(
+                    stringResource(R.string.dac_daily_unmeasured, dacKwh(budget.consumedKwh)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = RzTheme.extendedColors.warningText,
+                    modifier = Modifier.padding(top = RzSpacing.sm),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DacInfoCard(text: String) {
+    RzCard(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

@@ -107,6 +107,18 @@
     <string name="dac_max_current">Periodo actual</string>
     <string name="dac_max_following">Próximo periodo</string>
     <string name="dac_max_following_note">El máximo del próximo periodo supone que este cierra en la proyección y que dura los mismos días.</string>
+    <string name="dac_daily_title">Cuánto puedes gastar al día</string>
+    <string name="dac_daily_title_exit">Cuánto gastar al día para salir de DAC</string>
+    <string name="dac_daily_value">%1$s kWh al día</string>
+    <string name="dac_daily_detail">Te quedan %1$s kWh de los %2$s del periodo, repartidos en %3$d días.</string>
+    <string name="dac_daily_detail_one_day">Te quedan %1$s kWh de los %2$s del periodo y hoy es el último día.</string>
+    <string name="dac_daily_body">Si te mantienes en ese ritmo, tu promedio de los últimos 12 meses cierra el periodo por debajo del límite de tu tarifa.</string>
+    <string name="dac_daily_body_exit">Ese es el ritmo con el que tu promedio de los últimos 12 meses vuelve a quedar por debajo del límite y sales de DAC.</string>
+    <string name="dac_daily_unmeasured">Ese cálculo supone que llevas %1$s kWh en este periodo, y esa cifra no viene de lecturas tuyas de estos días. Registra una lectura para que sea real.</string>
+    <string name="dac_daily_exhausted_title">Ya pasaste el máximo del periodo</string>
+    <string name="dac_daily_exhausted_body">Llevas %1$s kWh y el máximo era %2$s: vas %3$s kWh por encima. Ya no hay un ritmo diario que lo evite en este periodo; lo que gastes de menos a partir de hoy reduce cuánto te pasas.</string>
+    <string name="dac_daily_incomplete">Todavía no podemos darte un máximo diario: hace falta un año de recibos para saber contra qué límite medirlo.</string>
+    <string name="dac_daily_period_closed">Este periodo ya cerró. El máximo diario aparece cuando empiece el siguiente.</string>
     <string name="dac_next_bill_need_reading">Registra una lectura del medidor para proyectar este periodo.</string>
 
     <string name="dac_opportunities_title">Lo que más podría ayudarte</string>
