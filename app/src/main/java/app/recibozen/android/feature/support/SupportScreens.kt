@@ -5,6 +5,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -41,6 +42,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.core.net.toUri
 import app.recibozen.android.BuildConfig
+import androidx.annotation.ChecksSdkIntAtLeast
+import androidx.compose.foundation.layout.FlowRow
 import app.recibozen.android.R
 import app.recibozen.android.core.components.RzBannerTone
 import app.recibozen.android.core.components.RzCard
@@ -53,6 +56,11 @@ import app.recibozen.android.core.designsystem.ReciboZenTheme
 import app.recibozen.android.core.designsystem.RzIcons
 import app.recibozen.android.core.designsystem.RzSpacing
 import app.recibozen.android.core.model.EntitlementTier
+import app.recibozen.android.core.calculation.NightUnplugAdvice
+import app.recibozen.android.core.calculation.NightUnplugAdvisor
+import app.recibozen.android.core.notifications.NightUnplugScheduler
+import app.recibozen.android.core.notifications.NightUnplugSettings
+import app.recibozen.android.core.notifications.NightUnplugStore
 import app.recibozen.android.core.notifications.PremiumFeaturePolicy
 import app.recibozen.android.core.notifications.ReadingReminderScheduler
 import app.recibozen.android.core.notifications.ReadingReminderSettings
@@ -258,14 +266,36 @@ fun NotificationSettingsRoute(navController: NavHostController, repository: Reci
     val session by repository.session.collectAsStateWithLifecycle()
     val store = remember(context) { ReadingReminderStore(context) }
     var settings by remember { mutableStateOf(store.load()) }
+    val nightStore = remember(context) { NightUnplugStore(context) }
+    var nightSettings by remember { mutableStateOf(nightStore.load()) }
     val tier = session.entitlementTier
+    // What the reminder would actually name tonight, from the household's own
+    // inventory. Showing it here is the difference between a switch someone
+    // trusts and one they turn on, get a vague nudge from, and turn off.
+    val nightAdvice = remember(session.customAppliances, session.applianceHoursPerWeek) {
+        NightUnplugAdvisor.advise(session.customAppliances, session.applianceHoursPerWeek)
+    }
+    // Which switch asked for the permission, so the grant turns on that one.
+    var pendingPermissionFor by remember { mutableStateOf<PendingReminder?>(null) }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) {
-            settings = settings.copy(enabled = true)
-            store.save(settings)
-            ReadingReminderScheduler.apply(context, settings, tier)
+        val requested = pendingPermissionFor
+        pendingPermissionFor = null
+        if (!granted) return@rememberLauncherForActivityResult
+        when (requested) {
+            PendingReminder.READING -> {
+                settings = settings.copy(enabled = true)
+                store.save(settings)
+                ReadingReminderScheduler.apply(context, settings, tier)
+            }
+            PendingReminder.NIGHT -> {
+                nightSettings = nightSettings.copy(enabled = true)
+                nightStore.save(nightSettings)
+                NightUnplugScheduler.apply(context, nightSettings, tier)
+            }
+            null -> Unit
         }
     }
+
 
     NotificationSettingsScreen(
         tier = tier,
@@ -274,9 +304,8 @@ fun NotificationSettingsRoute(navController: NavHostController, repository: Reci
         onViewPremium = { navController.navigate(Routes.Premium) },
         onEnabledChange = enabledChange@ { enabled ->
             if (!PremiumFeaturePolicy.notificationsAllowed(tier)) return@enabledChange
-            if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-            ) {
+            if (enabled && needsNotificationPermission(context)) {
+                pendingPermissionFor = PendingReminder.READING
                 permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             } else {
                 settings = settings.copy(enabled = enabled)
@@ -289,8 +318,44 @@ fun NotificationSettingsRoute(navController: NavHostController, repository: Reci
             store.save(settings)
             ReadingReminderScheduler.apply(context, settings, tier)
         },
+        nightSettings = nightSettings,
+        nightAdvice = nightAdvice,
+        onNightEnabledChange = nightChange@ { enabled ->
+            if (!PremiumFeaturePolicy.notificationsAllowed(tier)) return@nightChange
+            if (enabled && needsNotificationPermission(context)) {
+                pendingPermissionFor = PendingReminder.NIGHT
+                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            } else {
+                nightSettings = nightSettings.copy(enabled = enabled)
+                nightStore.save(nightSettings)
+                NightUnplugScheduler.apply(context, nightSettings, tier)
+            }
+        },
+        onNightHourChange = { hour ->
+            nightSettings = nightSettings.copy(hour = hour)
+            nightStore.save(nightSettings)
+            NightUnplugScheduler.apply(context, nightSettings, tier)
+        },
     )
 }
+
+/** Which switch is waiting on the POST_NOTIFICATIONS grant. */
+private enum class PendingReminder { READING, NIGHT }
+
+/**
+ * Whether turning a reminder on has to ask for the runtime notification
+ * permission first.
+ *
+ * The annotation is what lets the caller reference POST_NOTIFICATIONS without a
+ * version check of its own: returning true does imply API 33 or newer, even
+ * though the reverse is not true. Inlining the check at each call site instead
+ * would repeat it, and hiding it behind an unannotated helper is what made lint
+ * flag both launch sites.
+ */
+@ChecksSdkIntAtLeast(api = Build.VERSION_CODES.TIRAMISU)
+private fun needsNotificationPermission(context: Context): Boolean =
+    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
 
 @Composable
 fun NotificationSettingsScreen(
@@ -300,6 +365,11 @@ fun NotificationSettingsScreen(
     onViewPremium: () -> Unit,
     onEnabledChange: (Boolean) -> Unit,
     onIntervalChange: (Int) -> Unit,
+    nightSettings: NightUnplugSettings = NightUnplugSettings(),
+    /** What the night reminder would name right now, or null with nothing to name. */
+    nightAdvice: NightUnplugAdvice? = null,
+    onNightEnabledChange: (Boolean) -> Unit = {},
+    onNightHourChange: (Int) -> Unit = {},
 ) {
     val allowed = PremiumFeaturePolicy.notificationsAllowed(tier)
     Scaffold(topBar = { RzFlowTopBar(stringResource(R.string.notifications_title), onBack) }) { padding ->
@@ -339,6 +409,73 @@ fun NotificationSettingsScreen(
                         )
                     }
                 }
+            }
+            RzCard(modifier = Modifier.fillMaxWidth()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(stringResource(R.string.notifications_night_setting), style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            stringResource(R.string.notifications_night_setting_body),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = nightSettings.enabled && allowed,
+                        onCheckedChange = onNightEnabledChange,
+                        enabled = allowed,
+                    )
+                }
+                Text(
+                    stringResource(R.string.notifications_night_hour),
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(top = RzSpacing.lg),
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(RzSpacing.sm),
+                    verticalArrangement = Arrangement.spacedBy(RzSpacing.xs),
+                    modifier = Modifier.padding(top = RzSpacing.sm),
+                ) {
+                    NightUnplugSettings.SUPPORTED_HOURS.forEach { hour ->
+                        RzFilterChip(
+                            text = stringResource(R.string.notifications_night_hour_option, hour),
+                            selected = nightSettings.hour == hour,
+                            onClick = { onNightHourChange(hour) },
+                            enabled = allowed,
+                        )
+                    }
+                }
+                // The preview is the honest part: it shows exactly what the
+                // reminder can say tonight, so nobody switches this on expecting
+                // names the inventory cannot supply.
+                if (nightAdvice == null) {
+                    Text(
+                        stringResource(R.string.notifications_night_no_inventory),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = RzSpacing.md),
+                    )
+                } else {
+                    // map before joinToString: map is inline, so stringResource
+                    // stays in composable scope. joinToString's transform is not,
+                    // and reaching for LocalContext.getString instead skips the
+                    // recomposition a configuration change needs.
+                    val named = nightAdvice.items.take(3).map { item ->
+                        stringResource(R.string.notifications_night_item, item.name, item.standbyWatts)
+                    }
+                    Text(
+                        stringResource(R.string.notifications_night_preview, named.joinToString(", ")),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = RzSpacing.md),
+                    )
+                }
+                Text(
+                    stringResource(R.string.notifications_night_inventory_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.padding(top = RzSpacing.xs),
+                )
             }
             Text(stringResource(R.string.notifications_delivery_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
         }

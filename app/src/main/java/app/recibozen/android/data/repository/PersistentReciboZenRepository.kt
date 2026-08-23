@@ -67,6 +67,20 @@ import kotlin.math.roundToInt
 private val Context.reciboZenDataStore by preferencesDataStore(name = "recibozen_user_state")
 
 /**
+ * Reads the stored session without building a repository.
+ *
+ * Background work needs the household's inventory, and it has no Compose scope
+ * to collect a StateFlow from. It must not open its own DataStore either: a
+ * second delegate over the same file throws, so this reuses the one this file
+ * owns. Returns an empty session when nothing has been stored, which callers
+ * have to treat as "no inventory" rather than as an error.
+ */
+internal suspend fun readStoredSession(context: Context): ReciboZenSessionState {
+    val preferences = context.applicationContext.reciboZenDataStore.data.first()
+    return SessionJsonCodec.decode(preferences[stringPreferencesKey("session_json_v1")])
+}
+
+/**
  * Local-first repository used by the real app. DataStore owns the durable copy;
  * the inherited StateFlow keeps every Compose screen reactive and preserves the
  * narrow repository interface left by the design handoff.
