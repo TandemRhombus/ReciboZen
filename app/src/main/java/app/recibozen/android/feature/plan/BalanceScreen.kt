@@ -22,6 +22,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
 import app.recibozen.android.R
 import app.recibozen.android.core.components.RzBarSegment
 import app.recibozen.android.core.components.RzCard
@@ -132,6 +138,36 @@ fun BalanceRoute(navController: NavHostController, repository: ReciboZenReposito
     )
 }
 
+/**
+ * A colour chip beside a figure, so the bar above can be read without guessing
+ * which half is which. Drawn here rather than with [RzStackedBarRow], which is
+ * a full-width bar by contract and would ignore a fixed width.
+ */
+@Composable
+private fun BalanceLegend(text: String, color: Color, striped: Boolean) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(RzSpacing.xs)) {
+        Canvas(modifier = Modifier.size(width = 18.dp, height = 10.dp)) {
+            val radius = CornerRadius(size.height / 2, size.height / 2)
+            if (striped) {
+                drawRoundRect(color = color.copy(alpha = 0.22f), cornerRadius = radius)
+                var x = -size.height
+                while (x < size.width) {
+                    drawLine(
+                        color = color,
+                        start = Offset(x, size.height),
+                        end = Offset(x + size.height, 0f),
+                        strokeWidth = 2.5.dp.toPx(),
+                    )
+                    x += 7.dp.toPx()
+                }
+            } else {
+                drawRoundRect(color = color, cornerRadius = radius)
+            }
+        }
+        Text(text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
 @Composable
 fun BalanceScreen(
     uiState: BalanceUiState,
@@ -175,21 +211,24 @@ fun BalanceScreen(
                     height = 14.dp,
                     modifier = Modifier.padding(top = RzSpacing.lg),
                 )
+                // Swatches, not just two labels at opposite ends. The bar has a
+                // solid half and a striped half and nothing said which figure
+                // belonged to which; the reader had to guess from the order.
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = RzSpacing.sm),
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text(
-                        stringResource(R.string.balance_explained_label, uiState.explainedKwh),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    BalanceLegend(
+                        text = stringResource(R.string.balance_explained_label, uiState.explainedKwh),
+                        color = MaterialTheme.colorScheme.primary,
+                        striped = false,
                     )
-                    Text(
-                        stringResource(R.string.balance_unidentified_label, uiState.unexplainedKwh),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    BalanceLegend(
+                        text = stringResource(R.string.balance_unidentified_label, uiState.unexplainedKwh),
+                        color = MaterialTheme.colorScheme.outline,
+                        striped = true,
                     )
                 }
                 Text(

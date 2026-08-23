@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.FlowRow
@@ -27,7 +28,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
@@ -114,6 +114,15 @@ data class DacUiState(
     val rollingWindowKwh: Int get() = risk.rollingWindowKwh?.roundToInt() ?: 0
     val annualComparableKwh: Int get() = risk.annualizedRollingKwh?.roundToInt() ?: 0
 }
+
+/**
+ * Visible to tests only. The tier bar and its legend both filter on
+ * [DacTariffTier.usedKwh] being above zero, and that filter is only correct if
+ * unreached blocks really do come out at zero.
+ */
+@Suppress("FunctionName")
+fun buildTariffTiersForTest(basisKwh: Int, blocks: List<TariffBlock>): List<DacTariffTier> =
+    buildTariffTiers(basisKwh, blocks)
 
 private fun buildTariffTiers(basisKwh: Int, blocks: List<TariffBlock>): List<DacTariffTier> {
     if (basisKwh <= 0 || blocks.isEmpty()) return emptyList()
@@ -728,27 +737,28 @@ private fun DacTiersCard(uiState: DacUiState) {
             RzTheme.extendedColors.warning,
             MaterialTheme.colorScheme.surfaceVariant,
         )
+        // Only the tiers this period actually reaches. Every block of the tariff
+        // used to be mapped whether or not it was used, so a household inside the
+        // first block got a bar with two empty slivers on the right and a legend
+        // reading "Intermedio · 0 kWh". The colour still comes from the tier's
+        // real position, so "Excedente" stays the same colour whether or not the
+        // intermediate tier is on screen.
+        val reachedTiers = uiState.tariffTiers
+            .mapIndexed { index, tier -> index to tier }
+            .filter { (_, tier) -> tier.usedKwh > 0 }
         RzStackedBarRow(
-            segments = uiState.tariffTiers.mapIndexed { index, tier ->
+            segments = reachedTiers.map { (index, tier) ->
                 RzBarSegment(weight = tier.fraction, color = tierColors[index % tierColors.size])
             },
             height = 16.dp,
             modifier = Modifier.padding(top = RzSpacing.md),
         )
-        Box(modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.xs)) {
-            Text(
-                stringResource(R.string.dac_today_marker),
-                style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.align(
-                    BiasAlignment(horizontalBias = uiState.todayMarkerFraction * 2f - 1f, verticalBias = -1f),
-                ),
-            )
-        }
+        TodayMarker(fraction = uiState.todayMarkerFraction)
         Column(
             modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.sm),
             verticalArrangement = Arrangement.spacedBy(RzSpacing.sm),
         ) {
-            uiState.tariffTiers.forEachIndexed { index, tier ->
+            reachedTiers.forEach { (index, tier) ->
                 TariffTierRow(tierColors[index % tierColors.size], index, tier)
             }
         }
@@ -866,6 +876,29 @@ private fun DacNote(text: String) {
         color = MaterialTheme.colorScheme.outline,
         modifier = Modifier.padding(top = RzSpacing.xs),
     )
+}
+
+/**
+ * The "hoy" label under the tier bar, aligned to [fraction] of its width.
+ *
+ * Two weighted spacers rather than a BiasAlignment. Bias positions the label's
+ * *centre* at the fraction, so at 0 and at 1 half the label hangs outside the
+ * row and is clipped -- and today sitting at either end is the normal state at
+ * the start and end of a period. Splitting the leftover width in the same ratio
+ * slides the label between the two edges without ever crossing them.
+ */
+@Composable
+private fun TodayMarker(fraction: Float) {
+    val clamped = fraction.coerceIn(0f, 1f)
+    Row(modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.xs)) {
+        if (clamped > 0f) Spacer(modifier = Modifier.weight(clamped))
+        Text(
+            stringResource(R.string.dac_today_marker),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (clamped < 1f) Spacer(modifier = Modifier.weight(1f - clamped))
+    }
 }
 
 @Composable

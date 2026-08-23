@@ -44,6 +44,7 @@
 
     <string name="history_current_period_title">Periodo en curso — proyección</string>
     <string name="history_current_period_badge">Proyección</string>
+    <string name="history_current_period_progress">Llevas %1$d de %2$d días del periodo. Lo rayado es lo que falta, y es proyección.</string>
     <string name="history_current_period_caption_dynamic">Esta tarjeta sólo aparece cuando existe una lectura posterior al último recibo importado.</string>
 
     <string name="history_previous_bills_title">Recibos anteriores — valores reales</string>
