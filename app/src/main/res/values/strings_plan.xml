@@ -164,4 +164,21 @@
     <string name="dac_tariff_basis_observed">La barra es lo que llevas consumido, %1$s kWh. Sin una proyección no podemos dibujar lo que falta del periodo, así que tampoco marcamos dónde vas.</string>
     <string name="dac_today_marker">▲ hoy</string>
     <string name="dac_tariff_footnote">El rango excedente encarece el kWh dentro de este periodo. Es distinto del promedio anual de arriba.</string>
+    <!-- AI savings advice -->
+    <string name="savings_ai_title">Plan de ahorro</string>
+    <string name="plan_savings_ai_link_title">Plan de ahorro con IA</string>
+    <string name="plan_savings_ai_link_description">Qué configurar en tus aparatos para gastar menos, según tu propio consumo</string>
+    <string name="savings_ai_kind_setting">CONFIGURACIÓN</string>
+    <string name="savings_ai_kind_maintenance">MANTENIMIENTO</string>
+    <string name="savings_ai_kind_habit">HÁBITO</string>
+    <string name="savings_ai_target">Déjalo en %1$s</string>
+    <string name="savings_ai_target_safety">Déjalo en %1$s — no lo bajes de ahí, es un límite sanitario</string>
+    <string name="savings_ai_saving">Ahorra unos %1$d kWh en el periodo (%2$d%% de ese aparato)</string>
+    <string name="savings_ai_provenance_note">Los porcentajes los sugiere la IA; los kWh y los pesos los calcula la app con tu tarifa.</string>
+    <string name="savings_ai_needs_premium">El plan de ahorro con IA es parte de Premium.</string>
+    <string name="savings_ai_nothing_measured">Todavía no hay consumo medido para aconsejar sobre él. Registra una lectura y da de alta tus aparatos.</string>
+    <string name="savings_ai_error_quota">Se acabaron tus %1$d planes de este mes.</string>
+    <string name="savings_ai_error_too_fast">Vas muy rápido. Vuelve a intentar en %1$d segundos.</string>
+    <string name="savings_ai_error_no_plan">No se pudo armar un plan con estos aparatos.</string>
+    <string name="savings_ai_error_unavailable">No se pudo consultar ahora. Intenta más tarde.</string>
 </resources>

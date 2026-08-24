@@ -40,6 +40,7 @@ import app.recibozen.android.feature.support.LegalRoute
 import app.recibozen.android.feature.support.NotificationSettingsRoute
 import app.recibozen.android.feature.support.ReportIssueRoute
 import app.recibozen.android.feature.support.SupportCenterRoute
+import app.recibozen.android.feature.plan.SavingsAdviceRoute
 import app.recibozen.android.feature.premium.PremiumRoute
 
 @Composable
@@ -61,6 +62,7 @@ fun ReciboZenNavHost(
         composable(Routes.Home) { HomeRoute(navController, repository) }
         composable(Routes.Appliances) { AppliancesRoute(navController, repository) }
         composable(Routes.Plan) { PlanRoute(navController, repository) }
+        composable(Routes.SavingsAdvice) { SavingsAdviceRoute(navController, repository) }
         composable(Routes.History) { HistoryRoute(navController, repository) }
         composable(Routes.BillImport) { BillImportRoute(navController, repository) }
 
