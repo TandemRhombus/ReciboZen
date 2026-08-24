@@ -46,6 +46,34 @@ La prioridad de salida es `SETTING` sobre `HABIT`, y por una razón concreta:
 una configuración se cambia una vez y sigue pagando; un hábito hay que volver a
 decidirlo todos los días.
 
+## Las temperaturas no las pone el modelo
+
+En la primera llamada real, el modelo recomendó bajar un boiler a **40-45 °C**:
+justo el rango donde prolifera la legionela. El prompt ya le prohibía poner en
+riesgo la salud. La ignoró.
+
+Perseguir eso categoría por categoría era el instinto equivocado —`KITCHEN`
+también tiene hornos, donde 180 °C es normal, y el caso siguiente habría sido un
+congelador a -18— así que la regla es la misma que ya se aplica al dinero: una
+temperatura segura es un dato verificable, no una opinión.
+
+**El modelo no puede escribir ninguna cifra de temperatura.** Declara
+`settingKind` y el Worker adjunta la cifra desde `SETTING_TARGETS`. Una
+recomendación que la escriba de todos modos se descarta, y un `target` que
+venga en la respuesta se ignora aunque sea correcto.
+
+| `settingKind` | Cifra | Fuente |
+|---|---|---|
+| `FRIDGE_TEMPERATURE` | 4 °C o menos | FDA |
+| `FREEZER_TEMPERATURE` | -18 °C | FDA |
+| `WATER_HEATER_TEMPERATURE` | 60 °C o más | CDC, HSE |
+| `AC_SETPOINT` | 24 a 25 °C | eficiencia, no seguridad |
+| `WASHER_TEMPERATURE` | agua fría | eficiencia, no seguridad |
+
+Las tres primeras son límites sanitarios y no se relajan para ahorrar energía.
+Hay una prueba que fija cada cifra: editarlas en silencio rompe la suite en vez
+de romperle el estómago a alguien.
+
 ## La regla que sostiene el esquema de evidencia
 
 El modelo **no decide de dónde viene su propia información**. El campo `source`

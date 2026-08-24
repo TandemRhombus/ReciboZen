@@ -26,6 +26,29 @@ const EFFORTS = ["ONE_TIME", "DAILY"];
 const COMFORT = ["NONE", "MINOR", "NOTICEABLE"];
 const DAC_RISKS = ["NONE", "APPROACHING", "AT_RISK", "IN_DAC"];
 
+/**
+ * The temperature figures the app displays, kept here so there is exactly one
+ * copy of each and it is covered by tests.
+ *
+ * Sources: FDA for cold storage — refrigerator at or below 4 °C, freezer at
+ * -18 °C; between 4 °C and 60 °C Salmonella, E. coli and Listeria double about
+ * every 20 minutes. CDC and HSE for hot water — stored at 60 °C or above, since
+ * legionella grows between roughly 25 °C and 50 °C.
+ *
+ * The first three are safety floors and must never be relaxed to save energy.
+ * AC_SETPOINT is comfort and efficiency only, which is why it reads as a range
+ * rather than a limit.
+ */
+export const SETTING_TARGETS = {
+  FRIDGE_TEMPERATURE: { text: "4 °C o menos", safetyLimit: true },
+  FREEZER_TEMPERATURE: { text: "-18 °C", safetyLimit: true },
+  WATER_HEATER_TEMPERATURE: { text: "60 °C o más", safetyLimit: true },
+  AC_SETPOINT: { text: "24 a 25 °C", safetyLimit: false },
+  WASHER_TEMPERATURE: { text: "agua fría", safetyLimit: false },
+};
+
+const SETTING_KINDS = [...Object.keys(SETTING_TARGETS), "NONE"];
+
 export function validate(body) {
   if (!body || typeof body !== "object") return badRequest("body", "expected_object");
 
@@ -94,11 +117,12 @@ export const SYSTEM_PROMPT = [
   "4. Se realista con estimatedReductionPercent. Es el porcentaje del consumo DE ESE APARATO, no del",
   "   recibo. Subir dos grados un aire ronda 15-25%; un termostato de refrigerador mal puesto ronda",
   "   10-20%. Si no tienes una base razonable, usa una cifra conservadora.",
-  "5. SALUD, regla absoluta. NUNCA recomiendes bajar un calentador de agua o boiler por debajo de",
-  "   60 grados centigrados. Entre 25 y 50 grados prolifera la legionela, que causa neumonia grave.",
-  "   Para ahorrar en el boiler propon otras cosas: aislar el tanque y las tuberias, usar temporizador,",
-  "   reparar fugas, bajar el tiempo de la regadera. Nunca la temperatura. Tampoco apagues un",
-  "   refrigerador ni subas su temperatura mas alla de lo seguro para conservar alimentos.",
+  "5. NUNCA escribas una cifra de temperatura. Ni grados, ni °C, ni rangos como 40-45. Nunca.",
+  "   Cuando el consejo sea ajustar un termostato, di QUE ajustar y declaralo en settingKind; la app",
+  "   pone la cifra correcta desde su propia tabla verificada. Esto no es un capricho: bajar un boiler",
+  "   a 40 grados lo mete en el rango donde prolifera la legionela, y subir un refrigerador por encima",
+  "   de 4 grados mete la comida en la zona donde las bacterias se duplican cada 20 minutos. Esas",
+  "   cifras no son opinables y no son tuyas.",
   "6. Ordena por lo que de verdad mueve la aguja: el aparato que mas kWh consume merece tu mejor idea.",
   "   No repartas consejos parejos entre aparatos irrelevantes.",
   "7. Escribe en espanol claro de Mexico, tuteando, sin jerga tecnica y sin exagerar los beneficios.",
@@ -136,8 +160,14 @@ export const OUTPUT_TOOL = {
             },
             effort: { type: "string", enum: EFFORTS },
             comfortImpact: { type: "string", enum: COMFORT },
+            settingKind: {
+              type: "string",
+              enum: SETTING_KINDS,
+              description:
+                "Que termostato se ajusta, para que la app ponga la cifra correcta. NONE si el consejo no es de temperatura. Tu nunca escribes grados.",
+            },
           },
-          required: ["applianceIndex", "kind", "title", "howTo", "estimatedReductionPercent", "effort", "comfortImpact"],
+          required: ["applianceIndex", "kind", "title", "howTo", "estimatedReductionPercent", "effort", "comfortImpact", "settingKind"],
           additionalProperties: false,
         },
       },
@@ -183,20 +213,30 @@ const isFiniteNumber = (value) => typeof value === "number" && Number.isFinite(v
 // on advice that can put someone in hospital, the prompt is a request and the
 // code is the rule.
 //
-// Deliberately blunt. Any temperature figure under 60 anywhere in a WATER
-// recommendation kills it, even one mentioned only to be rejected. A dropped
-// good tip costs a tip; a kept bad one costs a lung infection.
-const TEMPERATURE_MENTION = /°\s*c|grados|centígrados|centigrados/i;
+const TEMPERATURE_MENTION = /°\s*c|\bgrados?\b|cent[ií]grados|\bcelsius\b/i;
 const NUMBERS = /\d+(?:[.,]\d+)?/g;
-const MIN_SAFE_WATER_CELSIUS = 60;
 
-function unsafeWaterTemperature(category, text) {
-  if (category !== "WATER") return false;
+/**
+ * True when the text states a temperature, which the model is not allowed to
+ * do at all.
+ *
+ * The first live call proved why. Told in the prompt not to endanger anyone,
+ * the model recommended dropping a water heater to 40-45 °C — squarely inside
+ * the range where legionella multiplies. Chasing that category by category was
+ * the wrong instinct: KITCHEN also holds ovens, where 180 °C is normal, and the
+ * next case would have been freezers at -18.
+ *
+ * So the rule is the same one already applied to money. A safe temperature is a
+ * verifiable fact, not an opinion, so it comes from the table below and never
+ * from a model. A recommendation that states one anyway is discarded, because
+ * the model was told plainly not to and a text that disagrees with the table is
+ * the one thing we cannot show a user.
+ */
+function statesATemperature(text) {
   if (!TEMPERATURE_MENTION.test(text)) return false;
-  return (text.match(NUMBERS) ?? [])
-    .map((n) => Number(n.replace(",", ".")))
-    .some((value) => value >= 20 && value < MIN_SAFE_WATER_CELSIUS);
+  return (text.match(NUMBERS) ?? []).length > 0;
 }
+
 
 /**
  * Rebuilt field by field, same as every other intent. Two rules carry the most
@@ -234,10 +274,13 @@ export function parseOutput(toolInput, { input } = {}) {
     const percent = entry.estimatedReductionPercent;
     if (!isFiniteNumber(percent) || percent < 1 || percent > 60) continue;
 
-    const category = input?.appliances?.[index]?.category;
-    if (unsafeWaterTemperature(category, `${entry.title} ${entry.howTo}`)) continue;
+    if (!SETTING_KINDS.includes(entry.settingKind)) continue;
+    // The model was told plainly not to state a temperature. One that does
+    // anyway is discarded rather than corrected: a text that disagrees with the
+    // table below is the one thing we must not put in front of a user.
+    if (statesATemperature(`${entry.title} ${entry.howTo}`)) continue;
 
-    accepted.push({
+    const recommendation = {
       applianceIndex: index,
       kind: entry.kind,
       title: entry.title.slice(0, MAX_TEXT),
@@ -245,8 +288,13 @@ export function parseOutput(toolInput, { input } = {}) {
       estimatedReductionPercent: Math.round(percent * 10) / 10,
       effort: entry.effort,
       comfortImpact: entry.comfortImpact,
+      settingKind: entry.settingKind,
       source: "AI_SUGGESTION",
-    });
+    };
+    // The figure comes from our table, never from the answer.
+    const target = SETTING_TARGETS[entry.settingKind];
+    if (target) recommendation.target = target;
+    accepted.push(recommendation);
   }
   if (accepted.length === 0) return { ok: false, error: "model_output_unusable" };
 

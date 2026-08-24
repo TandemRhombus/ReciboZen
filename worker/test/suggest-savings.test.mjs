@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { validate, buildRequest, parseOutput, SYSTEM_PROMPT, OUTPUT_TOOL } from "../src/intents/suggest-savings.mjs";
+import {
+  validate, buildRequest, parseOutput, SYSTEM_PROMPT, OUTPUT_TOOL, SETTING_TARGETS,
+} from "../src/intents/suggest-savings.mjs";
 
 const HOUSE = {
   periodDays: 60,
@@ -14,18 +16,25 @@ const HOUSE = {
   ],
 };
 
+const input = () => validate(HOUSE).input;
+
+// Note what these fixtures do not contain: figures. Stating a temperature is
+// what the model is now forbidden from doing, so the fixtures cannot do it
+// either without exercising the rejection path by accident.
 const goodPlan = () => ({
   summary: "Casi la mitad de tu consumo se va en el minisplit de la recamara.",
   recommendations: [
     {
-      applianceIndex: 0, kind: "SETTING", title: "Sube el termostato a 24 grados",
+      applianceIndex: 0, kind: "SETTING", title: "Sube la temperatura del minisplit",
       howTo: "En el control remoto, con las flechas de temperatura.",
       estimatedReductionPercent: 20, effort: "ONE_TIME", comfortImpact: "MINOR",
+      settingKind: "AC_SETPOINT",
     },
     {
-      applianceIndex: 1, kind: "SETTING", title: "Baja el termostato interno a nivel medio",
-      howTo: "La perilla dentro del refrigerador, normalmente arriba a la derecha.",
-      estimatedReductionPercent: 12, effort: "ONE_TIME", comfortImpact: "NONE",
+      applianceIndex: 1, kind: "MAINTENANCE", title: "Limpia las bobinas del refrigerador",
+      howTo: "Desconectalo, ubica las bobinas atras o abajo y quitales el polvo con un cepillo.",
+      estimatedReductionPercent: 8, effort: "ONE_TIME", comfortImpact: "NONE",
+      settingKind: "NONE",
     },
   ],
 });
@@ -77,11 +86,8 @@ test("the model is told to prefer settings over habits", () => {
 });
 
 test("the model is forbidden from touching money, and never sees any", () => {
-  // The prompt says "NUNCA calcules pesos", so the word appears there by
-  // design. What must be free of money is the data: the model has to be
-  // incapable of anchoring on a peso figure it was handed.
   assert.ok(SYSTEM_PROMPT.includes("NUNCA calcules pesos"));
-  const payload = buildRequest(validate(HOUSE).input).messages[0].content;
+  const payload = buildRequest(input()).messages[0].content;
   // DAC appears as a risk level, which is context the model should have.
   // What must never appear is an amount of money.
   for (const word of ["peso", "MXN", "$"]) {
@@ -90,9 +96,14 @@ test("the model is forbidden from touching money, and never sees any", () => {
   assert.ok(payload.includes("kWh"), "kWh is all it gets");
 });
 
+test("the model is forbidden from writing a temperature, and told why", () => {
+  assert.ok(SYSTEM_PROMPT.includes("NUNCA escribas una cifra de temperatura"));
+  assert.ok(SYSTEM_PROMPT.includes("legionela"), "a rule with a reason is obeyed more often than a bare ban");
+  assert.ok(SYSTEM_PROMPT.includes("settingKind"));
+});
+
 test("the inventory reaches the model with its share already computed", () => {
-  const request = buildRequest(validate(HOUSE).input);
-  const text = request.messages[0].content;
+  const text = buildRequest(input()).messages[0].content;
   assert.ok(text.includes("340 kWh"));
   assert.ok(text.includes("42.5%"), "the share is arithmetic, so we do it");
   assert.ok(text.includes("Mirage Magnum 19"));
@@ -100,7 +111,7 @@ test("the inventory reaches the model with its share already computed", () => {
 });
 
 test("the model is pinned and forced through the tool", () => {
-  const request = buildRequest(validate(HOUSE).input);
+  const request = buildRequest(input());
   assert.equal(request.model, "claude-haiku-4-5");
   assert.deepEqual(request.tool_choice, { type: "tool", name: OUTPUT_TOOL.name });
   assert.ok(request.max_tokens <= 2048);
@@ -110,7 +121,7 @@ test("the model is pinned and forced through the tool", () => {
 // --- Output ---
 
 test("a good plan comes back with the appliance links intact", () => {
-  const result = parseOutput(goodPlan(), { input: validate(HOUSE).input });
+  const result = parseOutput(goodPlan(), { input: input() });
   assert.equal(result.ok, true);
   assert.equal(result.body.recommendations.length, 2);
   assert.equal(result.body.recommendations[0].applianceIndex, 0);
@@ -121,7 +132,7 @@ test("a good plan comes back with the appliance links intact", () => {
 test("an index pointing at an appliance nobody sent is dropped", () => {
   const hallucinated = goodPlan();
   hallucinated.recommendations[1].applianceIndex = 7;
-  const result = parseOutput(hallucinated, { input: validate(HOUSE).input });
+  const result = parseOutput(hallucinated, { input: input() });
   assert.equal(result.body.recommendations.length, 1,
     "advice attached to a device that does not exist is worse than no advice");
 });
@@ -130,22 +141,25 @@ test("an impossible saving is dropped rather than shown as a promise", () => {
   for (const percent of [0, 0.5, 61, 95, 1000, -20, Number.NaN, "20"]) {
     const wild = goodPlan();
     wild.recommendations = [{ ...wild.recommendations[0], estimatedReductionPercent: percent }];
-    assert.equal(parseOutput(wild, { input: validate(HOUSE).input }).error, "model_output_unusable", String(percent));
+    assert.equal(parseOutput(wild, { input: input() }).error, "model_output_unusable", String(percent));
   }
 });
 
 test("a percentage inside the band survives, rounded to one decimal", () => {
   const plan = goodPlan();
   plan.recommendations = [{ ...plan.recommendations[0], estimatedReductionPercent: 17.3456 }];
-  const result = parseOutput(plan, { input: validate(HOUSE).input });
-  assert.equal(result.body.recommendations[0].estimatedReductionPercent, 17.3);
+  assert.equal(parseOutput(plan, { input: input() }).body.recommendations[0].estimatedReductionPercent, 17.3);
 });
 
-test("unknown kinds, efforts and comfort levels are dropped", () => {
-  for (const patch of [{ kind: "MAGIC" }, { effort: "SOMETIMES" }, { comfortImpact: "TERRIBLE" }]) {
+test("unknown kinds, efforts, comfort levels and setting kinds are dropped", () => {
+  const patches = [
+    { kind: "MAGIC" }, { effort: "SOMETIMES" }, { comfortImpact: "TERRIBLE" },
+    { settingKind: "OVEN_TEMPERATURE" }, { settingKind: undefined },
+  ];
+  for (const patch of patches) {
     const broken = goodPlan();
     broken.recommendations = [{ ...broken.recommendations[0], ...patch }];
-    assert.equal(parseOutput(broken, { input: validate(HOUSE).input }).error, "model_output_unusable", JSON.stringify(patch));
+    assert.equal(parseOutput(broken, { input: input() }).error, "model_output_unusable", JSON.stringify(patch));
   }
 });
 
@@ -153,7 +167,7 @@ test("extra fields the model invents do not reach the app", () => {
   const noisy = goodPlan();
   noisy.recommendations[0].savingsMxn = 480;
   noisy.recommendations[0].confidence = "HIGH";
-  const result = parseOutput(noisy, { input: validate(HOUSE).input });
+  const result = parseOutput(noisy, { input: input() });
   assert.equal(result.body.recommendations[0].savingsMxn, undefined,
     "pesos are the app's job; a model that returns them must not be believed");
   assert.equal(result.body.recommendations[0].confidence, undefined);
@@ -169,66 +183,96 @@ test("empty and malformed plans are refused", () => {
 test("at most eight recommendations survive", () => {
   const many = goodPlan();
   many.recommendations = Array.from({ length: 30 }, () => ({ ...goodPlan().recommendations[0] }));
-  assert.equal(parseOutput(many, { input: validate(HOUSE).input }).body.recommendations.length, 8);
+  assert.equal(parseOutput(many, { input: input() }).body.recommendations.length, 8);
 });
 
-// --- Safety: advice that could put someone in hospital ---
+// --- Temperatures: the figure comes from our table, or not at all ---
 
-const WATER_HOUSE = {
-  periodDays: 60, kwhProjected: 400, dacRisk: "NONE",
-  appliances: [{ name: "Boiler electrico", category: "WATER", kwhPeriod: 90 }],
-};
-
-const waterPlan = (title, howTo) => ({
+const withText = (title, howTo, settingKind = "NONE") => ({
   summary: "x",
   recommendations: [{
-    applianceIndex: 0, kind: "SETTING", title, howTo,
-    estimatedReductionPercent: 12, effort: "ONE_TIME", comfortImpact: "MINOR",
+    applianceIndex: 1, kind: "SETTING", title, howTo,
+    estimatedReductionPercent: 12, effort: "ONE_TIME", comfortImpact: "MINOR", settingKind,
   }],
 });
 
-test("advice to lower a water heater below 60 C is dropped, whatever the model says", () => {
-  // This is not hypothetical: the live model produced exactly this on the
-  // first real call, despite a prompt telling it not to.
-  const input = validate(WATER_HOUSE).input;
-  const dangerous = [
+test("any recommendation stating a temperature is dropped, whatever the appliance", () => {
+  // The live model produced the first of these on the very first real call,
+  // despite a prompt telling it not to endanger anyone. 40-45 C is squarely
+  // inside the range where legionella multiplies.
+  const stated = [
     ["Baja la temperatura del boiler", "Ajustalo a 40-45°C en lugar de 50-60°C."],
     ["Reduce el boiler", "Ponlo en 45 grados."],
     ["Ahorra en agua caliente", "Bajalo a 50 °C, es suficiente."],
-    ["Configura el boiler", "45 centigrados basta para bañarse."],
+    ["Configura el refrigerador", "Debe estar entre 3 y 5 grados Celsius."],
+    ["Sube el aire", "Ponlo en 25 centigrados en vez de 21."],
+    ["Ajusta el congelador", "-18 grados es lo correcto."],
   ];
-  for (const [title, howTo] of dangerous) {
-    const result = parseOutput(waterPlan(title, howTo), { input });
-    assert.equal(result.error, "model_output_unusable", `${title} / ${howTo}`);
+  for (const [title, howTo] of stated) {
+    assert.equal(parseOutput(withText(title, howTo), { input: input() }).error, "model_output_unusable",
+      `${title} / ${howTo}`);
   }
 });
 
-test("safe water-heater advice still gets through", () => {
-  const input = validate(WATER_HOUSE).input;
-  const safe = [
+test("advice with no figure in it gets through untouched", () => {
+  const clean = [
     ["Aisla el tanque del boiler", "Colocale una cubierta aislante, se consigue en ferreteria."],
-    ["Usa un temporizador", "Programalo para que caliente solo 2 horas antes de la ducha."],
-    ["Repara las fugas de agua caliente", "Revisa llaves y tuberias; una fuga hace trabajar al boiler de mas."],
-    ["Manten el boiler a 60 grados", "No lo bajes de ahi: por debajo hay riesgo sanitario."],
+    ["Usa un temporizador", "Programalo para que caliente solo antes de la ducha."],
+    ["Revisa el termostato del refrigerador", "La perilla esta dentro, en la pared lateral."],
+    ["Lava con agua fria", "Selecciona el ciclo de agua fria en la lavadora."],
   ];
-  for (const [title, howTo] of safe) {
-    const result = parseOutput(waterPlan(title, howTo), { input });
-    assert.equal(result.ok, true, `${title} / ${howTo}`);
+  for (const [title, howTo] of clean) {
+    assert.equal(parseOutput(withText(title, howTo), { input: input() }).ok, true, `${title} / ${howTo}`);
   }
 });
 
-test("the temperature check only applies to water heaters", () => {
-  const house = {
-    periodDays: 60, kwhProjected: 400, dacRisk: "NONE",
-    appliances: [{ name: "Minisplit", category: "CLIMATE", kwhPeriod: 200 }],
-  };
-  const plan = waterPlan("Sube el termostato", "Ponlo en 25°C en vez de 21°C.");
-  assert.equal(parseOutput(plan, { input: validate(house).input }).ok, true,
-    "25 C on an air conditioner is the whole point of the advice");
+test("the word grados on its own is not a temperature", () => {
+  // "Sube unos grados" carries no figure, so there is nothing to contradict.
+  const result = parseOutput(withText("Sube el aire unos grados", "Con las flechas del control."), { input: input() });
+  assert.equal(result.ok, true);
 });
 
-test("the prompt names the hazard, so the model has a reason and not just a ban", () => {
-  const { SYSTEM_PROMPT: prompt } = { SYSTEM_PROMPT };
-  assert.ok(prompt.includes("legionela"));
-  assert.ok(prompt.includes("60 grados"));
+test("the app is handed the figure from our table, never from the model", () => {
+  const plan = withText("Revisa el termostato del refrigerador", "La perilla esta dentro.", "FRIDGE_TEMPERATURE");
+  const result = parseOutput(plan, { input: input() });
+  assert.deepEqual(result.body.recommendations[0].target, SETTING_TARGETS.FRIDGE_TEMPERATURE);
+  assert.equal(result.body.recommendations[0].target.text, "4 °C o menos");
+});
+
+test("a recommendation that is not about temperature carries no target", () => {
+  const result = parseOutput(withText("Limpia el filtro", "Abre el panel y lava la malla."), { input: input() });
+  assert.equal(result.body.recommendations[0].target, undefined);
+  assert.equal(result.body.recommendations[0].settingKind, "NONE");
+});
+
+test("the safety figures match the published guidance", () => {
+  // FDA: refrigerator at or below 4 C, freezer at -18 C. CDC and HSE: stored
+  // hot water at 60 C or above. These are the numbers the app will display, so
+  // a silent edit here should break a test rather than a household.
+  assert.equal(SETTING_TARGETS.FRIDGE_TEMPERATURE.text, "4 °C o menos");
+  assert.equal(SETTING_TARGETS.FREEZER_TEMPERATURE.text, "-18 °C");
+  assert.equal(SETTING_TARGETS.WATER_HEATER_TEMPERATURE.text, "60 °C o más");
+  for (const key of ["FRIDGE_TEMPERATURE", "FREEZER_TEMPERATURE", "WATER_HEATER_TEMPERATURE"]) {
+    assert.equal(SETTING_TARGETS[key].safetyLimit, true, `${key} is a health limit, not a preference`);
+  }
+  assert.equal(SETTING_TARGETS.AC_SETPOINT.safetyLimit, false, "comfort is not a safety floor");
+});
+
+test("a target the model sends itself is ignored in favour of the table", () => {
+  const plan = withText("Revisa el termostato del refrigerador", "La perilla esta dentro.", "FRIDGE_TEMPERATURE");
+  // The figure is the entire point of the table's existence, so a model that
+  // supplies its own must not be able to reach the app with it — not even one
+  // that happens to be right.
+  plan.recommendations[0].target = { text: "8 °C o menos", safetyLimit: false };
+  const result = parseOutput(plan, { input: input() });
+  assert.equal(result.body.recommendations[0].target.text, "4 °C o menos");
+  assert.equal(result.body.recommendations[0].target.safetyLimit, true);
+});
+
+test("a boiler target the model tries to lower is overruled", () => {
+  const plan = withText("Revisa el termostato del boiler", "Suele estar al frente.", "WATER_HEATER_TEMPERATURE");
+  plan.recommendations[0].target = { text: "45 °C", safetyLimit: false };
+  const result = parseOutput(plan, { input: input() });
+  assert.equal(result.body.recommendations[0].target.text, "60 °C o más",
+    "the one figure the first live call got dangerously wrong");
 });
