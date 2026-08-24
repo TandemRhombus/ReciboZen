@@ -18,14 +18,13 @@ Rama `IA-Implement` (ya incluye todo `sergio`, con el fix de la meta de ayer).
 | Refresco diario | Sí | Cron Triggers |
 | 21 pruebas `node:test` | Sí | Reescribir a vitest + `@cloudflare/vitest-pool-workers` |
 
-**Pero hay un desconocido real que no puedo resolver leyendo código:** si el sitio de CFE responde bien a peticiones que salen de la red de Cloudflare. Muchos sitios de gobierno y utilities en México bloquean IPs de datacenter o filtran por geografía. Desde tu Orange Pi sale una IP residencial mexicana; desde Workers no.
+**Ese desconocido ya se midió, y la respuesta cambió el plan.** `app.cfe.mx` está detrás de Imperva (resuelve a `e85dinu.ng.impervadns.net`). Desde una IP de datacenter: **403**. Desde la IP residencial mexicana de la Orange Pi: **200**, con `curl` pelado y con user-agent de Chrome por igual. El discriminante es la IP, no el user-agent.
 
-Por eso **no arrancaría migrando**. Mi propuesta, ordenada por riesgo:
+Conclusión: **el scraper de tarifas se queda en la Orange Pi.** El Worker es solo para la IA. Dos hallazgos que vinieron de yapa: el sitio no es una SPA sino ASP.NET WebForms con postback, así que no hace falta Browser Rendering (que es de paga); y `robots.txt` permite la ruta de tarifas.
 
-1. **Workers limpio para lo nuevo** — auth, proxy de IA, cuotas. Cero riesgo de migración, y si Workers falla tu v1.0 ni se entera.
-2. **En paralelo, una prueba de 30 minutos**: un Worker desechable que pida las páginas de tarifas de CFE. Si responde, migramos tarifas y solar y apagas la Orange Pi. Si no responde, la Orange Pi se queda con ese trabajo específico y ya sabemos por qué.
+Así que el Worker se levanta **limpio, solo para lo nuevo**: auth, proxy de IA, cuotas. Cero riesgo de migración — si el Worker falla, tu v1.0 ni se entera, porque el backend de la Orange Pi sigue sirviendo tarifas y solar exactamente como hoy.
 
-Decidir eso con datos cuesta media hora. Decidirlo sin datos cuesta un fin de semana de migración que quizá haya que revertir.
+Media hora de medición evitó un fin de semana de migración que habría que revertir. La tabla de arriba queda como referencia de qué **sería** portable, no de qué conviene portar.
 
 ---
 
@@ -43,7 +42,7 @@ Diseñé esto asumiendo que alguien va a intentar abusarlo, porque va a pasar.
 
 Ya tienes el mecanismo: el *entitlement lease* firmado con ECDSA P-256 que el backend emite y `EntitlementLeaseVerifier` valida en el cliente. El Worker valida **la misma firma** antes de hacer nada. Sin lease válido y sin vencer → `403`, sin llamar a Anthropic.
 
-No inventamos autenticación nueva: reusamos la que ya construiste.
+No inventamos autenticación nueva: reusamos la que ya construiste. **Pero no es copiar y pegar.** El backend firma con `sign("sha256", ...)` de Node, que emite ECDSA en **DER**; Java lo lee sin problema, por eso el cliente Android nunca lo notó. WebCrypto —la única API de crypto que hay en Workers— solo acepta **r||s crudo** y responde `false` **en silencio** ante DER. El Worker convierte DER a crudo antes de verificar; el emisor no se toca, porque cambiarlo dejaría afuera a todos los clientes ya instalados. Implementado y probado en `worker/src/lease.mjs`.
 
 ### Capa 2 — Identidad estable por usuario
 
@@ -92,16 +91,31 @@ Cada llamada guarda tokens de entrada y salida en el Durable Object. Puedes ver 
 
 Precio oficial hoy: **$1 por millón de tokens de entrada, $5 de salida**. Lectura de caché: **$0.10/MTok** — importante, porque el prompt de sistema es idéntico en todas las llamadas y se cachea.
 
-**Identificar un aparato:**
+**Identificar un aparato — medido en producción el 2026-08-24**, no estimado:
 
 | Concepto | Tokens | Costo |
 |---|---|---|
-| Sistema (cacheado) | ~1,200 | $0.00012 |
-| Entrada (marca + modelo) | ~30 | $0.00003 |
-| Salida (JSON con ficha) | ~250 | $0.00125 |
-| **Total** | | **≈ $0.0014** |
+| Entrada (prompt de sistema + esquema de la herramienta + datos) | ~1,480 | $0.00148 |
+| Salida (JSON con la ficha) | ~240 | $0.00119 |
+| **Total** | | **$0.0027** |
+
+> **Corrección importante:** la estimación original de este documento era **$0.0014, la mitad del costo real**, porque daba por hecho que el prompt de sistema se cachearía a $0.10/MTok. **No se cachea.** Claude Haiku 4.5 exige un prefijo de **4,096 tokens** para activar el caché — cuatro veces el umbral de Sonnet — y el prefijo real mide 1,477. Nada se cacheó nunca, y nada lo avisa: `cache_creation_input_tokens` simplemente vuelve en cero.
+>
+> Inflar el prompt hasta pasar los 4,096 sería peor, no mejor: escribir el caché se cobra al **125%** y la entrada dura cinco minutos. Con un hogar que da de alta un aparato de vez en cuando, se pagaría la escritura casi siempre y se leería casi nunca. Por eso `cache_control` se retiró del código.
+
+Con el costo real, sobre un ingreso neto de $2.59 USD por suscriptor Plus (a 19 MXN/USD):
+
+| Perfil | Identificaciones/mes | Costo | % del neto |
+|---|---|---|---|
+| Usuario real | 20 | $0.053 | **2.1%** |
+| Usuario activo | 60 | $0.160 | 6.2% |
+| Al tope de la cuota | 150 | $0.401 | 15.5% |
+
+El costo se duplicó y el negocio no se movió: la IA sigue siendo el 2% de lo que deja un suscriptor normal. Con el techo de $20 al mes alcanza para unas 7,500 identificaciones, o unos 373 usuarios reales a pleno uso.
 
 **Explicar un recibo** (los números los calcula tu motor; Haiku solo los redacta): **≈ $0.0023**.
+
+> **Ojo con esta sección:** las cuotas de abajo están calculadas con Plus a **$49 MXN**, y el precio decidido es **$69 MXN**. Los costos por operación siguen vigentes (los precios de Haiku no se movieron); lo que hay que recalcular es el porcentaje del ingreso neto, y para eso falta el tipo de cambio.
 
 Con Plus a $49 MXN te quedan ~$2.10 USD después de la comisión de Google. Un usuario que hace **150 identificaciones + 80 explicaciones al mes** te cuesta **≈ $0.40**, o sea **19% del ingreso neto**.
 
@@ -126,7 +140,7 @@ Son generosas a propósito: un usuario normal no llega ni a 20 identificaciones,
 1. **Account ID** (aparece en el panel, sección Workers).
 2. Que **tú** instales wrangler y te autentiques: `npm i -g wrangler && wrangler login`.
 3. Un subdominio para el Worker. Ya tienes `simapp.uk`; propongo `ia-recibozen.simapp.uk`.
-4. Confirmar el plan: Workers de paga son **$5 USD/mes** e incluyen Durable Objects. El plan gratis **no** tiene Durable Objects, y sin ellos las cuotas se pueden burlar con llamadas simultáneas. Para proteger dinero, los $5 valen la pena.
+4. Confirmar el plan: **el plan gratuito alcanza.** Los Durable Objects con backend SQLite están incluidos en el plan gratuito, con 100,000 peticiones al día — y dan los incrementos atómicos que las cuotas necesitan. La versión anterior de este documento decía que hacían falta $5 al mes; era falso. Se construye y se prueba sin pagar.
 
 **No me des un API token de Cloudflare.** Yo escribo el código y los comandos; tú los corres. No hay razón para que yo tenga acceso de escritura a tu cuenta.
 
@@ -187,14 +201,14 @@ Lo que sí sostengo, porque lo leí en tu código: el motor tarifario, la calibr
 | # | Qué | Bloquea | Semanas |
 |---|---|---|---|
 | 1 | Las tres funciones deterministas + esquema de evidencia | Nada | Empieza hoy |
-| 2 | Prueba: ¿CFE responde desde Workers? | Nada | 30 min |
-| 3 | Worker: auth con lease + cuotas + Durable Objects | Cuenta Cloudflare | Después de (1) |
+| 2 | ~~Prueba: ¿CFE responde desde Workers?~~ | — | **Hecha** — el scraper se queda en la Orange Pi |
+| 3 | Worker: auth con lease ✅ · cuotas + Durable Objects | Cuenta Cloudflare | Auth verificada contra un lease real |
 | 4 | Proxy de Haiku: identificar aparato | (3) + API key | |
 | 5 | Explicación en lenguaje natural del recibo | (4) | |
 | 6 | Google Sign-In + sincronización opcional | Google Cloud | |
 | 7 | **Google Play Billing de verdad** | Play Console | |
 
-Sobre el 7: hoy tu backend responde `503 play_verification_not_configured`. **No puedes cobrarle a nadie todavía.** Si el objetivo es monetizar, esa es la pieza que de verdad bloquea el negocio — no la IA. La IA hace que Plus valga la pena; Billing es lo que permite venderlo.
+Sobre el 7: **el bloqueo se levantó.** `/readyz` reporta `playBillingConfigured: true` y `POST /v1/entitlements/exchange` con cuerpo vacío responde `400 invalid_product_id` — valida, en vez de negarse a existir. Lo que queda es Play Console: planes base activos y la prueba cerrada. Si el objetivo es monetizar, esa es la pieza que de verdad bloquea el negocio — no la IA. La IA hace que Plus valga la pena; Billing es lo que permite venderlo.
 
 ---
 
