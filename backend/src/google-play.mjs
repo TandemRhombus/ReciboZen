@@ -26,6 +26,23 @@ export function purchaseRequestHash({ subject, productId, purchaseToken }) {
     .digest("base64url");
 }
 
+/**
+ * The identity every AI quota is counted against, derived from the purchase.
+ *
+ * It must not come from the client. The app generates its install subject with
+ * UUID.randomUUID() and keeps it in SharedPreferences, so "clear app data" used
+ * to produce a brand-new identity — and with it a brand-new monthly allowance —
+ * off a single subscription. Two taps in Android settings, repeatable, with a
+ * genuine install that passes Play Integrity every time.
+ *
+ * The purchase token is the one value in that exchange the client cannot invent.
+ * If it rotates on a renewal the subject rotates with it, which costs nothing:
+ * the allowance resets monthly anyway.
+ */
+export function quotaSubjectFor(purchaseToken) {
+  return createHash("sha256").update(`v1|${purchaseToken}`, "utf8").digest("base64url").slice(0, 43);
+}
+
 export function obfuscatedSubject(subject) {
   return createHash("sha256").update(subject, "utf8").digest("base64url");
 }
@@ -91,7 +108,11 @@ export class GooglePlayPurchaseVerifier {
     if (purchase.acknowledgementState === "ACKNOWLEDGEMENT_STATE_PENDING") {
       await this.#acknowledgeSubscription(input.productId, input.purchaseToken, accessToken);
     }
-    return { tier, expiresAtEpochSeconds: Math.floor(expiresAtMillis / 1000) };
+    return {
+      tier,
+      expiresAtEpochSeconds: Math.floor(expiresAtMillis / 1000),
+      quotaSubject: quotaSubjectFor(input.purchaseToken),
+    };
   }
 
   async #decodeIntegrity(integrityToken, accessToken) {
@@ -141,9 +162,20 @@ export class GooglePlayPurchaseVerifier {
     if (!ALLOWED_SUBSCRIPTION_STATES.has(purchase.subscriptionState) || expiresAtMillis <= this.now()) {
       throw new PurchaseVerificationError("subscription_inactive", "This subscription is not active");
     }
-    if (purchase.externalAccountIdentifiers?.obfuscatedExternalAccountId !== obfuscatedSubject(input.subject)) {
-      throw new PurchaseVerificationError("purchase_subject_mismatch", "This purchase belongs to a different installation");
-    }
+    // Deliberately NOT compared against the caller install any more.
+    //
+    // The app stamps setObfuscatedAccountId with a hash of its local subject at
+    // purchase time, and that subject is a UUID in SharedPreferences. Requiring
+    // it to match meant a household that cleared app data — or moved to a new
+    // phone, or added a tablet — could never activate again: the stamp on the
+    // purchase is permanent and the local UUID is not. A Play subscription
+    // belongs to a Google account, not to one installation, so that check was
+    // refusing people their own purchase.
+    //
+    // What still has to hold is unchanged and is where the real assurance lives:
+    // the purchase token resolves to an active subscription for this package in
+    // Play, the product is one of ours, and Play Integrity says the caller is a
+    // genuine install of our signed app. A token alone is useless without those.
     return expiresAtMillis;
   }
 

@@ -132,12 +132,21 @@ test("verified purchase receives only a backend-signed lease", async () => {
     purchaseVerifier: {
       async verify(input) {
         assert.equal(input.subject, "install-subject-1234");
-        return { tier: "PLUS", expiresAtEpochSeconds: Math.floor(Date.now() / 1000) + 3600 };
+        return {
+          tier: "PLUS",
+          expiresAtEpochSeconds: Math.floor(Date.now() / 1000) + 3600,
+          quotaSubject: "derived-from-the-purchase",
+        };
       },
     },
     leaseIssuer: {
       issue(input) {
         assert.equal(input.tier, "PLUS");
+        // The lease is signed for the subject the verifier derived from the
+        // purchase, never the one the client sent. Clearing app data changes
+        // the client value and must not buy a fresh AI allowance.
+        assert.equal(input.subject, "derived-from-the-purchase");
+        assert.notEqual(input.subject, "install-subject-1234");
         return "signed.lease";
       },
     },

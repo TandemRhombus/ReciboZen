@@ -7,6 +7,7 @@ import {
   PurchaseVerificationError,
   obfuscatedSubject,
   purchaseRequestHash,
+  quotaSubjectFor,
 } from "../src/google-play.mjs";
 
 test("service account provider creates and caches an OAuth assertion without exposing credentials", async () => {
@@ -103,11 +104,12 @@ test("verifier requires fresh integrity, matching account and active Google subs
   assert.deepEqual(await verifier.verify(input), {
     tier: "PLUS",
     expiresAtEpochSeconds: Date.parse("2026-09-15T12:00:00Z") / 1000,
+    quotaSubject: quotaSubjectFor(input.purchaseToken),
   });
   assert.equal(acknowledgementCalls, 1);
 });
 
-test("verifier rejects a purchase bound to another installation", async () => {
+test("a household can activate its own purchase from a second installation", async () => {
   const now = Date.parse("2026-08-15T12:00:00Z");
   const input = {
     subject: "install-subject-1234",
@@ -139,8 +141,35 @@ test("verifier rejects a purchase bound to another installation", async () => {
     },
   });
 
-  await assert.rejects(
-    verifier.verify(input),
-    (error) => error instanceof PurchaseVerificationError && error.code === "purchase_subject_mismatch",
-  );
+  // The purchase carries the obfuscated id of whichever install bought it, and
+  // that stamp is permanent while a local UUID is not. Refusing a mismatch meant
+  // clearing app data, replacing a phone, or adding a tablet locked the
+  // household out of a subscription it had paid for. A Play subscription belongs
+  // to a Google account, not to one installation.
+  const verified = await verifier.verify(input);
+  assert.equal(verified.tier, "PLUS");
+
+  // And the quota follows the purchase, not the install: the second device
+  // shares the allowance instead of being handed a fresh one.
+  assert.equal(verified.quotaSubject, quotaSubjectFor(input.purchaseToken));
+});
+
+test("the quota subject comes from the purchase, so clearing app data buys nothing", () => {
+  const token = "purchase-token-that-is-long-enough";
+
+  // Stable for the same purchase, whatever the client calls itself.
+  assert.equal(quotaSubjectFor(token), quotaSubjectFor(token));
+
+  // Different for a different purchase.
+  assert.notEqual(quotaSubjectFor(token), quotaSubjectFor(`${token}-other`));
+
+  // And it does not carry the token: this value travels inside a lease the
+  // client can read, so leaking a purchase token through it would be worse than
+  // the problem it solves.
+  const subject = quotaSubjectFor(token);
+  assert.doesNotMatch(subject, /purchase-token/);
+  assert.ok(!subject.includes(token));
+
+  // Shaped so the lease format and the client's SUBJECT_PATTERN accept it.
+  assert.match(subject, /^[A-Za-z0-9_-]{43}$/);
 });
