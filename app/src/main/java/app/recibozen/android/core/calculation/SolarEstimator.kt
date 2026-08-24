@@ -42,6 +42,8 @@ object SolarEstimator {
         history: List<BillPeriod>,
         monthlyDailyIrradiance: List<Double>,
         readings: List<HistoryReadingEntry> = emptyList(),
+        /** The register those readings came off; ignored when [readings] is empty. */
+        register: MeterRegister = MeterRegister(capacityKwh = null, multiplier = 1),
         demandGrowthPercent: Int = 0,
         plannedAnnualKwh: Int = 0,
     ): SolarEstimate? {
@@ -51,7 +53,7 @@ object SolarEstimator {
             val end = bill.periodEndEpochDay ?: return@mapNotNull null
             if (end <= start || bill.consumptionKwh <= 0) null else Period(start, end, bill.consumptionKwh)
         }.distinctBy { it.start to it.end }
-        val manualPeriods = readingPeriods(readings).filter { candidate ->
+        val manualPeriods = readingPeriods(readings, register).filter { candidate ->
             billedPeriods.none { billed -> candidate.start < billed.end && candidate.end > billed.start }
         }
         val periods = (billedPeriods + manualPeriods).sortedBy { it.start }
@@ -137,7 +139,18 @@ object SolarEstimator {
     private fun annualized(window: Window): Int =
         (window.kwh * WINDOW_DAYS / window.coveredDays.coerceAtLeast(1)).roundToInt().coerceAtLeast(1)
 
-    private fun readingPeriods(readings: List<HistoryReadingEntry>): List<Period> {
+    /**
+     * Periods the household's own readings establish.
+     *
+     * The consumption used to be `to.kwh - from.kwh`, dropped when it came out
+     * at zero or below. That silently discarded every interval in which the
+     * register wrapped -- exactly the intervals a long-running meter produces --
+     * and the solar study was sized on the evidence that happened to survive.
+     * MeterDelta applies the wrap the household attested and the CFE multiplier,
+     * and an interval it cannot establish is still dropped, which is right: a
+     * solar array must not be sized on a number nobody can defend.
+     */
+    private fun readingPeriods(readings: List<HistoryReadingEntry>, register: MeterRegister): List<Period> {
         val points = readings.mapNotNull { reading ->
             val timestamp = reading.timestampEpochMillis ?: return@mapNotNull null
             val day = if (reading.method == ReadingMethod.PDF) {
@@ -145,14 +158,27 @@ object SolarEstimator {
             } else {
                 Instant.ofEpochMilli(timestamp).atZone(ZoneId.systemDefault()).toLocalDate().toEpochDay()
             }
-            ReadingPoint(day, reading.kwh)
-        }.filter { it.kwh >= 0 }
+            ReadingPoint(reading, day)
+        }.filter { it.entry.kwh >= 0 }
             .sortedBy { it.day }
-            .distinctBy { it.day to it.kwh }
+            .distinctBy { it.day to it.entry.kwh }
         return points.zipWithNext().mapNotNull { (from, to) ->
             val days = to.day - from.day
-            val consumed = to.kwh - from.kwh
-            if (days !in 1..183 || consumed <= 0) null else Period(from.day, to.day, consumed)
+            if (days !in 1..183) return@mapNotNull null
+            val delta = MeterDelta.consumption(
+                previousKwh = from.entry.kwh,
+                currentKwh = to.entry.kwh,
+                elapsedDays = days.toDouble(),
+                capacityKwh = register.capacityKwh,
+                multiplier = register.multiplier,
+                attestedWraps = ReadingInterval.attestedWrapsBetween(readings, from.entry, to.entry),
+                replacement = ReadingInterval.replacementForDelta(readings, from.entry, to.entry),
+                // No pace: this function is building the very evidence a pace
+                // would come from, so measuring against one would be circular.
+                plausibleDailyKwh = null,
+            )
+            val consumed = (delta as? MeterDelta.Measured)?.kwh ?: return@mapNotNull null
+            if (consumed <= 0) null else Period(from.day, to.day, consumed)
         }
     }
 
@@ -181,7 +207,7 @@ object SolarEstimator {
     private data class Period(val start: Long, val end: Long, val kwh: Int)
     private data class Overlap(val start: Long, val end: Long, val kwh: Double)
     private data class Window(val kwh: Double, val coveredDays: Int)
-    private data class ReadingPoint(val day: Long, val kwh: Int)
+    private data class ReadingPoint(val entry: HistoryReadingEntry, val day: Long)
     private const val MILLIS_PER_DAY = 86_400_000L
     private val MONTHS = listOf("Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
 }

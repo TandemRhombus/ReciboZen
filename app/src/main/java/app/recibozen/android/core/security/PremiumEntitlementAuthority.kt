@@ -24,6 +24,18 @@ class PremiumEntitlementAuthority(context: Context) {
         return leaseVerifier.verify(token, expectedSubject)
     }
 
+    /**
+     * Verifies a lease and takes the subject from inside it. The install trust
+     * check still applies: a lease is only as good as the installation holding
+     * it, whichever subject it names.
+     */
+    fun verifyLearningSubject(token: String?): EntitlementLeaseVerification {
+        if (!installTrustChecker.evaluate().premiumEnvironmentAccepted) {
+            return EntitlementLeaseVerification.Rejected(EntitlementLeaseFailure.UNTRUSTED_INSTALL)
+        }
+        return leaseVerifier.verifyLearningSubject(token)
+    }
+
     fun effectiveTier(token: String?, expectedSubject: String?): EntitlementTier =
         when (val result = verify(token, expectedSubject.orEmpty())) {
             is EntitlementLeaseVerification.Accepted -> result.lease.tier

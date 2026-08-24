@@ -22,6 +22,12 @@ data class OvernightTest(
     val observedWatts: Double,
     val startLabel: String,
     val endLabel: String,
+    /**
+     * True when [observedKwh] rests on the household attesting that the register
+     * wrapped during the night, not on the subtraction alone. The screen has to
+     * say so: it is a measurement supported by testimony, not by arithmetic.
+     */
+    val restsOnAttestation: Boolean = false,
 )
 
 /**
@@ -42,9 +48,15 @@ object OvernightBaselineCalculator {
     private val START_HOURS_AFTER_MIDNIGHT = 0..2
     private val END_HOURS = 4..11
 
+    /**
+     * @param register the physical register these readings came off. Without it
+     *   a night in which the meter crossed its maximum cannot be measured, and
+     *   the pair is skipped rather than read as consumption going backwards.
+     */
     fun evaluate(
         readings: List<HistoryReadingEntry>,
         appliances: List<Appliance>,
+        register: MeterRegister,
         zoneId: ZoneId = ZoneId.systemDefault(),
     ): OvernightTest? {
         if (appliances.isEmpty()) return null
@@ -52,24 +64,51 @@ object OvernightBaselineCalculator {
             .filter { it.method != ReadingMethod.PDF }
             .mapNotNull { reading ->
                 val timestamp = reading.timestampEpochMillis ?: return@mapNotNull null
-                Point(timestamp, reading.kwh, reading.dateLabel, Instant.ofEpochMilli(timestamp).atZone(zoneId).hour)
+                Point(reading, timestamp, Instant.ofEpochMilli(timestamp).atZone(zoneId).hour)
             }
             .sortedBy { it.timestamp }
         if (points.size < 2) return null
 
         // The most recent qualifying night, so the result follows the user's
         // latest attempt instead of freezing on the first one they ever made.
-        val pair = points.zipWithNext()
-            .lastOrNull { (from, to) ->
+        //
+        // The pair used to qualify on `to.kwh >= from.kwh`, which quietly threw
+        // away every night the register wrapped. That is not an exotic case: a
+        // four-dial meter going 9,998 -> 0,003 overnight consumed five kilowatt
+        // hours, an entirely ordinary night, and the test simply never appeared
+        // with nothing said about why. Qualification now rests on MeterDelta
+        // establishing a consumption, which it does once the household has
+        // attested the wrap on the confirm screen.
+        val measured = points.zipWithNext()
+            .mapNotNull { (from, to) ->
                 val hours = (to.timestamp - from.timestamp) / MILLIS_PER_HOUR
-                hours in MIN_HOURS..MAX_HOURS &&
-                    (from.hour in START_HOURS || from.hour in START_HOURS_AFTER_MIDNIGHT) &&
-                    to.hour in END_HOURS &&
-                    to.kwh >= from.kwh
-            } ?: return null
+                if (hours !in MIN_HOURS..MAX_HOURS) return@mapNotNull null
+                if (from.hour !in START_HOURS && from.hour !in START_HOURS_AFTER_MIDNIGHT) return@mapNotNull null
+                if (to.hour !in END_HOURS) return@mapNotNull null
+                val delta = MeterDelta.consumption(
+                    previousKwh = from.entry.kwh,
+                    currentKwh = to.entry.kwh,
+                    elapsedDays = hours / HOURS_PER_DAY,
+                    capacityKwh = register.capacityKwh,
+                    multiplier = register.multiplier,
+                    attestedWraps = ReadingInterval.attestedWrapsBetween(readings, from.entry, to.entry),
+                    // A meter swapped overnight is not a night this test can
+                    // measure unless the household supplied both boundary
+                    // readings, and it must never be measured by subtraction.
+                    replacement = ReadingInterval.replacementForDelta(readings, from.entry, to.entry),
+                    // No pace is passed on purpose. A night is shorter than the
+                    // half day MeterDelta needs before a rate means anything,
+                    // and the wrap-possible check would fire on the very kind of
+                    // interval this function exists to measure.
+                    plausibleDailyKwh = null,
+                )
+                (delta as? MeterDelta.Measured)?.let { Triple(from, to, it) }
+            }
+            .lastOrNull() ?: return null
 
-        val hours = (pair.second.timestamp - pair.first.timestamp) / MILLIS_PER_HOUR
-        val observedKwh = (pair.second.kwh - pair.first.kwh).toDouble()
+        val (from, to, delta) = measured
+        val hours = (to.timestamp - from.timestamp) / MILLIS_PER_HOUR
+        val observedKwh = delta.kwh.toDouble()
         val expectedWatts = baseWatts(appliances)
         val expectedKwh = expectedWatts * hours / 1_000.0
         return OvernightTest(
@@ -79,8 +118,9 @@ object OvernightBaselineCalculator {
             unexplainedKwh = (observedKwh - expectedKwh).coerceAtLeast(0.0),
             expectedWatts = expectedWatts,
             observedWatts = if (hours > 0) observedKwh * 1_000.0 / hours else 0.0,
-            startLabel = pair.first.label,
-            endLabel = pair.second.label,
+            startLabel = from.entry.dateLabel,
+            endLabel = to.entry.dateLabel,
+            restsOnAttestation = delta.restsOnAttestation,
         )
     }
 
@@ -109,5 +149,6 @@ object OvernightBaselineCalculator {
 
     private const val MILLIS_PER_HOUR = 3_600_000.0
 
-    private data class Point(val timestamp: Long, val kwh: Int, val label: String, val hour: Int)
+    /** Keeps the original entry so its attestation stays reachable. */
+    private data class Point(val entry: HistoryReadingEntry, val timestamp: Long, val hour: Int)
 }

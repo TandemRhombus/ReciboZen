@@ -27,6 +27,10 @@
     <string name="onboarding_meter_4_dials">De manecillas, 4 carátulas</string>
     <string name="onboarding_meter_unsure">No estoy seguro</string>
     <string name="onboarding_meter_selected_desc">Seleccionado</string>
+    <string name="onboarding_meter_digits_title">¿Cuántos dígitos muestra?</string>
+    <string name="onboarding_meter_digits_body">Tu medidor vuelve a cero al llegar a su máximo. Sin saber cuántos dígitos tiene no podemos distinguir esa vuelta de una lectura mal capturada, y el consumo de ese periodo se pierde. Puedes decírnoslo después en Perfil.</string>
+    <string name="onboarding_meter_digits_label">Dígitos del contador</string>
+    <string name="onboarding_meter_digits_capacity">Entonces pasa de %1$s a %2$s.</string>
     <string name="onboarding_meter_footnote">Si eliges «No estoy seguro», te mostramos las dos opciones para compararlas con tu medidor.</string>
 
     <!-- Step 3: Primera estimación -->

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -183,7 +184,10 @@ private fun DigitField(
             }
         },
         modifier = modifier
-            .height(62.dp)
+            // The digit itself is 22.sp, so it grows with the system font size
+            // while a fixed 62dp box does not. A floor keeps the boxes square
+            // and even at the default size and lets them grow past it.
+            .heightIn(min = 62.dp)
             .semantics { this.contentDescription = contentDescription },
         singleLine = true,
         textStyle = MaterialTheme.typography.headlineSmall.copy(textAlign = TextAlign.Center, fontSize = 22.sp),

@@ -2,9 +2,11 @@ package app.recibozen.android
 
 import app.recibozen.android.core.calculation.DacRiskCalculator
 import app.recibozen.android.core.calculation.DacRiskSnapshot
+import app.recibozen.android.core.calculation.TariffBlock
 import app.recibozen.android.core.model.BillPeriod
 import app.recibozen.android.feature.plan.DacGlanceKind
 import app.recibozen.android.feature.plan.DacGlanceTone
+import app.recibozen.android.feature.plan.buildTariffTiersForTest
 import app.recibozen.android.feature.plan.dacKwh
 import app.recibozen.android.feature.plan.dacSignedKwh
 import app.recibozen.android.feature.plan.toGlance
@@ -300,4 +302,81 @@ class DacGlanceTest {
         periodStartEpochDay = start.toEpochDay(),
         periodEndEpochDay = end.toEpochDay(),
     )
+
+    // --- The tier bar only shows tiers the period actually reaches ---
+
+    @Test
+    fun tariffTiersBeyondTheProjectionCarryNoWeightAndAreNotDrawn() {
+        // buildTariffTiers maps every block of the tariff, reached or not, so a
+        // household inside the first block produces two tiers of exactly zero.
+        // The bar used to coerce those to 0.001 and render two slivers with a
+        // 4dp gap each, eating its right end; the legend listed them as
+        // "Intermedio · 0 kWh". Both now filter on this being zero, so the
+        // property has to hold.
+        val blocks = listOf(
+            TariffBlock(limitKwh = 150, rateMxnPerKwh = 1.0),
+            TariffBlock(limitKwh = 280, rateMxnPerKwh = 2.0),
+            TariffBlock(limitKwh = null, rateMxnPerKwh = 3.0),
+        )
+
+        val tiers = buildTariffTiersForTest(basisKwh = 100, blocks = blocks)
+
+        assertEquals(3, tiers.size)
+        assertEquals(100, tiers[0].usedKwh)
+        assertEquals(0, tiers[1].usedKwh)
+        assertEquals(0, tiers[2].usedKwh)
+        assertEquals(0f, tiers[1].fraction, 0.0001f)
+        // Exactly one tier survives the filter both the bar and the legend apply.
+        assertEquals(1, tiers.count { it.usedKwh > 0 })
+    }
+
+    @Test
+    fun aPeriodReachingEveryTierKeepsAllOfThem() {
+        val blocks = listOf(
+            TariffBlock(limitKwh = 150, rateMxnPerKwh = 1.0),
+            TariffBlock(limitKwh = 280, rateMxnPerKwh = 2.0),
+            TariffBlock(limitKwh = null, rateMxnPerKwh = 3.0),
+        )
+
+        val tiers = buildTariffTiersForTest(basisKwh = 400, blocks = blocks)
+
+        assertEquals(listOf(150, 130, 120), tiers.map { it.usedKwh })
+        assertEquals(3, tiers.count { it.usedKwh > 0 })
+        // The fractions are the bar, so they have to add up to the whole bar.
+        assertEquals(1.0f, tiers.sumOf { it.fraction.toDouble() }.toFloat(), 0.001f)
+    }
+
+    @Test
+    fun everyTierKnowsWhereItEndsSoTheCardCanShowARangeAtAll() {
+        // The card is titled "Rango de este periodo" and the tier model carried
+        // no end at all: every row printed the kWh spent inside the tier, so
+        // "Básico · 87 kWh" said nothing about where básico ends -- which is the
+        // number a household can act on.
+        val blocks = listOf(
+            TariffBlock(limitKwh = 150, rateMxnPerKwh = 1.0),
+            TariffBlock(limitKwh = 280, rateMxnPerKwh = 2.0),
+            TariffBlock(limitKwh = null, rateMxnPerKwh = 3.0),
+        )
+
+        val tiers = buildTariffTiersForTest(basisKwh = 400, blocks = blocks)
+
+        assertEquals(listOf(0, 150, 280), tiers.map { it.startsAtKwh })
+        assertEquals(listOf(150, 280, null), tiers.map { it.endsAtKwh })
+        assertTrue(tiers.last().isOpenEnded)
+    }
+
+    @Test
+    fun aPartlyUsedTierStillReportsTheBoundaryAndTheUsageSeparately() {
+        val blocks = listOf(
+            TariffBlock(limitKwh = 150, rateMxnPerKwh = 1.0),
+            TariffBlock(limitKwh = null, rateMxnPerKwh = 3.0),
+        )
+
+        val tier = buildTariffTiersForTest(basisKwh = 87, blocks = blocks).first()
+
+        // 87 kWh spent inside a tier that ends at 150. Conflating the two is
+        // exactly what the row used to do.
+        assertEquals(87, tier.usedKwh)
+        assertEquals(150, tier.endsAtKwh)
+    }
 }

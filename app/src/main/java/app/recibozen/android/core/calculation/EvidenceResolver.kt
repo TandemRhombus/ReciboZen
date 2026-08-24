@@ -106,10 +106,11 @@ object EvidenceResolver {
  * new model describes today's real data instead of waiting for the NOM capture
  * and the AI to arrive.
  *
- * [ApplianceDataSource] predates this schema and is coarser: it has no slot for a
- * NOM label read by the user, for a certification dataset, or for a model
- * suggestion. Those map to [EvidenceSource] values nothing produces yet — that is
- * the room the schema adds, not an omission.
+ * [ApplianceDataSource] predates this schema and is coarser: it still has no slot
+ * for a NOM label read by the user or for a certification dataset. Those map to
+ * [EvidenceSource] values nothing produces yet — that is the room the schema
+ * adds, not an omission. AI_SUGGESTION is no longer among them: the Worker
+ * produces it now, and it lands on the lowest trustRank there is.
  */
 fun Appliance.declaredEvidence(): List<DeviceEvidence> {
     val (source, methodology) = when (dataSource) {
@@ -118,6 +119,7 @@ fun Appliance.declaredEvidence(): List<DeviceEvidence> {
         ApplianceDataSource.CATALOG -> EvidenceSource.CATEGORY_DEFAULT to EvidenceMethodology.MODELED
         ApplianceDataSource.RECEIPT_INFERENCE -> EvidenceSource.CATEGORY_DEFAULT to EvidenceMethodology.MODELED
         ApplianceDataSource.USER_ESTIMATE -> EvidenceSource.CATEGORY_DEFAULT to EvidenceMethodology.DECLARED
+        ApplianceDataSource.AI_SUGGESTION -> EvidenceSource.AI_SUGGESTION to EvidenceMethodology.MODELED
     }
     val items = mutableListOf<DeviceEvidence>()
     referenceAnnualKwh?.let { annual ->

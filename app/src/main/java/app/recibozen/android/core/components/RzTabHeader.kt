@@ -60,16 +60,13 @@ fun RzTabHeader(
                 }
             }
         }
-        Box(
+        RzAvatarCircle(
+            initial = userInitial,
+            baseDiameter = 48.dp,
+            textStyle = MaterialTheme.typography.titleMedium,
             modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer)
                 .clickable(onClickLabel = profileDescription, onClick = onProfileClick)
                 .semantics { contentDescription = profileDescription },
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(userInitial, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-        }
+        )
     }
 }

@@ -49,6 +49,7 @@ import app.recibozen.android.core.designsystem.RzTheme
 import app.recibozen.android.core.model.MonthlyEnergyPoint
 import app.recibozen.android.core.model.SolarScenario
 import app.recibozen.android.core.export.SolarReportExporter
+import app.recibozen.android.core.calculation.MeterProfile
 import app.recibozen.android.core.calculation.SolarEstimator
 import app.recibozen.android.core.location.CityLocator
 import app.recibozen.android.core.solar.SolarResource
@@ -109,6 +110,7 @@ class SolarViewModel(
                 history = history,
                 monthlyDailyIrradiance = it.monthlyDailyAverage,
                 readings = state.readings,
+                register = MeterProfile.register(state.meterType, state.meterDigitCount, state.meterMultiplier),
                 demandGrowthPercent = state.solarDemandGrowthPercent,
                 plannedAnnualKwh = state.solarPlannedLoadsKwh.values.sum(),
             )

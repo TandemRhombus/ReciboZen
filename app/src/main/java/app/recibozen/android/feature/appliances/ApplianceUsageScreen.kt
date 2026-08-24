@@ -17,6 +17,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -43,6 +44,11 @@ import app.recibozen.android.core.components.RzPrimaryButton
 import app.recibozen.android.core.designsystem.RzSpacing
 import app.recibozen.android.core.designsystem.ReciboZenTheme
 import app.recibozen.android.core.model.Appliance
+import androidx.compose.ui.platform.LocalContext
+import app.recibozen.android.core.ai.AiClient
+import app.recibozen.android.core.security.PremiumAccessStore
+import app.recibozen.android.navigation.Routes
+import app.recibozen.android.core.model.ApplianceCategory
 import app.recibozen.android.core.model.ApplianceDataSource
 import app.recibozen.android.core.model.ApplianceUsageModel
 import app.recibozen.android.core.model.HouseSpace
@@ -87,6 +93,8 @@ data class ApplianceUsageUiState(
     val usageModel: ApplianceUsageModel = ApplianceUsageModel.POWER_SCHEDULE,
     val unitKwh: Double = 0.0,
     val dataSource: ApplianceDataSource = ApplianceDataSource.USER_ESTIMATE,
+    /** Needed to ask the AI about this appliance; the model answers per category. */
+    val category: ApplianceCategory = ApplianceCategory.OTHER,
 )
 
 data class ApplianceUsageDraft(
@@ -142,6 +150,7 @@ class ApplianceUsageViewModel(
             meterProjectedKwh = energy.meterProjectedKwh,
             hasCurrentMeterProjection = energy.hasCurrentMeterProjection,
             quantity = appliance?.quantity ?: 1,
+            category = appliance?.category ?: ApplianceCategory.OTHER,
             room = appliance?.room ?: "Toda la casa",
             spaceId = appliance?.spaceId,
             spaces = session.houseSpaces,
@@ -182,12 +191,31 @@ fun ApplianceUsageRoute(
 ) {
     val viewModel = rzViewModel { ApplianceUsageViewModel(repository, applianceId) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // The lease is read at call time, not cached: it expires, and a stale one
+    // would send the household to a 403 instead of the paywall.
+    val context = LocalContext.current
+    val aiViewModel = rzViewModel {
+        val accessStore = PremiumAccessStore(context)
+        ApplianceAiSuggestionViewModel(AiClient(signedLease = { accessStore.signedLease() }))
+    }
+    val aiState by aiViewModel.state.collectAsStateWithLifecycle()
+
     ApplianceUsageScreen(
         uiState = uiState,
         onBack = { navController.popBackStack() },
         onSave = { draft ->
             viewModel.save(draft)
             navController.popBackStack()
+        },
+        aiState = aiState,
+        onAskAi = { brand, model ->
+            aiViewModel.request(brand, model, uiState.category, uiState.billingDays)
+        },
+        onDismissAi = aiViewModel::dismiss,
+        onGoPremium = {
+            aiViewModel.dismiss()
+            navController.navigate(Routes.Premium)
         },
     )
 }
@@ -197,6 +225,10 @@ fun ApplianceUsageScreen(
     uiState: ApplianceUsageUiState,
     onBack: () -> Unit,
     onSave: (ApplianceUsageDraft) -> Unit,
+    aiState: AiSuggestionUiState = AiSuggestionUiState.Idle,
+    onAskAi: (brand: String, model: String) -> Unit = { _, _ -> },
+    onDismissAi: () -> Unit = {},
+    onGoPremium: () -> Unit = {},
 ) {
     val safeSpaces = uiState.spaces.ifEmpty { HouseSpaceDefaults.items }
     var selectedSpaceId by remember(uiState.applianceId, uiState.spaceId, uiState.room) {
@@ -297,6 +329,25 @@ fun ApplianceUsageScreen(
                         modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.sm),
                         label = { Text(stringResource(R.string.appliances_model)) },
                         singleLine = true,
+                    )
+                    // Offered to everyone, on purpose: a household on the free
+                    // tier gets the paywall rather than a hidden feature. The
+                    // label says Premium before they spend a tap finding out.
+                    TextButton(
+                        onClick = { onAskAi(brand, model) },
+                        enabled = brand.isNotBlank() && model.isNotBlank() &&
+                            aiState !is AiSuggestionUiState.Loading,
+                        modifier = Modifier.padding(top = RzSpacing.xs),
+                    ) {
+                        Text(stringResource(R.string.appliances_ai_button))
+                    }
+                    Text(
+                        stringResource(
+                            if (brand.isBlank() || model.isBlank()) R.string.appliances_ai_needs_brand
+                            else R.string.appliances_ai_button_premium,
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
 
@@ -419,6 +470,9 @@ fun ApplianceUsageScreen(
                         val selectedSourceLabel = when (dataSource) {
                             ApplianceDataSource.USER_MEASURED -> stringResource(R.string.appliances_source_measured)
                             ApplianceDataSource.MANUFACTURER_LABEL -> stringResource(R.string.appliances_source_label)
+                            // Named explicitly: the else below would have shown
+                            // "Estimado" for a figure the household never estimated.
+                            ApplianceDataSource.AI_SUGGESTION -> stringResource(R.string.appliances_source_ai)
                             else -> stringResource(R.string.appliances_source_estimated)
                         }
                         RzDropdownField(
@@ -483,9 +537,15 @@ fun ApplianceUsageScreen(
                                 hoursPerWeek = draftHours.takeIf { effectiveMode == ApplianceUsageModel.POWER_SCHEDULE },
                                 powerWatts = parsedActiveWatts,
                                 unitKwh = if (effectiveMode == ApplianceUsageModel.PERIOD_KWH) parsedUnitKwh else draftUnitKwh,
-                                dataSource = if (effectiveMode == ApplianceUsageModel.POWER_SCHEDULE) {
-                                    ApplianceDataSource.USER_ESTIMATE
-                                } else dataSource,
+                                dataSource = when {
+                                    // An AI suggestion keeps its provenance in
+                                    // either model. Overwriting it with
+                                    // USER_ESTIMATE would tell the household
+                                    // they typed a number a model produced.
+                                    dataSource == ApplianceDataSource.AI_SUGGESTION -> ApplianceDataSource.AI_SUGGESTION
+                                    effectiveMode == ApplianceUsageModel.POWER_SCHEDULE -> ApplianceDataSource.USER_ESTIMATE
+                                    else -> dataSource
+                                },
                                 standbyEnabled = supportsStandby && standbyEnabled &&
                                     effectiveMode == ApplianceUsageModel.POWER_SCHEDULE,
                                 standbyWatts = parsedStandbyWatts.takeIf {
@@ -504,6 +564,25 @@ fun ApplianceUsageScreen(
             }
         }
     }
+
+    // Applying writes into the very fields the household edits, so anything the
+    // model got wrong can still be corrected before saving.
+    ApplianceAiSuggestionDialog(
+        state = aiState,
+        onApply = { fill ->
+            fill.powerWatts?.let { activeWatts = it.toString() }
+            fill.unitKwh?.let { unitKwh = "%.1f".format(java.util.Locale.US, it) }
+            fill.standbyWatts?.let {
+                standbyWatts = it.toString()
+                standbyEnabled = true
+            }
+            fill.usageModel?.let { draftMode = it }
+            dataSource = ApplianceDataSource.AI_SUGGESTION
+            onDismissAi()
+        },
+        onDismiss = onDismissAi,
+        onGoPremium = onGoPremium,
+    )
 }
 
 @Composable

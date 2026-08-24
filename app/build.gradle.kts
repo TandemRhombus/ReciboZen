@@ -17,6 +17,11 @@ val entitlementPublicKey = providers.gradleProperty("RECIBOZEN_ENTITLEMENT_PUBLI
     .orElse("")
 val apiBaseUrl = providers.gradleProperty("RECIBOZEN_API_BASE_URL")
     .orElse("https://api-recibozen.simapp.uk")
+// Separate host on purpose: the AI proxy is a Cloudflare Worker, while tariffs
+// and entitlements stay on the Orange Pi because app.cfe.mx answers 403 to
+// datacenter addresses.
+val aiBaseUrl = providers.gradleProperty("RECIBOZEN_AI_BASE_URL")
+    .orElse("https://ia-recibozen.simapp.uk")
 val playCloudProjectNumber = providers.gradleProperty("RECIBOZEN_PLAY_CLOUD_PROJECT_NUMBER")
     .orElse("0")
 
@@ -44,8 +49,8 @@ android {
         applicationId = "app.recibozen.android"
         minSdk = 28
         targetSdk = 37
-        versionCode = 5
-        versionName = "1.0.4"
+        versionCode = 6
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -65,6 +70,11 @@ android {
             "String",
             "API_BASE_URL",
             apiBaseUrl.get().asBuildConfigString(),
+        )
+        buildConfigField(
+            "String",
+            "AI_BASE_URL",
+            aiBaseUrl.get().asBuildConfigString(),
         )
         buildConfigField(
             "long",

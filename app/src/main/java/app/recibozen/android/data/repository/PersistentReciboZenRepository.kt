@@ -15,6 +15,7 @@ import app.recibozen.android.core.model.ConfidenceLevel
 import app.recibozen.android.core.model.OpportunityLevel
 import app.recibozen.android.core.model.HistoryUnit
 import app.recibozen.android.core.model.PlanActionStatus
+import app.recibozen.android.core.model.MeterReplacement
 import app.recibozen.android.core.model.ReadingMethod
 import app.recibozen.android.core.model.EntitlementTier
 import app.recibozen.android.core.model.ElectricServiceIdentity
@@ -36,6 +37,7 @@ import app.recibozen.android.core.security.PremiumAccessStore
 import app.recibozen.android.core.notifications.ReadingReminderScheduler
 import app.recibozen.android.core.notifications.ReadingReminderStore
 import app.recibozen.android.demo.data.DemoReciboZenData
+import app.recibozen.android.core.calculation.MeterProfile
 import app.recibozen.android.core.calculation.TariffBlock
 import app.recibozen.android.core.calculation.TariffCalibration
 import app.recibozen.android.core.calculation.TariffCatalog
@@ -64,6 +66,20 @@ import kotlin.math.roundToLong
 import kotlin.math.roundToInt
 
 private val Context.reciboZenDataStore by preferencesDataStore(name = "recibozen_user_state")
+
+/**
+ * Reads the stored session without building a repository.
+ *
+ * Background work needs the household's inventory, and it has no Compose scope
+ * to collect a StateFlow from. It must not open its own DataStore either: a
+ * second delegate over the same file throws, so this reuses the one this file
+ * owns. Returns an empty session when nothing has been stored, which callers
+ * have to treat as "no inventory" rather than as an error.
+ */
+internal suspend fun readStoredSession(context: Context): ReciboZenSessionState {
+    val preferences = context.applicationContext.reciboZenDataStore.data.first()
+    return SessionJsonCodec.decode(preferences[stringPreferencesKey("session_json_v1")])
+}
 
 /**
  * Local-first repository used by the real app. DataStore owns the durable copy;
@@ -482,6 +498,12 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
                 val references = if (bill.tariffCode == "DAC" && previousDomesticTariff != null) {
                     it.dacReferenceTariffsByService + (service.id to previousDomesticTariff)
                 } else it.dacReferenceTariffsByService
+                // CFE prints the multiplier on the bill, so an imported bill
+                // outranks anything the household typed into Perfil. This is the
+                // value bill import has always used for its own arithmetic; it
+                // now reaches the reading path too, which is what stopped the
+                // two from disagreeing by exactly this factor.
+                val billMultiplier = bill.multiplier.coerceAtLeast(1)
                 it.copy(
                     activeServiceId = service.id,
                     serviceAlias = service.displayAlias,
@@ -491,6 +513,8 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
                     tariff = bill.tariffCode,
                     dacReferenceTariffsByService = references,
                     billingCycle = service.billingCycle,
+                    meterMultiplier = billMultiplier,
+                    meterMultiplierByService = it.meterMultiplierByService + (service.id to billMultiplier),
                     lastConfirmedReadingKwh = maxOf(it.lastConfirmedReadingKwh, bill.currentReadingKwh),
                     readings = mergedReadings,
                 )
@@ -595,6 +619,8 @@ internal object SessionJsonCodec {
         put("billingCycle", state.billingCycle)
         put("goalMxn", state.goalMxn)
         put("meterType", state.meterType)
+        put("meterDigitCount", state.meterDigitCount ?: JSONObject.NULL)
+        put("meterMultiplier", state.meterMultiplier)
         put("applianceHours", JSONObject(state.applianceHoursPerWeek))
         put("houseSpaces", JSONArray().apply {
             state.houseSpaces.forEach { space ->
@@ -647,6 +673,8 @@ internal object SessionJsonCodec {
         put("goalMxnByService", JSONObject(state.goalMxnByService))
         put("meterTypeByService", JSONObject(state.meterTypeByService))
         put("locationByService", JSONObject(state.locationByService))
+        put("meterDigitCountByService", JSONObject(state.meterDigitCountByService))
+        put("meterMultiplierByService", JSONObject(state.meterMultiplierByService))
         put("dialAngles", JSONArray(state.dialAngles))
         put("dialSelectedIndex", state.dialSelectedIndex)
         put("dialVisitedFaces", JSONArray(state.dialVisitedFaces.sorted()))
@@ -668,6 +696,22 @@ internal object SessionJsonCodec {
                     put("method", reading.method.name)
                     put("note", reading.note)
                     put("timestamp", reading.timestampEpochMillis ?: JSONObject.NULL)
+                    // Absent and zero are different answers here: absent means
+                    // nobody was asked, zero means the household said it did not
+                    // wrap. Writing 0 for both would turn silence into testimony.
+                    put("wrapsSincePrevious", reading.wrapsSincePrevious ?: JSONObject.NULL)
+                    // Written as an object rather than two flat keys so that
+                    // "no replacement" and "a replacement whose readings are
+                    // still missing" stay distinguishable on the way back in.
+                    put(
+                        "meterReplacement",
+                        reading.meterReplacement?.let { replacement ->
+                            JSONObject().apply {
+                                put("previousMeterFinalKwh", replacement.previousMeterFinalKwh ?: JSONObject.NULL)
+                                put("newMeterStartKwh", replacement.newMeterStartKwh ?: JSONObject.NULL)
+                            }
+                        } ?: JSONObject.NULL,
+                    )
                 })
             }
         })
@@ -726,6 +770,13 @@ internal object SessionJsonCodec {
                     if (migrateFixtureState && it == DemoReciboZenData.GOAL_MXN) 0 else it.coerceAtLeast(0)
                 },
                 meterType = fixtureOrEmpty("meterType", DemoReciboZenData.METER_TYPE_SELECTED),
+                // Out of range is not coerced into range: clamping a stored 0 up
+                // to 4 would turn corrupt data into a declaration the household
+                // never made. Dropping it puts the app back to not knowing,
+                // which is a state it already handles honestly.
+                meterDigitCount = json.optNullableInt("meterDigitCount")
+                    ?.takeIf { it in MeterProfile.DECLARABLE_DIGITS },
+                meterMultiplier = json.optInt("meterMultiplier", 1).coerceAtLeast(1),
                 applianceHoursPerWeek = hours,
                 customAppliances = decodedAppliances,
                 houseSpaces = decodedSpaces,
@@ -744,6 +795,10 @@ internal object SessionJsonCodec {
                 } else emptyMap(),
                 meterTypeByService = json.optJSONObject("meterTypeByService").toStringMap(),
                 locationByService = json.optJSONObject("locationByService").toStringMap(),
+                meterDigitCountByService = json.optJSONObject("meterDigitCountByService")
+                    .toFilteredIntMap(MeterProfile.DECLARABLE_DIGITS),
+                meterMultiplierByService = json.optJSONObject("meterMultiplierByService")
+                    .toFilteredIntMap(MULTIPLIER_RANGE),
                 trackedActionIds = json.optJSONArray("trackedActionIds")
                     ?.let { array -> (0 until array.length()).mapNotNull { array.optString(it).takeIf(String::isNotBlank) } }
                     ?.toSet()
@@ -781,6 +836,13 @@ internal object SessionJsonCodec {
     private val HOURS_PER_WEEK_RANGE = 0..168
     private val GOAL_MXN_RANGE = 0..1_000_000
 
+    /**
+     * CFE constants run 1 for a direct-connected residential meter up to the
+     * hundreds on services read through a current transformer. The ceiling only
+     * exists to stop a corrupt value from multiplying a reading into nonsense.
+     */
+    private val MULTIPLIER_RANGE = 1..10_000
+
     private fun JSONObject?.toStringMap(): Map<String, String> {
         if (this == null) return emptyMap()
         return keys().asSequence().mapNotNull { key ->
@@ -804,6 +866,22 @@ internal object SessionJsonCodec {
         return keys().asSequence().associateWith { key ->
             optInt(key, fallback[key] ?: 0).coerceIn(range.first, range.last)
         }
+    }
+
+    /**
+     * Keeps only the entries that land inside [range] and drops the rest.
+     *
+     * Deliberately not [toIntMap], which coerces. These maps carry declarations
+     * about the physical meter, and clamping an impossible stored value into
+     * range would manufacture a declaration nobody made. Absence already means
+     * "not declared" everywhere these maps are read, so dropping is the honest
+     * failure and needs no extra handling downstream.
+     */
+    private fun JSONObject?.toFilteredIntMap(range: IntRange): Map<String, Int> {
+        if (this == null) return emptyMap()
+        return keys().asSequence().mapNotNull { key ->
+            optNullableInt(key)?.takeIf { it in range }?.let { key to it }
+        }.toMap()
     }
 
     private fun JSONObject?.toStringMap(fallback: Map<String, String>): Map<String, String> {
@@ -842,6 +920,16 @@ internal object SessionJsonCodec {
                         method = enumValueOr(item.optString("method"), ReadingMethod.MANUAL),
                         note = item.optString("note"),
                         timestampEpochMillis = item.optNullableLong("timestamp"),
+                        wrapsSincePrevious = item.optNullableInt("wrapsSincePrevious")
+                            ?.takeIf { it >= 0 },
+                        meterReplacement = item.optJSONObject("meterReplacement")?.let { replacement ->
+                            MeterReplacement(
+                                previousMeterFinalKwh = replacement.optNullableInt("previousMeterFinalKwh")
+                                    ?.takeIf { it >= 0 },
+                                newMeterStartKwh = replacement.optNullableInt("newMeterStartKwh")
+                                    ?.takeIf { it >= 0 },
+                            )
+                        },
                     ),
                 )
             }

@@ -45,7 +45,30 @@ class EntitlementLeaseVerifier(
     private val currentVersionCode: Long,
     private val nowEpochSeconds: () -> Long = { System.currentTimeMillis() / 1_000L },
 ) {
-    fun verify(token: String?, expectedSubject: String): EntitlementLeaseVerification {
+    /**
+     * Verifies a lease against a subject this install already knows.
+     */
+    fun verify(token: String?, expectedSubject: String): EntitlementLeaseVerification =
+        verifyInternal(token, expectedSubject)
+
+    /**
+     * Verifies a lease and takes its subject as given.
+     *
+     * Needed because the quota subject is derived by the backend from the
+     * purchase, not chosen by this install: the app used to generate its own
+     * with UUID.randomUUID(), so clearing app data minted a new identity and a
+     * new monthly AI allowance off one subscription.
+     *
+     * Reading the subject out of the payload is safe in a way trusting a header
+     * never would be: it sits inside the bytes the signature covers, so a forged
+     * subject is a forged lease. What is given up is transferability between
+     * devices, and [PremiumAccessStore] takes that back by pinning the first
+     * subject it learns.
+     */
+    fun verifyLearningSubject(token: String?): EntitlementLeaseVerification =
+        verifyInternal(token, expectedSubject = null)
+
+    private fun verifyInternal(token: String?, expectedSubject: String?): EntitlementLeaseVerification {
         if (publicKeyBase64.isBlank()) return rejected(EntitlementLeaseFailure.NOT_CONFIGURED)
         if (token.isNullOrBlank()) return rejected(EntitlementLeaseFailure.MISSING)
         if (token.length > MAX_TOKEN_CHARACTERS) return rejected(EntitlementLeaseFailure.MALFORMED)
@@ -62,8 +85,13 @@ class EntitlementLeaseVerifier(
             return rejected(EntitlementLeaseFailure.MALFORMED)
         }
         if (fields[1] != expectedAudience) return rejected(EntitlementLeaseFailure.WRONG_AUDIENCE)
-        if (expectedSubject.isBlank() || expectedSubject.length > MAX_SUBJECT_CHARACTERS ||
-            fields[2] != expectedSubject
+        if (fields[2].isBlank() || fields[2].length > MAX_SUBJECT_CHARACTERS) {
+            return rejected(EntitlementLeaseFailure.WRONG_SUBJECT)
+        }
+        // A null expectation means "learn it". A stated one still has to match.
+        if (expectedSubject != null &&
+            (expectedSubject.isBlank() || expectedSubject.length > MAX_SUBJECT_CHARACTERS ||
+                fields[2] != expectedSubject)
         ) {
             return rejected(EntitlementLeaseFailure.WRONG_SUBJECT)
         }

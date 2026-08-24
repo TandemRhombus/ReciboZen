@@ -10,11 +10,8 @@ import app.recibozen.android.core.calculation.TariffBlock
 import app.recibozen.android.core.calculation.TariffEngine
 import app.recibozen.android.core.model.BillPeriod
 import app.recibozen.android.core.model.ReadingMethod
-import app.recibozen.android.demo.repository.EnergySummary
-import app.recibozen.android.demo.repository.ReciboZenSessionState
-import java.time.Instant
-import java.time.ZoneId
-import kotlin.math.roundToInt
+import app.recibozen.android.core.calculation.AccumulatedConsumption
+import app.recibozen.android.core.calculation.MeterProfile
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -55,7 +52,13 @@ class PeriodAnalysisViewModel(repository: ReciboZenRepository) : ViewModel() {
                 currentPeriodDateRange = currentPeriod?.dateRangeLabel.orEmpty(),
                 previousPeriodLabel = latestBill?.monthLabel.orEmpty(),
                 previousBillKwh = latestBill?.consumptionKwh ?: 0,
-                accumulatedKwhByDay = accumulatedByDay(state, energy),
+                accumulatedKwhByDay = AccumulatedConsumption.byDay(
+                    readings = state.readings,
+                    register = MeterProfile.register(state.meterType, state.meterDigitCount, state.meterMultiplier),
+                    periodStartEpochDay = currentPeriod?.startEpochDay ?: 0L,
+                    observedDays = if (currentPeriod == null) 0 else energy.observedDays,
+                    observedKwh = energy.observedKwh,
+                ),
                 billChange = explainLastChange(importedBills, repository.activeTariffBlocks()),
             )
         }
@@ -79,45 +82,4 @@ private fun explainLastChange(bills: List<BillPeriod>, blocks: List<TariffBlock>
         current = real.last(),
         previousEngine = engine,
     )
-}
-
-/**
- * Accumulated consumption per elapsed day, interpolated between the readings
- * the user actually took. Between two readings the meter only tells us the
- * total, so the segment is drawn as a straight line: honest about the fact
- * that we do not know the shape inside that gap.
- */
-private fun accumulatedByDay(state: ReciboZenSessionState, energy: EnergySummary): List<Int> {
-    val period = energy.currentPeriod ?: return emptyList()
-    if (energy.observedDays <= 0) return emptyList()
-    val points = state.readings
-        .filter { it.method != ReadingMethod.PDF }
-        .mapNotNull { reading ->
-            val timestamp = reading.timestampEpochMillis ?: return@mapNotNull null
-            val day = Instant.ofEpochMilli(timestamp).atZone(ZoneId.systemDefault()).toLocalDate().toEpochDay()
-            if (day < period.startEpochDay) null else (day - period.startEpochDay).toInt() to reading.kwh
-        }
-        .sortedBy { it.first }
-        .distinctBy { it.first }
-    if (points.size < 2) {
-        // A single reading still draws a straight line from the period's start.
-        return (0..energy.observedDays).map { day ->
-            (energy.observedKwh.toDouble() * day / energy.observedDays).roundToInt()
-        }
-    }
-    val base = points.first().second
-    return (0..energy.observedDays).map { day ->
-        val after = points.firstOrNull { it.first >= day }
-        val before = points.lastOrNull { it.first <= day }
-        when {
-            after != null && before != null && after.first == before.first -> after.second - base
-            after != null && before != null -> {
-                val span = (after.first - before.first).coerceAtLeast(1)
-                val progress = (day - before.first).toDouble() / span
-                (before.second + (after.second - before.second) * progress).roundToInt() - base
-            }
-            before != null -> before.second - base
-            else -> 0
-        }.coerceAtLeast(0)
-    }
 }

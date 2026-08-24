@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.FlowRow
@@ -27,7 +28,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
@@ -40,6 +40,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import app.recibozen.android.R
+import app.recibozen.android.core.calculation.DacDailyBudget
 import app.recibozen.android.core.calculation.DacRiskCalculator
 import app.recibozen.android.core.calculation.DacRiskLevel
 import app.recibozen.android.core.calculation.DacRiskSnapshot
@@ -70,6 +71,15 @@ import kotlinx.coroutines.flow.stateIn
 data class DacTariffTier(
     val usedKwh: Int,
     val startsAtKwh: Int,
+    /**
+     * Where the tier ends, or null for the open-ended one.
+     *
+     * The card is titled "Rango de este periodo" and did not carry this at all:
+     * every row printed [usedKwh], the energy spent inside the tier. "Básico ·
+     * 87 kWh" says nothing about where básico ends, which is the number a
+     * household can act on.
+     */
+    val endsAtKwh: Int?,
     val fraction: Float,
     val amountMxn: Int,
     val isOpenEnded: Boolean,
@@ -91,11 +101,30 @@ data class DacLimitReference(
 
 data class DacUiState(
     val risk: DacRiskSnapshot = DacRiskSnapshot(),
+    /**
+     * The period ceiling turned into a rate someone can act on. Kept beside the
+     * snapshot rather than inside [DacGlance] because it rests on two facts the
+     * rolling-year rule does not carry: what this period has already used and
+     * how many days are left.
+     */
+    val dailyBudget: DacDailyBudget = DacDailyBudget.Unavailable(DacDailyBudget.Reason.NO_LIMIT),
     val tariff: String = "",
     val tariffTiers: List<DacTariffTier> = emptyList(),
     val tariffCalibrated: Boolean = false,
     val usesLatestDacBillEffectiveRate: Boolean = false,
-    val todayMarkerFraction: Float = 0f,
+    /**
+     * Where today sits along the bar, or null when the bar cannot answer that.
+     *
+     * It used to be observedKwh / basisKwh with the basis falling back to
+     * observedKwh itself, so without a live projection the ratio was 1.0 every
+     * single time and the marker sat pinned to the right end forever. A marker
+     * that cannot move is worse than no marker: it looks like a reading.
+     */
+    val todayMarkerFraction: Float? = null,
+    /** Energy the tier bar spans. */
+    val basisKwh: Int = 0,
+    /** True when [basisKwh] is the projected period rather than what is used so far. */
+    val basisIsProjection: Boolean = false,
     val opportunities: List<DacOpportunity> = emptyList(),
     val limitReferences: List<DacLimitReference> = emptyList(),
 ) {
@@ -107,6 +136,15 @@ data class DacUiState(
     val annualComparableKwh: Int get() = risk.annualizedRollingKwh?.roundToInt() ?: 0
 }
 
+/**
+ * Visible to tests only. The tier bar and its legend both filter on
+ * [DacTariffTier.usedKwh] being above zero, and that filter is only correct if
+ * unreached blocks really do come out at zero.
+ */
+@Suppress("FunctionName")
+fun buildTariffTiersForTest(basisKwh: Int, blocks: List<TariffBlock>): List<DacTariffTier> =
+    buildTariffTiers(basisKwh, blocks)
+
 private fun buildTariffTiers(basisKwh: Int, blocks: List<TariffBlock>): List<DacTariffTier> {
     if (basisKwh <= 0 || blocks.isEmpty()) return emptyList()
     val safeBasis = basisKwh.toFloat()
@@ -117,6 +155,7 @@ private fun buildTariffTiers(basisKwh: Int, blocks: List<TariffBlock>): List<Dac
         val tier = DacTariffTier(
             usedKwh = used,
             startsAtKwh = previousLimit,
+            endsAtKwh = block.limitKwh,
             fraction = used / safeBasis,
             amountMxn = (used * block.rateMxnPerKwh).roundToInt(),
             isOpenEnded = block.limitKwh == null,
@@ -191,6 +230,15 @@ class DacViewModel(private val repository: ReciboZenRepository) : ViewModel() {
         }
         return DacUiState(
             risk = risk,
+            dailyBudget = DacDailyBudget.of(
+                snapshot = risk,
+                consumedKwh = energy.observedKwh,
+                daysRemaining = energy.daysRemaining,
+                // Only a live meter pace means the consumed figure was measured
+                // during this period. A closed bill or an appliance estimate is
+                // an assumption, and a budget built on it has to say so.
+                consumptionIsMeasured = energy.hasCurrentMeterProjection,
+            ),
             tariff = state.tariff,
             tariffTiers = tiers,
             tariffCalibrated = tariffCalibrated,
@@ -199,7 +247,14 @@ class DacViewModel(private val repository: ReciboZenRepository) : ViewModel() {
                     TariffCatalog.normalize(it.tariffCode.orEmpty()) == "DAC" &&
                         it.consumptionKwh > 0 && it.amountMxn > 0
                 },
-            todayMarkerFraction = (energy.observedKwh.toFloat() / basisKwh.coerceAtLeast(1)).coerceIn(0f, 1f),
+            basisKwh = basisKwh,
+            basisIsProjection = projectedKwh != null,
+            // Only meaningful against a projection. With the bar spanning what
+            // has already been used, today is the end of the bar by definition
+            // and the marker would state a tautology.
+            todayMarkerFraction = projectedKwh?.let {
+                (energy.observedKwh.toFloat() / it.coerceAtLeast(1)).coerceIn(0f, 1f)
+            },
             opportunities = opportunities,
             limitReferences = limitReferences,
         )
@@ -250,6 +305,7 @@ fun DacScreen(
                         if (uiState.risk.referenceDomesticTariffCode != null) DacEmptyCard(hasTariff = true)
                     } else {
                         DacHeroCard(uiState, glance)
+                        DacDailyBudgetCard(uiState.dailyBudget)
                         DacNextBillCard(glance)
                         DacExitActionsCard(uiState)
                         DacExitReferenceCard(uiState, onSelectDacReferenceTariff)
@@ -265,6 +321,7 @@ fun DacScreen(
 
                 else -> {
                     DacHeroCard(uiState, glance)
+                    DacDailyBudgetCard(uiState.dailyBudget)
                     DacNextBillCard(glance)
                     DacOpportunitiesCard(uiState)
                     DacHowCard(uiState)
@@ -272,6 +329,118 @@ fun DacScreen(
                 }
             }
         }
+    }
+}
+
+/**
+ * The period ceiling as a daily rate.
+ *
+ * A bimester total is not something anyone rations by. This is the same number
+ * divided by the days that are actually left, after subtracting what the period
+ * has already used -- which is why it moves as the household consumes, and why
+ * it stops being a rate at all once the ceiling is spent.
+ */
+@Composable
+private fun DacDailyBudgetCard(budget: DacDailyBudget) {
+    when (budget) {
+        // Nothing to say, and no card. The screen already explains elsewhere
+        // that the tariff has no limit or that the year is not complete; the one
+        // case worth its own line is a reader who has the history but is between
+        // periods, and the incomplete-history case, which is actionable advice.
+        is DacDailyBudget.Unavailable -> when (budget.reason) {
+            DacDailyBudget.Reason.INCOMPLETE_HISTORY -> DacInfoCard(stringResource(R.string.dac_daily_incomplete))
+            DacDailyBudget.Reason.PERIOD_CLOSED -> DacInfoCard(stringResource(R.string.dac_daily_period_closed))
+            DacDailyBudget.Reason.NO_LIMIT, DacDailyBudget.Reason.PERIOD_LENGTH_UNKNOWN -> Unit
+        }
+
+        is DacDailyBudget.Exhausted -> RzCard(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                stringResource(R.string.dac_daily_exhausted_title),
+                style = MaterialTheme.typography.titleSmall,
+                color = RzTheme.extendedColors.warningText,
+            )
+            Text(
+                stringResource(
+                    R.string.dac_daily_exhausted_body,
+                    dacKwh(budget.consumedKwh),
+                    dacKwh(budget.periodCeilingKwh),
+                    dacKwh(budget.overshootKwh),
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = RzSpacing.xs),
+            )
+            if (!budget.basedOnMeasuredConsumption) {
+                Text(
+                    stringResource(R.string.dac_daily_unmeasured, dacKwh(budget.consumedKwh)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.padding(top = RzSpacing.sm),
+                )
+            }
+        }
+
+        is DacDailyBudget.Available -> RzCard(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                stringResource(
+                    if (budget.isExitBudget) R.string.dac_daily_title_exit else R.string.dac_daily_title,
+                ),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                stringResource(R.string.dac_daily_value, dacDaily(budget.dailyKwh)),
+                style = MaterialTheme.typography.displaySmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+            Text(
+                text = if (budget.daysRemaining == 1) {
+                    stringResource(
+                        R.string.dac_daily_detail_one_day,
+                        dacKwh(budget.remainingKwh),
+                        dacKwh(budget.periodCeilingKwh),
+                    )
+                } else {
+                    stringResource(
+                        R.string.dac_daily_detail,
+                        dacKwh(budget.remainingKwh),
+                        dacKwh(budget.periodCeilingKwh),
+                        budget.daysRemaining,
+                    )
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = RzSpacing.sm),
+            )
+            Text(
+                stringResource(
+                    if (budget.isExitBudget) R.string.dac_daily_body_exit else R.string.dac_daily_body,
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = RzSpacing.xs),
+            )
+            if (!budget.basedOnMeasuredConsumption) {
+                Text(
+                    stringResource(R.string.dac_daily_unmeasured, dacKwh(budget.consumedKwh)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = RzTheme.extendedColors.warningText,
+                    modifier = Modifier.padding(top = RzSpacing.sm),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DacInfoCard(text: String) {
+    RzCard(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -597,27 +766,38 @@ private fun DacTiersCard(uiState: DacUiState) {
             RzTheme.extendedColors.warning,
             MaterialTheme.colorScheme.surfaceVariant,
         )
+        // Only the tiers this period actually reaches. Every block of the tariff
+        // used to be mapped whether or not it was used, so a household inside the
+        // first block got a bar with two empty slivers on the right and a legend
+        // reading "Intermedio · 0 kWh". The colour still comes from the tier's
+        // real position, so "Excedente" stays the same colour whether or not the
+        // intermediate tier is on screen.
+        val reachedTiers = uiState.tariffTiers
+            .mapIndexed { index, tier -> index to tier }
+            .filter { (_, tier) -> tier.usedKwh > 0 }
         RzStackedBarRow(
-            segments = uiState.tariffTiers.mapIndexed { index, tier ->
+            segments = reachedTiers.map { (index, tier) ->
                 RzBarSegment(weight = tier.fraction, color = tierColors[index % tierColors.size])
             },
             height = 16.dp,
             modifier = Modifier.padding(top = RzSpacing.md),
         )
-        Box(modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.xs)) {
-            Text(
-                stringResource(R.string.dac_today_marker),
-                style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.align(
-                    BiasAlignment(horizontalBias = uiState.todayMarkerFraction * 2f - 1f, verticalBias = -1f),
-                ),
-            )
-        }
+        uiState.todayMarkerFraction?.let { TodayMarker(fraction = it) }
+        // What the bar actually spans. Without this the same picture means two
+        // different things depending on whether a projection exists, and nothing
+        // on screen said which one the reader was looking at.
+        DacNote(
+            stringResource(
+                if (uiState.basisIsProjection) R.string.dac_tariff_basis_projection
+                else R.string.dac_tariff_basis_observed,
+                dacKwh(uiState.basisKwh),
+            ),
+        )
         Column(
             modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.sm),
             verticalArrangement = Arrangement.spacedBy(RzSpacing.sm),
         ) {
-            uiState.tariffTiers.forEachIndexed { index, tier ->
+            reachedTiers.forEach { (index, tier) ->
                 TariffTierRow(tierColors[index % tierColors.size], index, tier)
             }
         }
@@ -737,20 +917,54 @@ private fun DacNote(text: String) {
     )
 }
 
+/**
+ * The "hoy" label under the tier bar, aligned to [fraction] of its width.
+ *
+ * Two weighted spacers rather than a BiasAlignment. Bias positions the label's
+ * *centre* at the fraction, so at 0 and at 1 half the label hangs outside the
+ * row and is clipped -- and today sitting at either end is the normal state at
+ * the start and end of a period. Splitting the leftover width in the same ratio
+ * slides the label between the two edges without ever crossing them.
+ */
+@Composable
+private fun TodayMarker(fraction: Float) {
+    val clamped = fraction.coerceIn(0f, 1f)
+    Row(modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.xs)) {
+        if (clamped > 0f) Spacer(modifier = Modifier.weight(clamped))
+        Text(
+            stringResource(R.string.dac_today_marker),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (clamped < 1f) Spacer(modifier = Modifier.weight(1f - clamped))
+    }
+}
+
 @Composable
 private fun TariffTierRow(color: Color, index: Int, tier: DacTariffTier) {
-    val labelRes = when {
-        tier.isOpenEnded -> R.string.dac_tier_excess
-        index == 0 -> R.string.dac_tier_basic
-        else -> R.string.dac_tier_intermediate
-    }
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(RzSpacing.sm)) {
-        Box(modifier = Modifier.size(10.dp).background(color, RoundedCornerShape(3.dp)))
-        Text(
-            stringResource(labelRes, if (tier.isOpenEnded) tier.startsAtKwh else tier.usedKwh),
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(1f),
+    // The range first, because that is what the card promises and what tells a
+    // household how much room is left before the next tier starts charging
+    // more. What was spent inside it goes underneath, where it cannot be
+    // mistaken for the boundary.
+    val rangeLabel = when {
+        tier.isOpenEnded -> stringResource(R.string.dac_tier_excess, tier.startsAtKwh)
+        index == 0 -> stringResource(R.string.dac_tier_basic, tier.endsAtKwh ?: tier.usedKwh)
+        else -> stringResource(
+            R.string.dac_tier_intermediate,
+            tier.startsAtKwh + 1,
+            tier.endsAtKwh ?: tier.usedKwh,
         )
+    }
+    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(RzSpacing.sm)) {
+        Box(modifier = Modifier.padding(top = 5.dp).size(10.dp).background(color, RoundedCornerShape(3.dp)))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(rangeLabel, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                stringResource(R.string.dac_tier_used, dacKwh(tier.usedKwh)),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         Text(
             if (tier.amountMxn > 0) dacMoneyFormat.format(tier.amountMxn) else "—",
             style = MaterialTheme.typography.titleSmall,

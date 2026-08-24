@@ -5,6 +5,7 @@ import app.recibozen.android.core.model.Appliance
 import app.recibozen.android.core.model.BillPeriod
 import app.recibozen.android.core.model.PlanAction
 import app.recibozen.android.core.model.HistoryUnit
+import app.recibozen.android.core.model.MeterReplacement
 import app.recibozen.android.core.model.ReadingMethod
 import app.recibozen.android.core.model.ElectricServiceIdentity
 import app.recibozen.android.core.model.ServiceCreationResult
@@ -104,6 +105,16 @@ interface ReciboZenRepository {
     /** Marks the guided tour as seen, or queues it again from Perfil. */
     fun setTutorialCompleted(completed: Boolean)
     fun setMeterType(meterType: String)
+
+    /**
+     * Records how many digits the register shows, as counted by the household.
+     * Null clears the declaration and hands the question back to the meter type
+     * label, which for a digital meter means the app goes back to not knowing.
+     */
+    fun setMeterDigitCount(digitCount: Int?)
+
+    /** Records the CFE constant printed on the meter. 1 when it has none. */
+    fun setMeterMultiplier(multiplier: Int)
     fun updateProfile(userName: String, householdName: String, location: String, goalMxn: Int)
     fun setTariff(tariff: String)
     fun setDacReferenceTariff(tariff: String)
@@ -115,5 +126,18 @@ interface ReciboZenRepository {
     suspend fun importCfeBill(bill: ParsedCfeBill, sourceFileHash: String): BillImportResult
     fun setManualReadingDigits(digits: List<Int>)
     fun prepareReading(kwh: Int, method: ReadingMethod)
-    fun confirmReading(kwh: Int, method: ReadingMethod)
+    /**
+     * Stores [kwh] as the household's confirmed reading.
+     *
+     * [wrapsSincePrevious] is how many times they attested the register wrapped
+     * since the previous reading. Null means they were never asked -- either the
+     * interval was unambiguous or the app could not frame the question -- and it
+     * travels with the entry so no later screen has to re-derive it.
+     */
+    fun confirmReading(
+        kwh: Int,
+        method: ReadingMethod,
+        wrapsSincePrevious: Int? = null,
+        meterReplacement: MeterReplacement? = null,
+    )
 }

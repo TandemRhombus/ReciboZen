@@ -42,7 +42,9 @@ import androidx.navigation.NavHostController
 import app.recibozen.android.R
 import app.recibozen.android.core.components.RzBarEntry
 import app.recibozen.android.core.components.RzScrollableBarChart
+import app.recibozen.android.core.components.RzBarSegment
 import app.recibozen.android.core.components.RzCard
+import app.recibozen.android.core.components.RzStackedBarRow
 import app.recibozen.android.core.components.RzSegmentedTabs
 import app.recibozen.android.core.components.RzSecondaryButton
 import app.recibozen.android.core.components.RzTabHeader
@@ -75,6 +77,10 @@ data class HistoryUiState(
     val householdName: String = "",
     val userInitial: String = "?",
     val currentPeriod: BillPeriod? = null,
+    /** Days of the period in progress the readings already cover. */
+    val currentPeriodObservedDays: Int = 0,
+    /** Days the period is expected to last, 0 while it is not established. */
+    val currentPeriodBillingDays: Int = 0,
     val pastBills: List<BillPeriod> = emptyList(),
     val historyUnit: HistoryUnit = HistoryUnit.MXN,
     val comparison: PastPeriodComparison? = null,
@@ -89,11 +95,14 @@ class HistoryViewModel(private val repository: ReciboZenRepository) : ViewModel(
     ) { state, importedBills ->
             val history = repository.billHistory(state)
             val projected = history.lastOrNull { it.isProjected }
+            val energy = repository.energySummary(state)
             HistoryUiState(
                 greetingName = state.userName,
                 householdName = state.householdName,
                 userInitial = state.userName.firstOrNull()?.uppercase() ?: "?",
                 currentPeriod = projected,
+                currentPeriodObservedDays = energy.observedDays,
+                currentPeriodBillingDays = energy.billingDays,
                 pastBills = importedBills,
                 historyUnit = state.historyUnit,
                 readingsCountLabel = "${state.readings.size} lecturas recientes",
@@ -178,7 +187,12 @@ fun HistoryScreen(
                 )
 
                 uiState.currentPeriod?.let { currentPeriod ->
-                    CurrentPeriodProjectionCard(currentPeriod = currentPeriod, unit = uiState.historyUnit)
+                    CurrentPeriodProjectionCard(
+                        currentPeriod = currentPeriod,
+                        unit = uiState.historyUnit,
+                        observedDays = uiState.currentPeriodObservedDays,
+                        billingDays = uiState.currentPeriodBillingDays,
+                    )
                 }
 
                 PreviousBillsCard(
@@ -224,7 +238,12 @@ fun HistoryScreen(
  * receipts only).
  */
 @Composable
-private fun CurrentPeriodProjectionCard(currentPeriod: BillPeriod, unit: HistoryUnit) {
+private fun CurrentPeriodProjectionCard(
+    currentPeriod: BillPeriod,
+    unit: HistoryUnit,
+    observedDays: Int,
+    billingDays: Int,
+) {
     RzCard(modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -258,7 +277,23 @@ private fun CurrentPeriodProjectionCard(currentPeriod: BillPeriod, unit: History
                 modifier = Modifier.padding(bottom = 3.dp),
             )
         }
-        StripedBar(modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.sm).height(10.dp))
+        PeriodProgressBar(
+            observedDays = observedDays,
+            billingDays = billingDays,
+            modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.sm),
+        )
+        if (billingDays > 0) {
+            Text(
+                stringResource(
+                    R.string.history_current_period_progress,
+                    observedDays.coerceIn(0, billingDays),
+                    billingDays,
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = RzSpacing.sm),
+            )
+        }
         Text(
             stringResource(R.string.history_current_period_caption_dynamic),
             style = MaterialTheme.typography.bodySmall,
@@ -268,24 +303,32 @@ private fun CurrentPeriodProjectionCard(currentPeriod: BillPeriod, unit: History
     }
 }
 
+/**
+ * How much of the period the projection actually rests on.
+ *
+ * This used to be a full-width band of diagonal stripes that represented
+ * nothing: identical on day 1 and on day 60, drawn from no data at all. It was
+ * texture from the mockup sitting directly under a peso figure, which invites
+ * reading it as a measurement of something.
+ *
+ * Now the solid part is the days the readings cover and the striped part is the
+ * rest of the period, which is the projection. The stripes keep their original
+ * meaning -- provisional -- and now mark exactly the portion that is.
+ */
 @Composable
-private fun StripedBar(modifier: Modifier = Modifier) {
+private fun PeriodProgressBar(observedDays: Int, billingDays: Int, modifier: Modifier = Modifier) {
     val color = MaterialTheme.colorScheme.primary
-    androidx.compose.foundation.Canvas(modifier = modifier) {
-        val radius = androidx.compose.ui.geometry.CornerRadius(size.height / 2, size.height / 2)
-        drawRoundRect(color = color.copy(alpha = 0.18f), cornerRadius = radius)
-        val step = size.height
-        var x = -size.height
-        while (x < size.width) {
-            drawLine(
-                color = color,
-                start = androidx.compose.ui.geometry.Offset(x, size.height),
-                end = androidx.compose.ui.geometry.Offset(x + size.height, 0f),
-                strokeWidth = 2.dp.toPx(),
-            )
-            x += step
-        }
-    }
+    // Without a period length nothing here is known, so the whole bar is
+    // provisional rather than a made-up fraction of an unknown total.
+    val elapsed = if (billingDays > 0) observedDays.coerceIn(0, billingDays).toFloat() / billingDays else 0f
+    RzStackedBarRow(
+        segments = listOf(
+            RzBarSegment(weight = elapsed, color = color),
+            RzBarSegment(weight = 1f - elapsed, color = color, striped = true),
+        ),
+        height = 10.dp,
+        modifier = modifier,
+    )
 }
 
 @Composable

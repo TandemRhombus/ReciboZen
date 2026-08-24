@@ -1,0 +1,64 @@
+name = "recibozen-ia"
+main = "src/worker.mjs"
+compatibility_date = "2026-08-23"
+account_id = "4833d23e417f8449b2b69536e3bc81bd"
+
+# Declared rather than left to the default, because both of these open a public
+# door and a default that opens doors should never be silent.
+#
+# workers.dev stays on until ia-recibozen.simapp.uk is routed; then it goes to
+# false so there is one entrance instead of two.
+# Off now that ia-recibozen.simapp.uk is verified serving: one entrance instead
+# of two. No published APK ever pointed at the workers.dev name, so nothing
+# breaks by closing it.
+workers_dev = false
+
+# The hostname the APK carries. A URL compiled into an installed app is
+# effectively permanent — a household that never updates keeps calling it — so it
+# has to be a name we own. With this in place the AI can move hosts by changing a
+# DNS record; on workers.dev it would take a new release and everyone updating.
+routes = [{ pattern = "ia-recibozen.simapp.uk", custom_domain = true }]
+
+# Preview URLs publish a separate public hostname for every version deployed.
+# Useful when you stage releases; here it is extra surface for a Worker that
+# has exactly one consumer, so it is off.
+preview_urls = false
+
+[observability]
+enabled = true
+
+[vars]
+LEASE_AUDIENCE = "app.recibozen.android"
+
+# Build-time trust anchor, served by the backend at
+#   GET https://api-recibozen.simapp.uk/.well-known/recibozen-entitlement-key
+# It is a PUBLIC key: it belongs in the repo. That same endpoint warns against
+# fetching it at runtime, and it is right — asking the server you want to verify
+# for the key that verifies it verifies nothing.
+ENTITLEMENT_PUBLIC_KEY_B64 = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEwWgSF1fLrNI/7ZXzdSmQiS1eRV3pRS4HXdyZy4fr/9p6E9rgCkRyjP8D5atgiB4aXZxaWpPfi4vIZADObwqAkg=="
+
+# Layer 4. A string because Workers vars are strings; the router parses it.
+# Empty or zero means the Worker refuses to spend anything at all — an
+# unconfigured ceiling fails closed, never open.
+MONTHLY_CEILING_USD = "20"
+
+# One instance per lease subject.
+[[durable_objects.bindings]]
+name = "SUBJECT_QUOTA"
+class_name = "SubjectQuota"
+
+# One instance for the whole Worker. See the note in src/quota-do.mjs on why
+# this deliberate bottleneck is the right call at this scale, and how to shard
+# it when it stops being.
+[[durable_objects.bindings]]
+name = "GLOBAL_SPEND"
+class_name = "GlobalSpend"
+
+# `new_sqlite_classes` is not a detail: the SQLite storage backend is the one
+# included in the free plan. Classic key-value Durable Objects are not.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SubjectQuota", "GlobalSpend"]
+
+# ANTHROPIC_API_KEY is a secret, never a var:
+#   npx wrangler secret put ANTHROPIC_API_KEY

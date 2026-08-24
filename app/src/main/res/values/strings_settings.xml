@@ -5,6 +5,7 @@
     <string name="profile_unconfigured_name">Perfil sin configurar</string>
     <string name="profile_unconfigured_subtitle">Agrega tu nombre y los datos reales de tu hogar.</string>
     <string name="profile_missing_tariff">sin tarifa</string>
+    <string name="profile_missing_meter_type">sin tipo de medidor</string>
     <string name="profile_missing_cycle">sin ciclo</string>
     <string name="profile_service_not_added">Sin suministro</string>
     <string name="profile_subtitle">%1$s · %2$s · %3$s</string>
@@ -38,6 +39,19 @@
     <string name="profile_service_rmu">RMU (opcional)</string>
     <string name="profile_service_meter_number">Número de medidor (opcional)</string>
     <string name="profile_service_tariff">Tarifa del recibo</string>
+    <string name="profile_row_meter">Cómo se lee tu medidor</string>
+    <string name="profile_row_meter_undeclared">Faltan datos</string>
+    <string name="profile_row_meter_summary">%1$d dígitos · ×%2$d</string>
+    <string name="profile_meter_title">Cómo se lee tu medidor</string>
+    <string name="profile_meter_hint">Estos dos datos deciden cuánto consumiste. Sin ellos no podemos saber si tu medidor dio la vuelta ni cuántos kWh cuenta cada unidad del registro.</string>
+    <string name="profile_meter_digits_label">Dígitos que muestra el registro</string>
+    <string name="profile_meter_digits_help">Cuenta las cifras del contador, sin la carátula de prueba. Es el número que vuelve a cero al llegar a su máximo: uno de 4 dígitos pasa de 9999 a 0000.</string>
+    <string name="profile_meter_digits_from_type">Tu tipo de medidor ya dice %1$d dígitos. Cámbialo solo si al verlo cuentas otra cosa.</string>
+    <string name="profile_meter_digits_unknown">Aún no lo sabemos: “%1$s” no dice cuántos dígitos son.</string>
+    <string name="profile_meter_capacity">Con %1$d dígitos, tu medidor vuelve a cero después de %2$s.</string>
+    <string name="profile_meter_multiplier_label">Multiplicador</string>
+    <string name="profile_meter_multiplier_help">Viene impreso en tu recibo como MULTIPLICADOR. Es 1 en casi todos los servicios de casa. Si importas un recibo, el valor del recibo reemplaza a este.</string>
+    <string name="profile_meter_multiplier_error">Debe ser 1 o más.</string>
     <string name="services_title">Mis suministros</string>
     <string name="services_usage">%1$d de %2$d suministros activos</string>
     <string name="services_empty_title">No hay casas ni suministros registrados</string>

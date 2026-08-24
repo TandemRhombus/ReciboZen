@@ -76,6 +76,7 @@
     <string name="balance_overnight_expected">Tus aparatos registrados justifican %1$.1f kWh (%2$d W).</string>
     <string name="balance_overnight_unexplained">Sobran %1$.1f kWh sin explicar. Busca algo encendido que no tengas registrado.</string>
     <string name="balance_overnight_matches">Cuadra con lo registrado. No hay consumo fantasma a la vista.</string>
+    <string name="balance_overnight_attested">Esta cifra cuenta la vuelta que nos dijiste que dio tu medidor esa noche. Sin ese dato la prueba no se podría medir.</string>
     <string name="balance_overnight_footnote">Puede ser un aparato que no tenemos registrado. Si la diferencia continúa, puedes consultar a un electricista.</string>
     <string name="balance_overnight_action">Iniciar la prueba</string>
     <string name="balance_overnight_no_result">Registra una lectura antes de dormir y otra al despertar para medirlo.</string>
@@ -106,6 +107,18 @@
     <string name="dac_max_current">Periodo actual</string>
     <string name="dac_max_following">Próximo periodo</string>
     <string name="dac_max_following_note">El máximo del próximo periodo supone que este cierra en la proyección y que dura los mismos días.</string>
+    <string name="dac_daily_title">Tu ritmo diario máximo</string>
+    <string name="dac_daily_title_exit">Tu ritmo diario para salir de DAC</string>
+    <string name="dac_daily_value">%1$s kWh al día</string>
+    <string name="dac_daily_detail">Te quedan %1$s kWh de los %2$s del periodo, repartidos en %3$d días.</string>
+    <string name="dac_daily_detail_one_day">Te quedan %1$s kWh de los %2$s del periodo y hoy es el último día.</string>
+    <string name="dac_daily_body">Si te mantienes en ese ritmo, tu promedio de los últimos 12 meses cierra el periodo por debajo del límite de tu tarifa.</string>
+    <string name="dac_daily_body_exit">Ese es el ritmo con el que tu promedio de los últimos 12 meses vuelve a quedar por debajo del límite y sales de DAC.</string>
+    <string name="dac_daily_unmeasured">Ese cálculo supone que llevas %1$s kWh en este periodo, y esa cifra no viene de lecturas tuyas de estos días. Registra una lectura para que sea real.</string>
+    <string name="dac_daily_exhausted_title">Ya pasaste el máximo del periodo</string>
+    <string name="dac_daily_exhausted_body">Llevas %1$s kWh y el máximo era %2$s: vas %3$s kWh por encima. Ya no hay un ritmo diario que lo evite en este periodo; lo que gastes de menos a partir de hoy reduce cuánto te pasas.</string>
+    <string name="dac_daily_incomplete">Todavía no podemos darte un máximo diario: hace falta un año de recibos para saber contra qué límite medirlo.</string>
+    <string name="dac_daily_period_closed">Este periodo ya cerró. El máximo diario aparece cuando empiece el siguiente.</string>
     <string name="dac_next_bill_need_reading">Registra una lectura del medidor para proyectar este periodo.</string>
 
     <string name="dac_opportunities_title">Lo que más podría ayudarte</string>
@@ -143,9 +156,29 @@
     <string name="dac_tariff_title">Rango de este periodo · %1$s</string>
     <string name="dac_tariff_unavailable">Importa un recibo con el desglose legible para ver estos tramos con tus cuotas reales.</string>
     <string name="dac_tariff_effective_bill">El costo por kWh viene de tu último recibo DAC. Se actualiza cuando importes uno más reciente.</string>
-    <string name="dac_tier_basic">Básico · %1$d kWh</string>
-    <string name="dac_tier_intermediate">Intermedio · %1$d kWh</string>
+    <string name="dac_tier_basic">Básico · hasta %1$d kWh</string>
+    <string name="dac_tier_intermediate">Intermedio · de %1$d a %2$d kWh</string>
     <string name="dac_tier_excess">Excedente · desde %1$d kWh</string>
+    <string name="dac_tier_used">Llevas %1$s kWh en este tramo</string>
+    <string name="dac_tariff_basis_projection">La barra es tu consumo proyectado del periodo, %1$s kWh. El marcador es dónde vas hoy.</string>
+    <string name="dac_tariff_basis_observed">La barra es lo que llevas consumido, %1$s kWh. Sin una proyección no podemos dibujar lo que falta del periodo, así que tampoco marcamos dónde vas.</string>
     <string name="dac_today_marker">▲ hoy</string>
     <string name="dac_tariff_footnote">El rango excedente encarece el kWh dentro de este periodo. Es distinto del promedio anual de arriba.</string>
+    <!-- AI savings advice -->
+    <string name="savings_ai_title">Plan de ahorro</string>
+    <string name="plan_savings_ai_link_title">Plan de ahorro con IA</string>
+    <string name="plan_savings_ai_link_description">Qué configurar en tus aparatos para gastar menos, según tu propio consumo</string>
+    <string name="savings_ai_kind_setting">CONFIGURACIÓN</string>
+    <string name="savings_ai_kind_maintenance">MANTENIMIENTO</string>
+    <string name="savings_ai_kind_habit">HÁBITO</string>
+    <string name="savings_ai_target">Déjalo en %1$s</string>
+    <string name="savings_ai_target_safety">Déjalo en %1$s — no lo bajes de ahí, es un límite sanitario</string>
+    <string name="savings_ai_saving">Ahorra unos %1$d kWh en el periodo (%2$d%% de ese aparato)</string>
+    <string name="savings_ai_provenance_note">Los porcentajes los sugiere la IA; los kWh y los pesos los calcula la app con tu tarifa.</string>
+    <string name="savings_ai_needs_premium">El plan de ahorro con IA es parte de Premium.</string>
+    <string name="savings_ai_nothing_measured">Todavía no hay consumo medido para aconsejar sobre él. Registra una lectura y da de alta tus aparatos.</string>
+    <string name="savings_ai_error_quota">Se acabaron tus %1$d planes de este mes.</string>
+    <string name="savings_ai_error_too_fast">Vas muy rápido. Vuelve a intentar en %1$d segundos.</string>
+    <string name="savings_ai_error_no_plan">No se pudo armar un plan con estos aparatos.</string>
+    <string name="savings_ai_error_unavailable">No se pudo consultar ahora. Intenta más tarde.</string>
 </resources>

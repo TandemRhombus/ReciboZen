@@ -37,8 +37,29 @@ data class ReciboZenSessionState(
     val goalMxnByService: Map<String, Int> = emptyMap(),
     val meterTypeByService: Map<String, String> = emptyMap(),
     val locationByService: Map<String, String> = emptyMap(),
+    val meterDigitCountByService: Map<String, Int> = emptyMap(),
+    val meterMultiplierByService: Map<String, Int> = emptyMap(),
     val goalMxn: Int = 0,
     val meterType: String = "",
+    /**
+     * How many digits the register shows, as the household counted them.
+     *
+     * Null until they say, and null must stay null: [meterType] is a label
+     * picked off a list, and "Digital, con números" establishes no digit count
+     * at all. Without one, rollover arithmetic has no capacity to work against
+     * and the app says so instead of assuming five.
+     */
+    val meterDigitCount: Int? = null,
+    /**
+     * The CFE constant this meter is read with. 1 for every service without a
+     * current transformer, which is nearly all residential ones.
+     *
+     * Bill import already multiplies the register delta by the value printed on
+     * the bill. Readings did not, so the two disagreed by exactly this factor on
+     * the services that have one. Where a bill has been imported its value is
+     * authoritative and overwrites whatever was declared here.
+     */
+    val meterMultiplier: Int = 1,
     val applianceHoursPerWeek: Map<String, Int> = emptyMap(),
     val customAppliances: List<Appliance> = emptyList(),
     val houseSpaces: List<HouseSpace> = HouseSpaceDefaults.items,
@@ -189,12 +210,15 @@ data class RemoteTariffReference(
     val isSeasonAmbiguous: Boolean get() = season != "NONE"
 }
 
-/** Result of interpreting the 5 dial faces into a meter reading. */
+/**
+ * Result of interpreting the dial faces into a meter reading.
+ *
+ * Deliberately only the reading. The consumption, daily rate and warning this
+ * used to carry were computed against a hard-coded interval and read by nobody;
+ * [app.recibozen.android.core.calculation.MeterDelta] answers all three on the
+ * confirm screen, with the register capacity and the CFE multiplier it needs.
+ */
 data class DialReadingResult(
     val digits: List<Int>,
     val valueKwh: Int,
-    val consumptionSinceLast: Int,
-    val averagePerDay: Double,
-    val isAbnormal: Boolean,
-    val warningMessage: String?,
 )

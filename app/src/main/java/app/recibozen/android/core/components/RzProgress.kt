@@ -4,15 +4,18 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
@@ -136,34 +139,59 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.trackColorFallback(
 /** Horizontal stacked bar — "activo/reposo", Balance "explicado/sin identificar", DAC tariff tiers. */
 data class RzBarSegment(val weight: Float, val color: Color, val striped: Boolean = false)
 
+/**
+ * One rounded bar divided into proportional segments.
+ *
+ * Three things this gets right that the previous version did not, all of them
+ * visible on the DAC tier bar and the Balance split:
+ *
+ *  - **A segment worth nothing is not drawn.** Weights used to be coerced up to
+ *    0.001, so a tariff tier the household never reaches -- the usual case, since
+ *    every block of the tariff was mapped whether or not it was used -- rendered
+ *    as a one-pixel sliver that still claimed a 4dp gap. Two unreached tiers ate
+ *    the right end of the bar with nothing in them.
+ *  - **The segments form one bar, not a row of floating rectangles.** Gaps
+ *    between square-cornered rects read as separate objects; a single pill with
+ *    colour changes inside reads as a proportion, which is what it is.
+ *  - **The striped fill is legible.** It was drawn at 35% alpha over the card,
+ *    which on a light surface is nearly the surface itself.
+ *
+ * With nothing to show it still draws an empty track, so a card does not change
+ * height the moment data arrives.
+ */
 @Composable
 fun RzStackedBarRow(
     segments: List<RzBarSegment>,
     modifier: Modifier = Modifier,
     height: Dp = 12.dp,
-    gap: Dp = 4.dp,
 ) {
+    val visible = segments.filter { it.weight > 0f }
+    val trackColor = MaterialTheme.colorScheme.surfaceVariant
     Row(
-        modifier = modifier.fillMaxWidth().height(height),
-        horizontalArrangement = Arrangement.spacedBy(gap),
+        modifier = modifier
+            .fillMaxWidth()
+            .height(height)
+            .clip(RoundedCornerShape(percent = 50)),
     ) {
-        segments.forEach { segment ->
-            Canvas(
-                modifier = Modifier
-                    .weight(segment.weight.coerceAtLeast(0.001f))
-                    .fillMaxWidth()
-                    .height(height),
-            ) {
+        if (visible.isEmpty()) {
+            Canvas(modifier = Modifier.weight(1f).fillMaxHeight()) { drawRect(color = trackColor) }
+            return@Row
+        }
+        visible.forEach { segment ->
+            Canvas(modifier = Modifier.weight(segment.weight).fillMaxHeight()) {
                 if (segment.striped) {
-                    drawRect(color = segment.color.copy(alpha = 0.35f))
-                    val step = 6.dp.toPx()
+                    // A solid tint the stripes sit on, not a wash. The stripes
+                    // say "provisional"; the tint is what makes the segment
+                    // readable as a segment at all.
+                    drawRect(color = segment.color.copy(alpha = 0.22f))
+                    val step = 7.dp.toPx()
                     var x = -size.height
                     while (x < size.width) {
                         drawLine(
                             color = segment.color,
                             start = androidx.compose.ui.geometry.Offset(x, size.height),
                             end = androidx.compose.ui.geometry.Offset(x + size.height, 0f),
-                            strokeWidth = 2.dp.toPx(),
+                            strokeWidth = 2.5.dp.toPx(),
                         )
                         x += step
                     }

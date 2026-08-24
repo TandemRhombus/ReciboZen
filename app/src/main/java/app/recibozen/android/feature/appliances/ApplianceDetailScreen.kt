@@ -215,6 +215,7 @@ fun ApplianceDetailScreen(
                         ApplianceDataSource.CATALOG -> stringResource(R.string.appliances_detail_source_catalog)
                         ApplianceDataSource.RECEIPT_INFERENCE -> stringResource(R.string.appliances_detail_source_inferred)
                         ApplianceDataSource.USER_ESTIMATE -> stringResource(R.string.appliances_source_estimated)
+                        ApplianceDataSource.AI_SUGGESTION -> stringResource(R.string.appliances_source_ai)
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

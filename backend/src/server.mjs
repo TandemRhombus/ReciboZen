@@ -267,7 +267,10 @@ export function buildRequestHandler({
         }
         const verified = await purchaseVerifier.verify(input);
         const entitlementLease = leaseIssuer.issue({
-          subject: input.subject,
+          // Derived from the purchase, never taken from the request: the client
+          // regenerates its own install subject whenever app data is cleared,
+          // which would hand out a fresh AI allowance each time.
+          subject: verified.quotaSubject,
           tier: verified.tier,
           purchaseExpiresAtEpochSeconds: verified.expiresAtEpochSeconds,
         });

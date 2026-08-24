@@ -1,5 +1,6 @@
 package app.recibozen.android
 
+import app.recibozen.android.core.calculation.MeterRegister
 import app.recibozen.android.core.calculation.OvernightBaselineCalculator
 import app.recibozen.android.core.model.Appliance
 import app.recibozen.android.core.model.ApplianceUsageModel
@@ -71,6 +72,9 @@ class OvernightBaselineTest {
         assertEquals(93.3, OvernightBaselineCalculator.baseWatts(listOf(fridge, television)), 0.2)
     }
 
+    /** A five-dial register, i.e. the household that wraps at 99,999. */
+    private val fiveDial = MeterRegister(capacityKwh = 100_000, multiplier = 1)
+
     @Test
     fun aScheduledApplianceWithoutDeclaredStandbyAddsNothingOvernight() {
         val noStandby = television.copy(standbyEnabled = false, standbyWatts = null)
@@ -86,7 +90,7 @@ class OvernightBaselineTest {
             reading(day.plusDays(1), 7, 10_002),
         )
 
-        val result = OvernightBaselineCalculator.evaluate(readings, listOf(fridge, television), zone)
+        val result = OvernightBaselineCalculator.evaluate(readings, listOf(fridge, television), fiveDial, zone)
 
         assertNotNull(result)
         assertEquals(8.0, result!!.hours, 0.01)
@@ -106,7 +110,7 @@ class OvernightBaselineTest {
             reading(day.plusDays(1), 7, 10_001),
         )
 
-        val result = OvernightBaselineCalculator.evaluate(readings, listOf(fridge, television), zone)
+        val result = OvernightBaselineCalculator.evaluate(readings, listOf(fridge, television), fiveDial, zone)
 
         assertNotNull(result)
         assertTrue("el sobrante debe ser pequeño", result!!.unexplainedKwh < 0.3)
@@ -117,7 +121,7 @@ class OvernightBaselineTest {
         val day = LocalDate.of(2026, 8, 10)
         val readings = listOf(reading(day, 23, 10_000), reading(day.plusDays(1), 7, 10_002))
 
-        assertNull(OvernightBaselineCalculator.evaluate(readings, emptyList(), zone))
+        assertNull(OvernightBaselineCalculator.evaluate(readings, emptyList(), fiveDial, zone))
     }
 
     @Test
@@ -125,7 +129,7 @@ class OvernightBaselineTest {
         val day = LocalDate.of(2026, 8, 10)
         val readings = listOf(reading(day, 9, 10_000), reading(day, 17, 10_002))
 
-        assertNull(OvernightBaselineCalculator.evaluate(readings, listOf(fridge), zone))
+        assertNull(OvernightBaselineCalculator.evaluate(readings, listOf(fridge), fiveDial, zone))
     }
 
     @Test
@@ -136,7 +140,7 @@ class OvernightBaselineTest {
             reading(day.plusDays(1), 7, 10_002, ReadingMethod.PDF),
         )
 
-        assertNull(OvernightBaselineCalculator.evaluate(readings, listOf(fridge), zone))
+        assertNull(OvernightBaselineCalculator.evaluate(readings, listOf(fridge), fiveDial, zone))
     }
 
     @Test
@@ -144,7 +148,7 @@ class OvernightBaselineTest {
         val day = LocalDate.of(2026, 8, 10)
         val readings = listOf(reading(day, 23, 10_005), reading(day.plusDays(1), 7, 10_000))
 
-        assertNull(OvernightBaselineCalculator.evaluate(readings, listOf(fridge), zone))
+        assertNull(OvernightBaselineCalculator.evaluate(readings, listOf(fridge), fiveDial, zone))
     }
 
     @Test
@@ -158,9 +162,66 @@ class OvernightBaselineTest {
             reading(second.plusDays(1), 7, 10_101),
         )
 
-        val result = OvernightBaselineCalculator.evaluate(readings, listOf(fridge), zone)
+        val result = OvernightBaselineCalculator.evaluate(readings, listOf(fridge), fiveDial, zone)
 
         assertNotNull(result)
         assertEquals(1.0, result!!.observedKwh, 0.01)
+    }
+
+    // --- A night the register wrapped is a night like any other ---
+
+    @Test
+    fun aNightInWhichTheRegisterWrappedIsMeasuredOnceTheHouseholdAttestedIt() {
+        // Four-dial meter at 9,998 going to 0,003 overnight. That is five kWh --
+        // an entirely ordinary night. The old `to.kwh >= from.kwh` guard threw
+        // the pair away and the card simply said there was no test.
+        val fourDial = MeterRegister(capacityKwh = 10_000, multiplier = 1)
+        val day = LocalDate.of(2026, 8, 10)
+        val readings = listOf(
+            reading(day, 23, 9_998),
+            reading(day.plusDays(1), 7, 3).copy(wrapsSincePrevious = 1),
+        )
+
+        val result = OvernightBaselineCalculator.evaluate(readings, listOf(fridge), fourDial, zone)
+
+        assertNotNull("la noche no debe descartarse en silencio", result)
+        assertEquals(5.0, result!!.observedKwh, 0.01)
+        assertTrue("el número se apoya en el testimonio, y hay que decirlo", result.restsOnAttestation)
+    }
+
+    @Test
+    fun aWrapNobodyAttestedIsStillNotAssumed() {
+        // Same readings, no attestation. Refusing is correct: the app cannot
+        // tell a wrap from a mis-capture on its own, and inventing one here
+        // would report a phantom-consumption figure nobody can defend.
+        val fourDial = MeterRegister(capacityKwh = 10_000, multiplier = 1)
+        val day = LocalDate.of(2026, 8, 10)
+        val readings = listOf(reading(day, 23, 9_998), reading(day.plusDays(1), 7, 3))
+
+        assertNull(OvernightBaselineCalculator.evaluate(readings, listOf(fridge), fourDial, zone))
+    }
+
+    @Test
+    fun theMultiplierReachesTheOvernightFigure() {
+        val withCt = MeterRegister(capacityKwh = 100_000, multiplier = 20)
+        val day = LocalDate.of(2026, 8, 10)
+        val readings = listOf(reading(day, 23, 10_000), reading(day.plusDays(1), 7, 10_002))
+
+        val result = OvernightBaselineCalculator.evaluate(readings, listOf(fridge), withCt, zone)
+
+        // Two register units at x20 is 40 billed kWh overnight, not 2.
+        assertNotNull(result)
+        assertEquals(40.0, result!!.observedKwh, 0.01)
+        assertEquals(false, result.restsOnAttestation)
+    }
+
+    @Test
+    fun anOrdinaryNightDoesNotClaimToRestOnTestimony() {
+        val day = LocalDate.of(2026, 8, 10)
+        val readings = listOf(reading(day, 23, 10_000), reading(day.plusDays(1), 7, 10_002))
+
+        val result = OvernightBaselineCalculator.evaluate(readings, listOf(fridge), fiveDial, zone)
+
+        assertEquals(false, result!!.restsOnAttestation)
     }
 }

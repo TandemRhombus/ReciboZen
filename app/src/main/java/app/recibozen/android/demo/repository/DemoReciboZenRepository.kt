@@ -3,6 +3,8 @@ package app.recibozen.android.demo.repository
 import app.recibozen.android.core.designsystem.AppThemeMode
 import app.recibozen.android.core.calculation.MeterDelta
 import app.recibozen.android.core.calculation.MeterProfile
+import app.recibozen.android.core.calculation.ReadingInterval
+import app.recibozen.android.core.model.MeterReplacement
 import app.recibozen.android.core.calculation.ApplianceAdviceEngine
 import app.recibozen.android.core.calculation.ApplianceAdviceEvidence
 import app.recibozen.android.core.calculation.ApplianceAdvicePriority
@@ -304,7 +306,15 @@ open class DemoReciboZenRepository : ReciboZenRepository {
                 previousKwh = baseline.kwh,
                 currentKwh = newest.kwh,
                 elapsedDays = intervalDays,
-                capacityKwh = MeterProfile.capacity(state.meterType),
+                capacityKwh = MeterProfile.capacity(state.meterType, state.meterDigitCount),
+                multiplier = state.meterMultiplier,
+                // Baseline and newest are routinely not adjacent, so the wraps
+                // across the span are the sum of what was attested for each
+                // interval inside it, not the newest entry's own value.
+                attestedWraps = ReadingInterval.attestedWrapsBetween(timedReadings, baseline, newest),
+                // A swap inside the span makes the two endpoints readings of
+                // different registers, so it can never be ignored here.
+                replacement = ReadingInterval.replacementForDelta(timedReadings, baseline, newest),
             )
         } else null
         val measuredKwh = (meterDelta as? MeterDelta.Measured)?.kwh ?: 0
@@ -446,28 +456,22 @@ open class DemoReciboZenRepository : ReciboZenRepository {
         ))
     }
 
+    /**
+     * Interprets the dial faces into a reading. Nothing more.
+     *
+     * It used to also return a consumption, a daily rate and a warning, all
+     * built from `value - lastConfirmedReadingKwh` divided by a hard-coded
+     * `76.0 / 24.0` -- an interval nobody measured, left over from the demo
+     * fixture. Every one of those four fields was dead: the only thing any
+     * screen ever read was [DialReadingResult.valueKwh]. They are gone rather
+     * than repaired, because [MeterDelta] on the confirm screen already answers
+     * the same question correctly, and a second, wrong implementation kept for
+     * later is worse than none.
+     */
     override fun dialReading(state: ReciboZenSessionState): DialReadingResult {
         val allDigits = MeterDialMath.digits(state.dialAngles, state.dialDirections)
-        val digits = MeterProfile.trimDigits(state.meterType, allDigits)
-        val value = digits.joinToString("").toInt()
-        val diff = value - state.lastConfirmedReadingKwh
-        val rate = diff / 76.0 * 24.0
-        val abnormal = diff < 0 || rate > DemoReciboZenData.ABNORMAL_RATE_THRESHOLD_KWH_PER_DAY || diff == 0
-        val warning = when {
-            diff < 0 -> "Esta lectura es menor que la anterior. ¿Ajustaste mal una manecilla, cambiaron tu medidor o reinició su contador?"
-            diff == 0 -> "Tu lectura no cambió desde el último registro. Puedes guardarla si es correcta."
-            rate > DemoReciboZenData.ABNORMAL_RATE_THRESHOLD_KWH_PER_DAY ->
-                "Esta lectura implicaría ${rate.roundToInt()} kWh diarios, muy por encima de tu promedio de ${DemoReciboZenData.TYPICAL_DAILY_AVERAGE}."
-            else -> null
-        }
-        return DialReadingResult(
-            digits = digits,
-            valueKwh = value,
-            consumptionSinceLast = diff,
-            averagePerDay = rate,
-            isAbnormal = abnormal,
-            warningMessage = warning,
-        )
+        val digits = MeterProfile.trimDigits(state.meterType, allDigits, state.meterDigitCount)
+        return DialReadingResult(digits = digits, valueKwh = digits.joinToString("").toInt())
     }
 
     override fun setThemeMode(mode: AppThemeMode) {
@@ -549,7 +553,8 @@ open class DemoReciboZenRepository : ReciboZenRepository {
                         ApplianceDataSource.MANUFACTURER_LABEL -> app.recibozen.android.core.model.ConfidenceLevel.HIGH
                         ApplianceDataSource.CATALOG,
                         ApplianceDataSource.RECEIPT_INFERENCE -> app.recibozen.android.core.model.ConfidenceLevel.MEDIUM
-                        ApplianceDataSource.USER_ESTIMATE -> app.recibozen.android.core.model.ConfidenceLevel.LOW
+                        ApplianceDataSource.USER_ESTIMATE,
+                        ApplianceDataSource.AI_SUGGESTION -> app.recibozen.android.core.model.ConfidenceLevel.LOW
                     },
                     referenceAnnualKwh = if (dataSource == ApplianceDataSource.MANUFACTURER_LABEL) {
                         appliance.referenceAnnualKwh
@@ -818,10 +823,16 @@ open class DemoReciboZenRepository : ReciboZenRepository {
     override fun setMeterType(meterType: String) {
         _session.update { state ->
             if (state.meterType == meterType) state else {
+                // A digit count declared for the previous meter is not evidence
+                // about this one. Dropping it costs one question; keeping it
+                // would silently do rollover arithmetic against the capacity of
+                // a meter the household just told us they no longer have.
                 val firstFace = MeterProfile.firstFaceIndex(meterType)
                 state.copy(
                     meterType = meterType,
                     meterTypeByService = state.withActiveService(state.meterTypeByService, meterType),
+                    meterDigitCount = null,
+                    meterDigitCountByService = state.withoutActiveService(state.meterDigitCountByService),
                     dialSelectedIndex = firstFace,
                     dialVisitedFaces = setOf(firstFace),
                     dialUnsure = false,
@@ -830,9 +841,46 @@ open class DemoReciboZenRepository : ReciboZenRepository {
         }
     }
 
+    override fun setMeterDigitCount(digitCount: Int?) {
+        val declared = digitCount?.takeIf { it in MeterProfile.DECLARABLE_DIGITS }
+        _session.update { state ->
+            // The dial component shows one face per digit, so a declaration
+            // changes which faces exist and the selection has to land inside
+            // the new set rather than pointing past its end.
+            val firstFace = MeterProfile.firstFaceIndex(state.meterType, declared)
+            state.copy(
+                meterDigitCount = declared,
+                meterDigitCountByService = declared
+                    ?.let { state.withActiveService(state.meterDigitCountByService, it) }
+                    ?: state.withoutActiveService(state.meterDigitCountByService),
+                dialSelectedIndex = firstFace,
+                dialVisitedFaces = setOf(firstFace),
+                dialUnsure = false,
+            )
+        }
+    }
+
+    override fun setMeterMultiplier(multiplier: Int) {
+        val safe = multiplier.coerceAtLeast(1)
+        _session.update { state ->
+            state.copy(
+                meterMultiplier = safe,
+                meterMultiplierByService = state.withActiveService(state.meterMultiplierByService, safe),
+            )
+        }
+    }
+
     /** Stores [value] for the active supply, or leaves the map alone if there is none yet. */
     private fun <T> ReciboZenSessionState.withActiveService(map: Map<String, T>, value: T): Map<String, T> =
         activeServiceId.takeIf { it.isNotBlank() }?.let { map + (it to value) } ?: map
+
+    /**
+     * Drops the active supply's entry. Absence is how these maps say "never
+     * declared", so a cleared declaration has to remove the key rather than
+     * store a placeholder that later reads as an answer.
+     */
+    private fun <T> ReciboZenSessionState.withoutActiveService(map: Map<String, T>): Map<String, T> =
+        activeServiceId.takeIf { it.isNotBlank() }?.let { map - it } ?: map
 
     override fun updateProfile(userName: String, householdName: String, location: String, goalMxn: Int) {
         _session.update { state ->
@@ -959,6 +1007,15 @@ open class DemoReciboZenRepository : ReciboZenRepository {
             val goal = state.goalMxnByService[service.id] ?: state.goalMxn
             val meterType = state.meterTypeByService[service.id] ?: state.meterType
             val location = state.locationByService[service.id] ?: state.location
+            // Absence here means "this supply never declared one", which is a
+            // different thing from "the previous supply's value applies". Only
+            // the first switch, before any per-service entry exists, adopts the
+            // scalar; after that an unset supply stays unset.
+            val digitCount = state.meterDigitCountByService[service.id]
+                ?: state.meterDigitCount.takeIf { state.meterDigitCountByService.isEmpty() }
+            val multiplier = state.meterMultiplierByService[service.id]
+                ?: state.meterMultiplier.takeIf { state.meterMultiplierByService.isEmpty() }
+                ?: 1
             state.copy(
                 activeServiceId = service.id,
                 serviceAlias = service.alias,
@@ -970,9 +1027,15 @@ open class DemoReciboZenRepository : ReciboZenRepository {
                 goalMxn = goal,
                 meterType = meterType,
                 location = location,
+                meterDigitCount = digitCount,
+                meterMultiplier = multiplier,
                 goalMxnByService = state.goalMxnByService + (service.id to goal),
                 meterTypeByService = state.meterTypeByService + (service.id to meterType),
                 locationByService = state.locationByService + (service.id to location),
+                meterDigitCountByService = digitCount
+                    ?.let { state.meterDigitCountByService + (service.id to it) }
+                    ?: state.meterDigitCountByService,
+                meterMultiplierByService = state.meterMultiplierByService + (service.id to multiplier),
             )
         }
     }
@@ -988,11 +1051,47 @@ open class DemoReciboZenRepository : ReciboZenRepository {
         _session.update { it.copy(pendingReadingKwh = kwh.coerceAtLeast(0), pendingReadingMethod = method) }
     }
 
-    override fun confirmReading(kwh: Int, method: ReadingMethod) {
+    /**
+     * Days since the household's latest timestamped reading. Zero when none
+     * carries a timestamp: [MeterDelta] treats anything under half a day as "no
+     * rate can be derived", which is exactly right for an unknown interval.
+     */
+    private fun elapsedDaysSinceLastReading(state: ReciboZenSessionState, nowMillis: Long): Double =
+        ReadingInterval.daysSince(state.readings, nowMillis) ?: 0.0
+
+    override fun confirmReading(
+        kwh: Int,
+        method: ReadingMethod,
+        wrapsSincePrevious: Int?,
+        meterReplacement: MeterReplacement?,
+    ) {
         _session.update { state ->
             val now = System.currentTimeMillis()
-            val difference = kwh - state.lastConfirmedReadingKwh
             val label = SimpleDateFormat("d MMM, h:mm a", Locale.forLanguageTag("es-MX")).format(Date(now))
+            // The note used to come from `kwh - lastConfirmedReadingKwh`, the
+            // fourth raw subtraction in the app and the one that wrote "lectura
+            // menor a la anterior" into history for every register that wrapped.
+            // The attestation the user just gave answers that, so the note has
+            // to be built from the same arithmetic the screen showed them.
+            val delta = MeterDelta.consumption(
+                previousKwh = state.lastConfirmedReadingKwh,
+                currentKwh = kwh,
+                elapsedDays = elapsedDaysSinceLastReading(state, now),
+                capacityKwh = MeterProfile.capacity(state.meterType, state.meterDigitCount),
+                multiplier = state.meterMultiplier,
+                attestedWraps = wrapsSincePrevious,
+                replacement = meterReplacement,
+            )
+            val note = when {
+                delta is MeterDelta.Measured && delta.acrossMeterReplacement ->
+                    "+${delta.kwh} kWh, contando el medidor anterior y el nuevo"
+                meterReplacement != null && delta !is MeterDelta.Measured ->
+                    "cambiaron el medidor; falta la lectura que cierra el tramo"
+                delta is MeterDelta.Measured && delta.wraps > 0 ->
+                    "+${delta.kwh} kWh, con ${delta.wraps} vuelta${if (delta.wraps == 1) "" else "s"} del medidor"
+                delta is MeterDelta.Measured -> "+${delta.kwh} kWh desde la anterior"
+                else -> "consumo sin determinar desde la anterior"
+            }
             state.copy(
                 lastConfirmedReadingKwh = kwh,
                 readings = listOf(
@@ -1000,8 +1099,10 @@ open class DemoReciboZenRepository : ReciboZenRepository {
                         kwh = kwh,
                         dateLabel = label,
                         method = method,
-                        note = if (difference >= 0) "+$difference kWh desde la anterior" else "lectura menor a la anterior",
+                        note = note,
                         timestampEpochMillis = now,
+                        wrapsSincePrevious = wrapsSincePrevious,
+                        meterReplacement = meterReplacement,
                     ),
                 ) + state.readings,
                 pendingReadingKwh = null,

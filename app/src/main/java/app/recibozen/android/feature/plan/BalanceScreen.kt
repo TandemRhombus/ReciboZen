@@ -22,6 +22,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
 import app.recibozen.android.R
 import app.recibozen.android.core.components.RzBarSegment
 import app.recibozen.android.core.components.RzCard
@@ -29,6 +35,7 @@ import app.recibozen.android.core.components.RzFlowTopBar
 import app.recibozen.android.core.components.RzPrimaryButton
 import app.recibozen.android.core.components.RzSecondaryButton
 import app.recibozen.android.core.components.RzStackedBarRow
+import app.recibozen.android.core.calculation.MeterProfile
 import app.recibozen.android.core.calculation.OvernightBaselineCalculator
 import app.recibozen.android.core.components.RzStatusChip
 import app.recibozen.android.core.designsystem.ReciboZenTheme
@@ -65,6 +72,12 @@ data class BalanceUiState(
     val overnightHours: Int = 0,
     val overnightObservedWatts: Int = 0,
     val overnightExpectedWatts: Int = 0,
+    /**
+     * The overnight figure counts a register wrap the household attested to.
+     * Shown because it is a measurement supported by testimony, and the screen
+     * must not present it as if the subtraction alone had produced it.
+     */
+    val overnightRestsOnAttestation: Boolean = false,
 )
 
 class BalanceViewModel(repository: ReciboZenRepository) : ViewModel() {
@@ -81,7 +94,11 @@ class BalanceViewModel(repository: ReciboZenRepository) : ViewModel() {
             val explainedShare = if (observed == 0) 0 else (explained * 100f / observed).toInt().coerceIn(0, 100)
             // Phantom consumption: what the meter recorded overnight against
             // what the registered inventory can justify while nobody uses it.
-            val overnight = OvernightBaselineCalculator.evaluate(state.readings, repository.appliances(state))
+            val overnight = OvernightBaselineCalculator.evaluate(
+                readings = state.readings,
+                appliances = repository.appliances(state),
+                register = MeterProfile.register(state.meterType, state.meterDigitCount, state.meterMultiplier),
+            )
             BalanceUiState(
                 hasUsageData = energy.hasUsageEvidence,
                 explainedSharePercent = explainedShare,
@@ -103,6 +120,7 @@ class BalanceViewModel(repository: ReciboZenRepository) : ViewModel() {
                 overnightHours = overnight?.hours?.roundToInt() ?: 0,
                 overnightObservedWatts = overnight?.observedWatts?.roundToInt() ?: 0,
                 overnightExpectedWatts = overnight?.expectedWatts?.roundToInt() ?: 0,
+                overnightRestsOnAttestation = overnight?.restsOnAttestation == true,
             )
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), BalanceUiState())
@@ -118,6 +136,36 @@ fun BalanceRoute(navController: NavHostController, repository: ReciboZenReposito
         onReviewRemaining = { navController.navigate(Routes.ApplianceEmpty) },
         onStartOvernightTest = { navController.navigate(Routes.ReadingMethod) },
     )
+}
+
+/**
+ * A colour chip beside a figure, so the bar above can be read without guessing
+ * which half is which. Drawn here rather than with [RzStackedBarRow], which is
+ * a full-width bar by contract and would ignore a fixed width.
+ */
+@Composable
+private fun BalanceLegend(text: String, color: Color, striped: Boolean) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(RzSpacing.xs)) {
+        Canvas(modifier = Modifier.size(width = 18.dp, height = 10.dp)) {
+            val radius = CornerRadius(size.height / 2, size.height / 2)
+            if (striped) {
+                drawRoundRect(color = color.copy(alpha = 0.22f), cornerRadius = radius)
+                var x = -size.height
+                while (x < size.width) {
+                    drawLine(
+                        color = color,
+                        start = Offset(x, size.height),
+                        end = Offset(x + size.height, 0f),
+                        strokeWidth = 2.5.dp.toPx(),
+                    )
+                    x += 7.dp.toPx()
+                }
+            } else {
+                drawRoundRect(color = color, cornerRadius = radius)
+            }
+        }
+        Text(text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
 }
 
 @Composable
@@ -163,21 +211,24 @@ fun BalanceScreen(
                     height = 14.dp,
                     modifier = Modifier.padding(top = RzSpacing.lg),
                 )
+                // Swatches, not just two labels at opposite ends. The bar has a
+                // solid half and a striped half and nothing said which figure
+                // belonged to which; the reader had to guess from the order.
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = RzSpacing.sm),
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text(
-                        stringResource(R.string.balance_explained_label, uiState.explainedKwh),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    BalanceLegend(
+                        text = stringResource(R.string.balance_explained_label, uiState.explainedKwh),
+                        color = MaterialTheme.colorScheme.primary,
+                        striped = false,
                     )
-                    Text(
-                        stringResource(R.string.balance_unidentified_label, uiState.unexplainedKwh),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    BalanceLegend(
+                        text = stringResource(R.string.balance_unidentified_label, uiState.unexplainedKwh),
+                        color = MaterialTheme.colorScheme.outline,
+                        striped = true,
                     )
                 }
                 Text(
@@ -299,6 +350,14 @@ fun BalanceScreen(
                         } else RzTheme.extendedColors.success,
                         modifier = Modifier.padding(top = RzSpacing.sm),
                     )
+                    if (uiState.overnightRestsOnAttestation) {
+                        Text(
+                            stringResource(R.string.balance_overnight_attested),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = RzSpacing.xs),
+                        )
+                    }
                 }
                 else Text(
                     stringResource(R.string.balance_overnight_no_result),

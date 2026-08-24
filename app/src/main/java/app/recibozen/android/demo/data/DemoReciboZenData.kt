@@ -219,7 +219,9 @@ object DemoReciboZenData {
     // Onboarding household summary
     const val METER_TYPE_SELECTED = "De manecillas, 5 carátulas"
 
-    // Confirm reading validation thresholds (mirrors the original prototype's simple sanity checks)
-    const val ABNORMAL_RATE_THRESHOLD_KWH_PER_DAY = 20
-    const val TYPICAL_DAILY_AVERAGE = 8.3
+    // The two "confirm reading" thresholds that used to live here are gone with
+    // the dead calculation in dialReading that was their only reader. One of
+    // them, a TYPICAL_DAILY_AVERAGE of 8.3, was printed in a warning as "tu
+    // promedio" -- a fixture number presented to real households as their own.
+    // The confirm screen now measures the household's own pace instead.
 }

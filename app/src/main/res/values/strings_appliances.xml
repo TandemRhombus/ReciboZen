@@ -160,6 +160,7 @@
     <string name="appliances_source_measured">Medido por mí</string>
     <string name="appliances_source_label">Etiqueta/fabricante</string>
     <string name="appliances_source_estimated">Estimado</string>
+    <string name="appliances_source_ai">Sugerido por IA</string>
     <string name="appliances_usage_draft_total">El grupo consumiría aproximadamente %1$d kWh en %2$d días.</string>
     <string name="appliances_usage_per_unit_note">Consumo calculado por unidad: %1$.1f kWh.</string>
     <string name="appliances_usage_detail_title">Detalle opcional</string>
@@ -241,4 +242,30 @@
     <string name="appliances_simulator_save_scenario">Guardar escenario</string>
     <string name="appliances_simulator_saved_scenario">Escenario guardado</string>
     <string name="appliances_simulator_add_home">Agregar a mi hogar</string>
+    <!-- AI appliance lookup -->
+    <string name="appliances_ai_button">Preguntar a la IA</string>
+    <string name="appliances_ai_button_premium">Función Premium</string>
+    <string name="appliances_ai_needs_brand">Escribe la marca y el modelo para poder consultar</string>
+    <string name="appliances_ai_loading">Consultando…</string>
+    <string name="appliances_ai_title">Sugerencia de la IA</string>
+    <string name="appliances_ai_recognized">Reconocí este modelo.</string>
+    <string name="appliances_ai_not_recognized">No reconocí este modelo exacto. La estimación viene de equipos parecidos.</string>
+    <string name="appliances_ai_market_unverified">No pude confirmar que este modelo se venda en México.</string>
+    <string name="appliances_ai_provenance_note">Se guardará como «Sugerido por IA». Cualquier lectura o medición tuya le gana siempre.</string>
+    <string name="appliances_ai_apply">Usar estos valores</string>
+    <string name="appliances_ai_dismiss">Descartar</string>
+    <string name="appliances_ai_quota_left">Te quedan %1$d de %2$d consultas este mes</string>
+    <string name="appliances_ai_value_watts">%1$d W promedio en uso</string>
+    <string name="appliances_ai_value_standby">%1$d W en espera</string>
+    <string name="appliances_ai_value_kwh">%1$s kWh en este periodo</string>
+    <string name="appliances_ai_unapplied_title">Lo que no apliqué</string>
+    <string name="appliances_ai_unapplied_nameplate">Dio la potencia de placa, que es lo que el equipo puede consumir y no lo que consume normalmente. Multiplicarla por tus horas de uso daría un recibo irreal.</string>
+    <string name="appliances_ai_unapplied_cycle">Dio el consumo por ciclo. Para convertirlo haría falta saber cuántos ciclos haces al mes, y eso no lo sabe nadie más que tú.</string>
+    <string name="appliances_ai_unapplied_total">También dio una potencia, pero el total de energía es más confiable porque ya incluye las veces que el equipo se apaga solo.</string>
+    <string name="appliances_ai_error_quota">Se acabaron tus %1$d consultas de este mes.</string>
+    <string name="appliances_ai_error_too_fast">Vas muy rápido. Vuelve a intentar en %1$d segundos.</string>
+    <string name="appliances_ai_error_not_recognized">No pude estimar este aparato. Revisa que la marca y el modelo estén bien escritos.</string>
+    <string name="appliances_ai_error_unavailable">No se pudo consultar ahora. Intenta más tarde.</string>
+    <string name="appliances_ai_needs_premium">La consulta con IA es parte de Premium.</string>
+    <string name="appliances_ai_go_premium">Ver Premium</string>
 </resources>

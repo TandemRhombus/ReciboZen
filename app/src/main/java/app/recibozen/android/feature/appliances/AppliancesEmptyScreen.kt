@@ -330,7 +330,8 @@ class AppliancesEmptyViewModel(
                     ApplianceDataSource.MANUFACTURER_LABEL -> ConfidenceLevel.HIGH
                     ApplianceDataSource.CATALOG,
                     ApplianceDataSource.RECEIPT_INFERENCE -> ConfidenceLevel.MEDIUM
-                    ApplianceDataSource.USER_ESTIMATE -> ConfidenceLevel.LOW
+                    ApplianceDataSource.USER_ESTIMATE,
+                    ApplianceDataSource.AI_SUGGESTION -> ConfidenceLevel.LOW
                 },
                 opportunity = OpportunityLevel.MEDIUM,
                 calculationNote = estimate.calculation,

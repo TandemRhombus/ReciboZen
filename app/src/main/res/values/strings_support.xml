@@ -45,6 +45,23 @@
     <string name="notifications_channel_readings_description">Avisos para registrar una nueva lectura del medidor.</string>
     <string name="notifications_reading_title">Actualiza tu consumo</string>
     <string name="notifications_reading_body">Registra una lectura para mantener precisa la proyección de tu próximo recibo.</string>
+    <string name="notifications_night_setting">Recordarme desconectar antes de dormir</string>
+    <string name="notifications_night_setting_body">Un aviso a la hora que elijas, con los aparatos que dejas en espera y lo que gastan de noche.</string>
+    <string name="notifications_night_hour">Hora del aviso</string>
+    <string name="notifications_night_hour_option">%1$02d:00</string>
+    <string name="notifications_night_inventory_note">Nombramos solo aparatos que registraste como programados y con consumo en espera declarado. Nunca te vamos a decir que desconectes el refrigerador.</string>
+    <string name="notifications_night_no_inventory">Todavía no tienes aparatos con consumo en espera declarado, así que el aviso llegará sin nombres. Regístralos en Aparatos para que sea útil.</string>
+    <string name="notifications_night_preview">Esta noche nombraríamos: %1$s</string>
+    <string name="notifications_channel_night">Recordatorio nocturno</string>
+    <string name="notifications_channel_night_description">Aviso a la hora que elijas para desconectar los aparatos que no usas de noche.</string>
+    <string name="notifications_night_title">Antes de dormir</string>
+    <string name="notifications_night_item">%1$s (%2$d W)</string>
+    <string name="notifications_night_body">Desconecta %1$s. Son %2$d W en espera: unas %3$d horas de noche, %4$s kWh.</string>
+    <string name="notifications_night_body_generic">Desconecta lo que no uses esta noche. Registra tus aparatos en la app y te decimos cuáles y cuánto gastan.</string>
+    <plurals name="notifications_night_more">
+        <item quantity="one">%1$s y %2$d más</item>
+        <item quantity="other">%1$s y %2$d más</item>
+    </plurals>
     <!-- Legal y privacidad -->
     <string name="legal_title">Privacidad y términos</string>
     <string name="legal_intro">Resumen de qué guarda ReciboZen, dónde lo guarda y qué sale de tu teléfono.</string>

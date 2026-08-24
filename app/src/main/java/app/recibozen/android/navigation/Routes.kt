@@ -26,6 +26,7 @@ object Routes {
 
     const val Simulator = "appliance_simulator"
     const val Balance = "balance"
+    const val SavingsAdvice = "savings-advice"
     const val Dac = "dac"
     const val Solar = "solar"
 

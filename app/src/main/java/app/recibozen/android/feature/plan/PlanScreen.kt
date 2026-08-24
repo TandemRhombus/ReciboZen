@@ -160,6 +160,7 @@ fun PlanRoute(navController: NavHostController, repository: ReciboZenRepository)
         onDacClick = { navController.navigate(Routes.Dac) },
         onSolarClick = { navController.navigate(Routes.Solar) },
         onBalanceClick = { navController.navigate(Routes.Balance) },
+        onSavingsAdviceClick = { navController.navigate(Routes.SavingsAdvice) },
         onApplianceClick = { id -> navController.navigate(Routes.applianceDetail(id)) },
         onAddAppliances = { navController.navigateToBottomTab(Routes.Appliances) },
     )
@@ -174,6 +175,7 @@ fun PlanScreen(
     onDacClick: () -> Unit,
     onSolarClick: () -> Unit,
     onBalanceClick: () -> Unit,
+    onSavingsAdviceClick: () -> Unit,
     modifier: Modifier = Modifier,
     onHouseholdClick: () -> Unit = {},
     onApplianceClick: (String) -> Unit = {},
@@ -283,6 +285,7 @@ fun PlanScreen(
             )
 
             BalanceLinkRow(onClick = onBalanceClick)
+            SavingsAdviceLinkRow(onClick = onSavingsAdviceClick)
         }
     }
 }
@@ -559,6 +562,41 @@ private fun BalanceLinkRow(onClick: () -> Unit) {
     }
 }
 
+/**
+ * Entry point to the AI savings plan. Shown to everyone: a household without
+ * premium reaches the paywall from inside, rather than never learning the
+ * feature exists.
+ */
+@Composable
+private fun SavingsAdviceLinkRow(onClick: () -> Unit) {
+    RzCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        contentPadding = PaddingValues(horizontal = RzSpacing.xl, vertical = RzSpacing.lg),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(RzSpacing.md),
+        ) {
+            Icon(RzIcons.Lightbulb, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    stringResource(R.string.plan_savings_ai_link_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    stringResource(R.string.plan_savings_ai_link_description),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+            }
+            Icon(RzIcons.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.outline)
+        }
+    }
+}
+
 @Composable
 private fun effortLabel(effort: EffortLevel): String = stringResource(
     when (effort) {
@@ -625,6 +663,7 @@ private fun PlanScreenPreview() {
             onDacClick = {},
             onSolarClick = {},
             onBalanceClick = {},
+            onSavingsAdviceClick = {},
         )
     }
 }
