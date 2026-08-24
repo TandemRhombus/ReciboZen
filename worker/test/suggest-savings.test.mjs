@@ -276,3 +276,49 @@ test("a boiler target the model tries to lower is overruled", () => {
   assert.equal(result.body.recommendations[0].target.text, "60 °C o más",
     "the one figure the first live call got dangerously wrong");
 });
+
+test("on a health limit, telling the household which way to turn it is dropped", () => {
+  // Both of these came back from the live model after the figures were removed:
+  // "baja la temperatura del boiler" beside a target of 60 °C or above, and
+  // "sube un nivel" on a fridge with a ceiling of 4 °C. The text contradicted
+  // the number on the same card.
+  const directed = [
+    ["Bajar la temperatura del boiler", "Localiza el termostato y bajalo a un nivel comodo.", "WATER_HEATER_TEMPERATURE"],
+    ["Reducir el boiler", "Ponlo mas templado.", "WATER_HEATER_TEMPERATURE"],
+    ["Subir la temperatura del refrigerador", "Sube un nivel la perilla.", "FRIDGE_TEMPERATURE"],
+    ["Aumentar el congelador", "Aumenta un nivel el control.", "FREEZER_TEMPERATURE"],
+  ];
+  for (const [title, howTo, settingKind] of directed) {
+    assert.equal(parseOutput(withText(title, howTo, settingKind), { input: input() }).error, "model_output_unusable",
+      `${title} / ${howTo}`);
+  }
+});
+
+test("checking a health-limited thermostat, without a direction, gets through", () => {
+  const checks = [
+    ["Revisa el termostato del boiler", "Suele estar al frente, en una perilla o panel.", "WATER_HEATER_TEMPERATURE"],
+    ["Verifica la temperatura del refrigerador", "El control esta dentro, en la pared lateral.", "FRIDGE_TEMPERATURE"],
+    ["Comprueba el ajuste del congelador", "Busca el control junto al del refrigerador.", "FREEZER_TEMPERATURE"],
+  ];
+  for (const [title, howTo, settingKind] of checks) {
+    const result = parseOutput(withText(title, howTo, settingKind), { input: input() });
+    assert.equal(result.ok, true, `${title} / ${howTo}`);
+    assert.equal(result.body.recommendations[0].target.safetyLimit, true);
+  }
+});
+
+test("on a comfort setting, a direction is exactly the advice", () => {
+  // There is no health limit on an air conditioner, so "raise it" is the whole
+  // point and must not be swept up by the same rule.
+  const result = parseOutput(
+    withText("Sube la temperatura del minisplit", "Aumenta el ajuste con las flechas del control.", "AC_SETPOINT"),
+    { input: input() },
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.body.recommendations[0].target.safetyLimit, false);
+});
+
+test("a direction on advice that is not about a thermostat is fine", () => {
+  const result = parseOutput(withText("Reduce el tiempo de la ducha", "Con cinco minutos menos se nota."), { input: input() });
+  assert.equal(result.ok, true, "shortening a shower is not a thermostat instruction");
+});

@@ -74,6 +74,19 @@ Las tres primeras son límites sanitarios y no se relajan para ahorrar energía.
 Hay una prueba que fija cada cifra: editarlas en silencio rompe la suite en vez
 de romperle el estómago a alguien.
 
+**Y en esas tres, el modelo tampoco puede decir para qué lado moverlo.** Quitarle
+las cifras no bastó: la siguiente llamada devolvió *"baja la temperatura del
+boiler"* junto a un objetivo de 60 °C o más — el texto contradiciendo al número
+en la misma tarjeta. Y el espejo en el refrigerador: *"sube un nivel"* contra un
+techo de 4 °C.
+
+El modelo no sabe en qué temperatura está el aparato hoy, así que **ninguna
+dirección es segura**: bajar un boiler que ya está en 60 entra al rango de la
+legionela, y subir un refrigerador que ya está en 4 entra a la zona de peligro
+alimentario. Lo único correcto es revisar contra la cifra. En un aire
+acondicionado, en cambio, "súbelo" es justo el consejo — por eso el filtro solo
+se aplica donde `safetyLimit` es `true`.
+
 ## La regla que sostiene el esquema de evidencia
 
 El modelo **no decide de dónde viene su propia información**. El campo `source`
