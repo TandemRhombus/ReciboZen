@@ -553,7 +553,8 @@ open class DemoReciboZenRepository : ReciboZenRepository {
                         ApplianceDataSource.MANUFACTURER_LABEL -> app.recibozen.android.core.model.ConfidenceLevel.HIGH
                         ApplianceDataSource.CATALOG,
                         ApplianceDataSource.RECEIPT_INFERENCE -> app.recibozen.android.core.model.ConfidenceLevel.MEDIUM
-                        ApplianceDataSource.USER_ESTIMATE -> app.recibozen.android.core.model.ConfidenceLevel.LOW
+                        ApplianceDataSource.USER_ESTIMATE,
+                        ApplianceDataSource.AI_SUGGESTION -> app.recibozen.android.core.model.ConfidenceLevel.LOW
                     },
                     referenceAnnualKwh = if (dataSource == ApplianceDataSource.MANUFACTURER_LABEL) {
                         appliance.referenceAnnualKwh

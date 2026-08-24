@@ -29,6 +29,14 @@ enum class ApplianceDataSource {
     USER_ESTIMATE,
     USER_MEASURED,
     RECEIPT_INFERENCE,
+
+    /**
+     * Filled in from a language model suggestion. It gets its own value rather
+     * than borrowing USER_ESTIMATE because the household did not estimate it and
+     * has every right to know that — and because this is the one provenance a
+     * later reading should always be allowed to overwrite without a warning.
+     */
+    AI_SUGGESTION,
 }
 
 data class HouseSpace(
