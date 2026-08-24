@@ -396,7 +396,14 @@ fun NotificationSettingsScreen(
                     Switch(checked = settings.enabled && allowed, onCheckedChange = onEnabledChange, enabled = allowed)
                 }
                 Text(stringResource(R.string.notifications_frequency), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = RzSpacing.lg))
-                Row(horizontalArrangement = Arrangement.spacedBy(RzSpacing.sm), modifier = Modifier.padding(top = RzSpacing.sm)) {
+                // FlowRow, like the hour chips below. In a plain Row the two
+                // chips keep sharing one line at any font size, so at a large
+                // one "Cada 7 días" wrapped inside its own pill.
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(RzSpacing.sm),
+                    verticalArrangement = Arrangement.spacedBy(RzSpacing.xs),
+                    modifier = Modifier.padding(top = RzSpacing.sm),
+                ) {
                     ReadingReminderSettings.SUPPORTED_INTERVALS.sorted().forEach { days ->
                         RzFilterChip(
                             text = stringResource(

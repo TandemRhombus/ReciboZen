@@ -448,8 +448,15 @@ private fun WrapAttestationCard(
     onDeclareReplacement: () -> Unit,
 ) {
     RzCard(modifier = Modifier.fillMaxWidth()) {
+        // The heading follows the answer, not the question. Once a meter swap is
+        // declared the card was still titled "¿Tu medidor dio la vuelta?" above a
+        // body about a replacement -- the two contradict each other, and a
+        // household reading it has no way to tell which one the app recorded.
         Text(
-            stringResource(R.string.reading_confirm_wrap_title),
+            stringResource(
+                if (uiState.meterReplacement != null) R.string.reading_confirm_swap_title
+                else R.string.reading_confirm_wrap_title,
+            ),
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurface,
         )

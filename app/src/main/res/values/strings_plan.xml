@@ -107,8 +107,8 @@
     <string name="dac_max_current">Periodo actual</string>
     <string name="dac_max_following">Próximo periodo</string>
     <string name="dac_max_following_note">El máximo del próximo periodo supone que este cierra en la proyección y que dura los mismos días.</string>
-    <string name="dac_daily_title">Cuánto puedes gastar al día</string>
-    <string name="dac_daily_title_exit">Cuánto gastar al día para salir de DAC</string>
+    <string name="dac_daily_title">Tu ritmo diario máximo</string>
+    <string name="dac_daily_title_exit">Tu ritmo diario para salir de DAC</string>
     <string name="dac_daily_value">%1$s kWh al día</string>
     <string name="dac_daily_detail">Te quedan %1$s kWh de los %2$s del periodo, repartidos en %3$d días.</string>
     <string name="dac_daily_detail_one_day">Te quedan %1$s kWh de los %2$s del periodo y hoy es el último día.</string>
