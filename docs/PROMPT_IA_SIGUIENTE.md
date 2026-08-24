@@ -16,9 +16,15 @@ Vas a continuar el desarrollo de **ReciboZen**, una app Android nativa (Jetpack 
 - **No ajustes una prueba para que pase.** Primero determina cuál debería ser el resultado correcto.
 - Respóndeme en **español**, conciso.
 
+### Dos reglas que la sesión anterior ganó a golpes
+
+**1. Cuando escribas una prueba que protege un arreglo, revierte el arreglo y confirma que la prueba falla.** Eso atrapó tres errores: una prueba que exigía lo contrario de lo correcto, un guard que no podía fallar (leía el nodo *fusionado* de una fila en vez del `Text`, así que siempre medía ancho completo), y un experimento de reversión inválido porque se revirtió el layout pero no la cadena de texto que también había cambiado. Un guard que no falla ante su propio bug no es un guard.
+
+**2. Antes de mandar a ejecutar un comando de arreglo, confirma el diagnóstico.** En la misma sesión estuve a punto de pedir un `apt-get install --reinstall ca-certificates` que no habría cambiado absolutamente nada, porque la causa real era otra. Ver la sección de TLS abajo.
+
 ## Acceso al servidor (ya configurado, NO necesitas contraseña)
 
-El backend corre en una Orange Pi en la red local. **La autenticación por clave ya está instalada**, así que puedes ejecutar comandos directamente.
+El backend corre en una Orange Pi en la red local. **La autenticación por clave ya está instalada.**
 
 ```
 host: 192.168.192.242
@@ -26,42 +32,100 @@ usuario: orangepi
 ruta: /home/orangepi/recibozen/backend
 ```
 
-**IMPORTANTE — usa el binario nativo de Windows, no el de Git Bash.** El `ssh` de Git Bash (`/usr/bin/ssh`) **falla** con `Permission denied`; el de Windows funciona con la clave. Siempre así:
+**Usa el binario nativo de Windows, no el de Git Bash.** El `ssh` de Git Bash (`/usr/bin/ssh`) **falla** con `Permission denied`:
 
 ```bash
 /c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes orangepi@192.168.192.242 "comando"
 ```
 
-Verifica que tienes acceso antes de nada:
+**Git Bash convierte rutas tipo `/sdcard/...` o `/data/...` en rutas de Windows.** Prefija con `MSYS_NO_PATHCONV=1` cuando pases rutas absolutas de Linux/Android a `adb` o al shell remoto.
 
-```bash
-/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes orangepi@192.168.192.242 "docker ps --format '{{.Names}}: {{.Status}}'"
-```
+Notas del servidor:
 
-Otras notas del servidor:
 - Los contenedores `sim-*` son de **otro proyecto del usuario**. No los toques.
 - El backend **siempre** se levanta con los dos archivos compose, o pierde la configuración de billing:
   ```bash
   cd /home/orangepi/recibozen/backend && docker compose -f compose.yaml -f compose.billing.yaml up -d --no-deps api
   ```
-- Los secretos en `backend/secrets/` deben ser `640` y del grupo `10001` (el contenedor corre como UID 10001; con `600` no los puede leer y entra en bucle de reinicio). Está documentado en `compose.billing.yaml`.
+- Los secretos en `backend/secrets/` deben ser `640` y del grupo `10001` (el contenedor corre como UID 10001; con `600` entra en bucle de reinicio). Documentado en `compose.billing.yaml`.
+- `sudo` **pide contraseña**. No la necesitas para nada de lo descrito aquí.
 
-## Estado verificado hoy
+## TLS contra CFE: cómo funciona realmente (no lo "arregles")
+
+`app.cfe.mx` **sirve una cadena de certificados incompleta**: manda solo la hoja
+(`CN = app.cfe.mx`, emitida por `Entrust EV TLS Issuing RSA CA 2`) y **no manda el
+intermedio**. Cualquier cliente que no haga AIA-chasing falla con
+`unable to get local issuer certificate` / `UNABLE_TO_VERIFY_LEAF_SIGNATURE`.
+
+Ya está resuelto, deliberadamente, y **no es un bundle de CAs viejo**:
+
+```
+NODE_EXTRA_CA_CERTS=/app/certs/cfe-intermediate.pem
+```
+
+El contenedor `recibozen-api` lleva el intermedio que a CFE le falta. El archivo vive
+en `backend/certs/cfe-intermediate.pem`. `NODE_TLS_REJECT_UNAUTHORIZED` **no** está
+puesto, o sea que la verificación de TLS sigue encendida — el apaño es el correcto
+(aportar el intermedio faltante), no el peligroso (desactivar la verificación).
+
+**Que falle desde el host es lo esperado**, no un defecto: el host no tiene ese apaño.
+Su bundle de CAs está bien y contiene las cinco raíces Entrust. Reinstalar
+`ca-certificates` no cambia nada.
+
+**Riesgo operativo que sí vale vigilar:**
+
+| Certificado | Vence |
+|---|---|
+| Hoja `app.cfe.mx` | **3 dic 2026** |
+| Intermedio fijado `Entrust EV TLS Issuing RSA CA 2` | 10 dic 2027 |
+
+Si CFE renueva su hoja bajo un intermedio **distinto**, el `.pem` fijado queda obsoleto
+y la sincronización de tarifas se rompe con un error de TLS. La renovación de la hoja
+es el próximo momento de riesgo.
+
+## Emulador Android disponible — puedes ver la app tú mismo
+
+Hay SDK completo, imagen android-36, un AVD (`Medium_Phone_API_36.0`) y **WHPX activo**,
+así que corre acelerado.
+
+```bash
+cd "C:/Users/emili/AppData/Local/Android/Sdk/emulator" && ./emulator.exe -avd Medium_Phone_API_36.0 \
+  -no-window -no-audio -no-boot-anim -no-snapshot-save -gpu swiftshader_indirect -port 5554
+```
+
+**El teléfono real del usuario suele estar conectado por ADB inalámbrico.** Aísla siempre
+con `ANDROID_SERIAL=emulator-5554` para no instalarle nada:
+
+```bash
+ANDROID_SERIAL=emulator-5554 ./gradlew connectedDebugAndroidTest
+```
+
+Tres tropiezos ya pagados, para que no los repitas:
+
+- `getExternalFilesDir(null)` devuelve **null** en ese AVD. Usa `filesDir` y saca los archivos con `run-as`.
+- **Gradle desinstala la app al terminar** `connectedDebugAndroidTest`, y se lleva los archivos con ella. Si necesitas que sobrevivan: `installDebug installDebugAndroidTest` y luego `adb shell am instrument -w -e class <clase> app.recibozen.android.test/androidx.test.runner.AndroidJUnitRunner`.
+- Para revisar tamaño de fuente: `adb shell settings put system font_scale 2.0`, y **regrésalo a 1.0 al terminar**.
+
+## Estado verificado el 2026-08-24
 
 | | |
 |---|---|
 | Paquete | `app.recibozen.android` · versionCode **5** / 1.0.4 |
-| Pruebas unitarias Android | **268 · 0 fallos** |
-| Pruebas backend | **21 · 0 fallos** (`cd backend && node --test`) |
-| Lint | 0 errores, 72 avisos (59 `PluralsCandidate`, resto versiones y falsos `Typos`) |
-| Cadenas de texto huérfanas | **0** |
-| Bundle release | firmado (`jar verified`), con los 2 certificados de Play App Signing |
-| Backend | `/readyz` → `{"status":"ready","playBillingConfigured":true}` |
+| Pruebas unitarias Android | **338 · 0 fallos** |
+| Pruebas instrumentadas | **7 · 0 fallos** (en emulador) |
+| Pruebas backend | **21 · 0 fallos** (`cd backend && node --test`, Node v23.11 local / v22.17 en contenedor) |
+| Lint | 0 errores, 79 avisos (66 `PluralsCandidate`, resto versiones y falsos `Typos`) |
+| Cadenas huérfanas | **0** |
+| Backend | `recibozen-api` healthy · `recibozen-tunnel` up |
+| `/readyz` | `{"status":"ready","entitlementKeyConfigured":true,"playBillingConfigured":true}` |
+| `POST /v1/entitlements/exchange` con `{}` | `400 invalid_product_id` — **valida, no se niega a existir** |
 
-Comandos de verificación:
+**No re-verificado** (arrastrado, trátalo como no confirmado): que el bundle release siga
+firmado con los 2 certificados de Play App Signing, y todo el estado de Play Console.
 
 ```bash
 ./gradlew testDebugUnitTest assembleDebug lintDebug bundleRelease
+ANDROID_SERIAL=emulator-5554 ./gradlew connectedDebugAndroidTest
 cd backend && node --test
 ```
 
@@ -69,13 +133,17 @@ cd backend && node --test
 
 # LA TAREA: el apartado de IA
 
-## Lo primero: el bloqueo ya se levantó
+## El bloqueo ya se levantó, y está verificado
 
-Durante meses la IA estuvo bloqueada porque el backend respondía `503 play_verification_not_configured` y **todo el diseño del Worker cuelga de un entitlement lease que no se podía emitir**. Eso **ya está resuelto**: Billing quedó configurado y verificado de punta a punta. `POST /v1/entitlements/exchange` ahora responde `400` a una petición vacía en vez de `503`, que es la prueba de que valida en lugar de negarse a existir.
+Durante meses la IA estuvo bloqueada porque el backend respondía
+`503 play_verification_not_configured` y **todo el diseño del Worker cuelga de un
+entitlement lease que no se podía emitir**. Resuelto:
+`POST /v1/entitlements/exchange` con cuerpo vacío responde **`400 invalid_product_id`**
+— valida en vez de negarse a existir.
 
 ## El diseño está en `docs/PLAN_IA.md`
 
-Léelo completo. Resumen de sus 8 capas de blindaje:
+Léelo completo. Sus 8 capas:
 
 - **Capa 0** — `ANTHROPIC_API_KEY` vive **solo** como secreto del Worker. Nunca en el APK, ni en el repo, ni en Gradle properties.
 - **Capa 1** — el Worker valida el mismo lease ECDSA P-256 que ya emite el backend. Sin lease válido → `403`, sin llamar a Anthropic.
@@ -87,41 +155,70 @@ Léelo completo. Resumen de sus 8 capas de blindaje:
 - **Capa 7** — Play Integrity atado a la emisión del lease.
 - **Capa 8** — tokens de entrada/salida guardados en el Durable Object para ver el gasto antes de la factura.
 
-## ⚠️ Dos correcciones a ese documento
+## Correcciones al documento
 
-**1. `PLAN_IA.md` §4 está desactualizado.** Dice que el plan gratuito de Cloudflare no tiene Durable Objects y que por eso hay que pagar $5/mes. **Falso**: los Durable Objects **sí** están en el plan gratuito con backend SQLite, que da los incrementos atómicos que el diseño necesita. El plan gratuito da 100,000 peticiones/día. **Se puede construir y probar todo sin pagar.**
+**1. `PLAN_IA.md` §4 está desactualizado.** Dice que el plan gratuito de Cloudflare no
+tiene Durable Objects y que hay que pagar $5/mes. **Falso**: los Durable Objects **sí**
+están en el plan gratuito con backend SQLite, que da los incrementos atómicos que el
+diseño necesita. 100,000 peticiones/día. **Se construye y prueba todo sin pagar.**
 
-**2. El precio cambió.** El documento calcula el modelo de negocio con Plus a **$49 MXN**; el usuario decidió **$69 MXN**. Las tablas de cuotas necesitan recalcularse con el precio real y un tipo de cambio que él confirme.
+**2. El precio cambió.** El documento calcula con Plus a **$49 MXN**; el usuario decidió
+**$69 MXN**. Las tablas de cuotas necesitan recalcularse con el precio real y un tipo de
+cambio que él confirme.
 
-Precios verificados de la API (Haiku 4.5, `claude-haiku-4-5`): **$1/MTok entrada, $5/MTok salida**, lectura de caché ~$0.10/MTok. Los cálculos del documento (≈$0.0014 por identificar un aparato) se sostienen.
+Precios verificados de la API (Haiku 4.5, `claude-haiku-4-5`): **$1/MTok entrada,
+$5/MTok salida**, lectura de caché ~$0.10/MTok. Los cálculos del documento (≈$0.0014 por
+identificar un aparato) se sostienen.
 
-## Alcance de la IA, ya acotado por el usuario
+**3. El paso 1 del orden recomendado — la prueba de 30 minutos sobre CFE — YA SE HIZO.**
 
-Consejos de ahorro, configuración de equipos, consumo, predicción de costo y alta rápida de aparatos. **Sin identificación por cámara ni por imagen** — el usuario descartó ese alcance explícitamente.
+## La prueba de CFE ya está hecha
 
-## La base sobre la que la IA va a escribir — ya existe
+| Origen | User-Agent | Resultado |
+|---|---|---|
+| IP de datacenter | — | **403** |
+| Orange Pi · IP residencial MX | `curl` pelado | **200** · 39,675 B |
+| Orange Pi · IP residencial MX | Chrome | **200** · 38,496 B |
+| Contenedor `recibozen-api` · Node `fetch` | — | **200** · `__VIEWSTATE` presente |
 
-Esto es importante: **no empieces por el Worker.** El esquema de evidencia ya está construido y probado, y define las reglas que la IA tiene que respetar.
+Conclusiones con evidencia:
 
-`core/model/DeviceEvidence.kt` + `core/calculation/EvidenceResolver.kt` (24 pruebas en `DeviceEvidenceTest.kt`):
+1. **`app.cfe.mx` está detrás de Imperva** (resuelve a `e85dinu.ng.impervadns.net`).
+2. **El discriminante es la IP, no el user-agent.** Un `curl` pelado obtiene 200 desde México. *No es concluyente para Cloudflare* —esa IP no se probó— pero Imperva conoce los rangos de salida de Cloudflare, así que **lo esperable es que el Worker también reciba 403**.
+3. **El sitio NO es una SPA.** Es ASP.NET WebForms con postback: `cfe-tariff-source.mjs` lee campos ocultos, hace POST y parsea HTML del servidor. **No hace falta Browser Rendering**, que es de paga y habría tirado la premisa de plan gratuito. Si algún día se migra: el postback necesita continuidad de cookie de sesión entre el GET y el POST.
+4. **`robots.txt` permite la ruta de tarifas.** `Allow: /`, y `/Aplicaciones/CCFE/Tarifas/` no está en la lista de `Disallow`.
 
-- `DeviceEvidence` lleva `value + unit + source + retrievedAt + methodology`. La **unidad la manda la métrica**, no es un campo suelto que pueda contradecirla.
-- La **confianza se deriva**, no se declara. Nadie puede estampar `HIGH` sobre una estimación modelada.
-- **`EvidenceSource.AI_SUGGESTION` tiene el rango más bajo de todos.** Una sugerencia de un modelo **nunca** le gana a una etiqueta que alguien leyó ni a una medición. Esto es deliberado y hay pruebas que lo fijan.
-- **Regla de conflicto: dos valores que se contradicen NUNCA se promedian.** Un promedio es un número que nadie afirmó con la autoridad de los dos. Gana uno por criterios declarados, el perdedor se conserva y se reporta, y la confianza baja.
+**Conclusión práctica: el scraper de tarifas se queda en la Orange Pi. El Worker es solo
+para la IA.**
 
-Cuando la IA escriba datos de aparatos, tiene que entrar por ahí, como `AI_SUGGESTION`.
+## Alcance de la IA, acotado por el usuario
 
-## El orden que recomiendo
+Consejos de ahorro, configuración de equipos, consumo, predicción de costo y alta rápida
+de aparatos. **Sin identificación por cámara ni por imagen** — descartado explícitamente.
 
-1. **Prueba de 30 minutos:** un Worker desechable que pida las páginas de tarifas de CFE (`https://app.cfe.mx/Aplicaciones/CCFE/Tarifas/TarifasCREHogar/Tarifas`). Muchos sitios de gobierno mexicanos bloquean IPs de datacenter. Desde la Orange Pi sale IP residencial mexicana; desde Cloudflare no. **Esa respuesta decide si el scraper de tarifas puede migrar o se queda en la Orange Pi para siempre.**
-2. **Worker limpio para lo nuevo** (auth con lease + cuotas + Durable Objects), en el **plan gratuito**. Cero riesgo para lo que ya funciona.
-3. **Proxy de Haiku** para identificar aparato, escribiendo como `AI_SUGGESTION`.
+## La base sobre la que la IA va a escribir — ya existe, no la rompas
+
+**No empieces por el Worker.** El esquema de evidencia está construido y probado.
+
+`core/model/DeviceEvidence.kt` + `core/calculation/EvidenceResolver.kt` (24 pruebas):
+
+- `DeviceEvidence` lleva `value + unit + source + retrievedAt + methodology`. La **unidad la manda la métrica**.
+- La **confianza se deriva**, no se declara. Nadie estampa `HIGH` sobre una estimación modelada.
+- **`EvidenceSource.AI_SUGGESTION` tiene el rango más bajo de todos.** Una sugerencia de un modelo **nunca** le gana a una etiqueta leída ni a una medición. Hay pruebas que lo fijan.
+- **Dos valores que se contradicen NUNCA se promedian.** Gana uno por criterios declarados, el perdedor se conserva y se reporta, y la confianza baja.
+
+Cuando la IA escriba datos de aparatos, entra por ahí, como `AI_SUGGESTION`.
+
+## El orden recomendado (actualizado)
+
+1. ~~Prueba de CFE~~ — **hecha.**
+2. **Worker limpio** (auth con lease + cuotas + Durable Objects) en el **plan gratuito**.
+3. **Proxy de Haiku** para alta rápida de aparatos, escribiendo como `AI_SUGGESTION`.
 4. Explicación en lenguaje natural del recibo.
 
 ## Lo que necesitas del usuario
 
-- **Account ID de Cloudflare** y que **él** corra `npm i -g wrangler && wrangler login`. **No le pidas un API token de Cloudflare** — tú escribes el código y los comandos, él los ejecuta.
+- **Account ID de Cloudflare** y que **él** corra `npm i -g wrangler && wrangler login`. **No le pidas un API token** — tú escribes código y comandos, él los ejecuta.
 - Que **él** cree la API key de Anthropic y la ponga con `wrangler secret put ANTHROPIC_API_KEY`. **No le pidas la llave por chat**; quedaría en el historial y habría que rotarla.
 - Su **techo mensual de gasto en USD**.
 - Subdominio propuesto: `ia-recibozen.simapp.uk` (ya tiene `simapp.uk` en Cloudflare, con el túnel `recibozen-tunnel` sirviendo `api-recibozen.simapp.uk`).
@@ -130,75 +227,131 @@ Cuando la IA escriba datos de aparatos, tiene que entrar por ahí, como `AI_SUGG
 
 # Contexto de lo hecho recientemente (para que no lo rompas)
 
-## Google Play — dónde está parado
+## Ocho commits en `IA-Implement`
 
-Cuenta creada, app registrada (`app.recibozen.android`), verificación de desarrollador con 4 huellas verificadas, política de privacidad publicada en `https://tandemrhombus.github.io/recibozen-legal/`, suscripciones `recibozen_plus_monthly` y `recibozen_family_monthly` creadas.
+```
+198a309  fix: three things only visible with the screens rendered at a large font size
+0f62352  fix: make the layouts survive a large system font size
+34ce094  feat: let the household record that CFE replaced the meter
+dfc4f7b  fix: make the DAC period range show a range and a marker that can move
+2278761  fix: make three bar charts show data instead of decoration
+d955146  feat: add a nightly reminder to unplug what the house leaves in standby
+c3c79f5  feat: show the DAC ceiling as a daily allowance
+c3c358f  feat: resolve meter rollover with the household's own testimony
+```
 
-**La app fue rechazada una vez** por la política de afirmaciones engañosas: mostraba información gubernamental (tarifas CFE, límites DAC) sin enlace a la fuente original. Ya está corregido en la ficha y **dentro de la app** (`LegalScreen` y el desplegable del DAC ahora enlazan a la publicación oficial de CFE).
+## APIs nuevas que tu código tiene que respetar
 
-**Falta:** subir el bundle v5, completar Contenido de la aplicación, y correr la **prueba cerrada con 12 testers durante 14 días** (la interna **no cuenta** para producción).
+**`MeterDelta.consumption(...)` cambió de firma.** Ahora acepta `attestedWraps`,
+`plausibleDailyKwh` y `replacement`. Es el único lugar que convierte dos lecturas en
+consumo.
 
-## El candado de Plus está levantado a propósito
+> **Si agregas cualquier cálculo que cruce un tramo de lecturas, tiene que pasar por
+> `MeterDelta` y usar `ReadingInterval.replacementForDelta(...)`.** Un tramo ambiguo debe
+> llegar como reemplazo **incompleto** para que `MeterDelta` se niegue; si llega como
+> `null`, restaría una lectura de un registro contra la de otro medidor físico distinto.
 
-`core/model/Paywall.kt` → `ENFORCED = false`. **No es un pendiente, es una decisión.** Razones:
+| Archivo nuevo | Qué resuelve |
+|---|---|
+| `core/calculation/ReadingInterval.kt` | intervalo real entre lecturas; suma de vueltas atestiguadas; detección de reemplazo en un tramo |
+| `core/calculation/AccumulatedConsumption.kt` | curva de acumulado del periodo (salió del ViewModel para poder probarse) |
+| `core/calculation/DacDailyBudget.kt` | techo del periodo convertido en ritmo diario |
+| `core/calculation/NightUnplugAdvice.kt` | qué aparatos nombrar en el recordatorio nocturno |
+| `core/notifications/NightUnplugReminder.kt` | ajustes + agenda por hora + worker |
+| `core/designsystem/FontScale.kt` | `rzPrefersStackedLayout()` — umbral 1.3 para apilar layouts |
+| `core/components/RzAvatar.kt` | el círculo de la inicial, unificado y con crecimiento acotado |
 
-1. Play exige, en la declaración de acceso, atestiguar que las credenciales dan acceso completo "incluido contenido premium". Con el candado puesto y sin forma de darle una compra al revisor, esa casilla sería una declaración falsa — y eso es causa de retiro.
-2. Ningún plan base está activo, así que **nadie puede comprar**. El candado quitaba dos funciones a todo el mundo sin recaudar nada.
+También `MeterRegister(capacityKwh, multiplier)` en `MeterProfile.kt` — los dos viajan
+juntos **a propósito**, porque el multiplicador se omitió en todos los sitios de lectura
+durante toda la vida del código por ser un argumento opcional con default de 1.
 
-Un solo flag gobierna las dos compuertas (recordatorios de lectura y múltiples suministros). Las pruebas cubren **ambos estados**, así que reactivarlo es un cambio de una línea que llega probado.
+Y `readStoredSession(context)` en `PersistentReciboZenRepository.kt` — para trabajo en
+segundo plano que necesita el inventario. **No abras un segundo DataStore sobre el mismo
+archivo, revienta.**
 
-**Reactívalo en la misma versión que active los planes base.** No antes: la pantalla Premium ofrecería cobrar por funciones que ya son gratis.
+## Decisiones que NO son pendientes
 
-## Trabajo reciente en el medidor (no lo deshagas)
+**`Paywall.ENFORCED = false` es deliberado** (`core/model/Paywall.kt:28`). Razones:
 
-`core/calculation/MeterDelta.kt` (20 pruebas) reemplazó la resta cruda que había en tres lugares. Reporta consumo **o** reporta que no puede saberlo, nunca algo intermedio:
+1. Play exige atestiguar que las credenciales de prueba dan acceso completo "incluido contenido premium". Con el candado puesto y sin forma de darle una compra al revisor, esa casilla sería una declaración falsa — causa de retiro.
+2. Ningún plan base está activo, así que **nadie puede comprar**.
 
-- El desbordamiento del registro (medidor de 4 carátulas que pasa de 9999) producía consumo **negativo**, que la pantalla mostraba como medición.
-- El desbordamiento que aterriza **arriba** de la lectura anterior es invisible: parece una lectura normal pero está subestimada por una capacidad entera.
-- El **multiplicador de CFE** no se aplica a lecturas, aunque la importación de recibos sí lo aplica (`BillImportScreen.kt:299`). **Esto sigue sin arreglar** y afecta a servicios con transformador de corriente.
+Un flag gobierna las tres compuertas (recordatorios de lectura, recordatorio nocturno,
+múltiples suministros). Las pruebas cubren **ambos estados**. **Reactívalo en la misma
+versión que active los planes base**, no antes.
 
-`core/calculation/MeterProfile.kt` reemplazó tres probes `meterType.contains("4")` sobre una etiqueta en español.
+**`Type.kt` usa `FontFamily.Default` a propósito.** No lo "arregles" empaquetando una
+fuente. La consecuencia —que cada layout sobreviva una escala grande— ya está atendida.
 
-`core/ocr/MeterReadingParser.kt` devolvía el código `SIC DGE 4348` de la placa del medidor como si fuera la lectura. Ahora descarta líneas de placa y responde `null` si hay ambigüedad.
+## La lectura hacia atrás quedó cerrada
 
-## Pendientes reales, en orden
+| Situación | Cómo se resuelve |
+|---|---|
+| El registro dio la vuelta | atestación con candidatos calculados |
+| Varias vueltas | mismo camino, hasta 3 |
+| Capturaste mal | manda a corregir la lectura |
+| No se sabe cuántos dígitos tiene | se declara en Perfil u onboarding |
+| Cambiaron el medidor | se registra, con o sin las lecturas frontera |
 
-1. **Nadie pregunta al usuario** cuál de las cuatro situaciones ocurrió cuando una lectura va hacia atrás. La app enuncia la ambigüedad honestamente pero no la resuelve. Requiere UI nueva y guardar el conteo de dígitos y el multiplicador como datos declarados.
-2. **El multiplicador de CFE** sin aplicar a lecturas.
-3. **Tipografía**: `Type.kt` usa `FontFamily.Default` **a propósito** (decisión documentada: respeta la fuente y el tamaño que el usuario eligió en su teléfono). La consecuencia es que **cada layout debe sobrevivir una escala de fuente grande**, y eso nunca se probó.
-4. **Cuatro arreglos sin confirmar en dispositivo**: paso 3 del tutorial (DAC), la tarjeta bajo la barra de navegación, el tutorial de Configuración del 1 al 7, y el botón Inicio de la barra inferior.
-5. **Dos defectos vistos en capturas**: el botón flotante "Registrar lectura" tapa contenido en Inicio e Historial, y en Aparatos aparece **"Toda la casa" dos veces** como chip.
-6. Tabla `appliance_references` sin usar: aliméntala o quítala.
+Y **el multiplicador de CFE ya se aplica a las lecturas** (el recibo importado gana sobre
+el declarado).
+
+## Pendientes reales
+
+**Cerrados:** la pregunta de la vuelta, el multiplicador, el conteo de dígitos declarado,
+el cambio de medidor, y la escala de fuente grande.
+
+Quedan:
+
+1. **Escala de fuente: la auditoría no fue exhaustiva.** Se revisaron visualmente Inicio, Perfil, onboarding, confirmación de lectura, DAC y Notificaciones. **No se revisaron** Historial, Aparatos, Solar, Análisis del periodo, Balance ni Premium. El emulador está listo.
+2. **Cuatro arreglos sin confirmar en dispositivo** *(arrastrados, no verificados)*: paso 3 del tutorial (DAC), la tarjeta bajo la barra de navegación, el tutorial de Configuración del 1 al 7, y el botón Inicio de la barra inferior.
+3. **Dos defectos vistos en capturas** *(arrastrados, no verificados)*: el botón flotante "Registrar lectura" tapa contenido en Inicio e Historial, y en Aparatos aparece **"Toda la casa" dos veces** como chip.
+4. **Tabla `appliance_references` sin usar**: aliméntala o quítala. *Candidata natural para la IA* — sería el destino de las sugerencias `AI_SUGGESTION`.
+5. **Play**: subir el bundle v5, completar Contenido de la aplicación, y correr la **prueba cerrada con 12 testers durante 14 días** (la interna **no cuenta** para producción).
+6. **Vigilar la renovación del certificado de `app.cfe.mx`** (vence 3 dic 2026), por lo del intermedio fijado.
 
 ## Mapa de archivos
 
 ```
 app/src/main/java/app/recibozen/android/
-  core/calculation/   DacRisk.kt · MeterDelta.kt · MeterProfile.kt · EvidenceResolver.kt
-                      TariffEngine.kt · ConsumptionPace.kt · OvernightBaseline.kt
-  core/model/         DeviceEvidence.kt · Paywall.kt · ElectricService.kt · Appliance.kt
+  core/calculation/   DacRisk.kt · DacDailyBudget.kt · MeterDelta.kt · MeterProfile.kt
+                      ReadingInterval.kt · AccumulatedConsumption.kt · EvidenceResolver.kt
+                      NightUnplugAdvice.kt · TariffEngine.kt · ConsumptionPace.kt
+                      OvernightBaseline.kt · SolarEstimator.kt
+  core/model/         DeviceEvidence.kt · Readings.kt (HistoryReadingEntry, MeterReplacement)
+                      Paywall.kt · ElectricService.kt · Appliance.kt
+  core/notifications/ ReadingReminder.kt · NightUnplugReminder.kt
+  core/designsystem/  Type.kt · Spacing.kt · FontScale.kt
+  core/components/    RzButtons.kt · RzProgress.kt · RzAvatar.kt · RzCharts.kt
   core/security/      EntitlementLeaseVerifier.kt · PremiumEntitlementAuthority.kt
-                      AppInstallTrustChecker.kt · PremiumAccessStore.kt
   core/ocr/           MeterReadingParser.kt
   feature/plan/       DacScreen.kt · DacGlance.kt · BalanceScreen.kt · PlanScreen.kt
   feature/premium/    PremiumScreen.kt   ← aquí vive el BillingClient
   feature/readings/   ReadingConfirmScreen.kt · ReadingDialScreen.kt · ReadingPhotoScreen.kt
-  demo/repository/    DemoReciboZenRepository.kt   ← energySummary vive aquí
-  data/repository/    PersistentReciboZenRepository.kt   ← el repositorio real
+  demo/repository/    DemoReciboZenRepository.kt        ← energySummary vive aquí
+  data/repository/    PersistentReciboZenRepository.kt  ← el repositorio real
+
+app/src/androidTest/  FontScaleTest.kt · ProfileRowFontScaleTest.kt
 
 backend/src/          server.mjs · google-play.mjs · entitlement-lease.mjs
                       cfe-tariff-source.mjs · tariff-catalog.mjs · solar-resource.mjs
+backend/certs/        cfe-intermediate.pem   ← el intermedio que a CFE le falta
 backend/              compose.yaml + compose.billing.yaml   ← siempre los dos
 
 docs/                 PLAN_IA.md · BACKEND_OPERATIONS.md · COMO_PUBLICAR.md
                       SECURITY_HARDENING.md · REFERENCE_DATA_FORMAT.md
-play_assets/          ícono, gráfico destacado, 4 capturas, logos, hoja de estilo
 ```
 
 ## Un pendiente de seguridad
 
-La contraseña del usuario `orangepi` **sigue siendo la de fábrica**. En esa máquina vive la clave privada que firma los entitlement leases y la cuenta de servicio de Google Play. Es el punto 1 de `docs/BACKEND_OPERATIONS.md` y lleva ahí desde agosto. Recuérdaselo; el acceso por clave ya está puesto, así que cambiarla no rompe nada.
+**La contraseña de `orangepi` sigue siendo la de fábrica.** En esa máquina vive la clave
+privada que firma los entitlement leases y la cuenta de servicio de Google Play. Punto 1
+de `docs/BACKEND_OPERATIONS.md`, ahí desde agosto. El acceso por clave ya está puesto, así
+que cambiarla no rompe nada. El usuario ya está enterado y ha decidido no cambiarla por
+ahora — menciónalo una vez y no insistas.
 
 ---
 
-**Empieza leyendo `docs/PLAN_IA.md` completo, y verifica el estado del backend antes de proponer nada.**
+**Empieza leyendo `docs/PLAN_IA.md` completo, verifica el backend, y ten presente que la
+prueba de CFE ya está hecha: el scraper se queda donde está y el Worker es solo para la
+IA.**
