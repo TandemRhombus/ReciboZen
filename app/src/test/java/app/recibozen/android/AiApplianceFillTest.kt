@@ -180,4 +180,22 @@ class AiApplianceFillTest {
         assertNull(fill.standbyWatts)
         assertFalse(fill.hasSomethingToApply)
     }
+    @Test
+    fun theSamsungAnswerFromProductionResolvesToTheModelledWatts() {
+        // Verbatim from a live call on 2026-08-24 for a Samsung UN55AU7000:
+        // the model marked its annual total as a nameplate figure and its power
+        // as modelled. Both rules have to fire, in order, to land on 85 W.
+        val fill = aiApplianceFill(
+            listOf(
+                suggestion(EvidenceMetric.ANNUAL_KWH, 104.0, EvidenceMethodology.NAMEPLATE),
+                suggestion(EvidenceMetric.ACTIVE_WATTS, 85.0, EvidenceMethodology.MODELED),
+            ),
+            billingDays = 60,
+        )
+
+        assertEquals(85, fill.powerWatts)
+        assertNull("the nameplate total must not win just for being a total", fill.unitKwh)
+        assertEquals(ApplianceUsageModel.POWER_SCHEDULE, fill.usageModel)
+        assertEquals(UnappliedReason.NAMEPLATE_IS_NOT_TYPICAL_USE, fill.unapplied.single().reason)
+    }
 }

@@ -21,7 +21,7 @@ val apiBaseUrl = providers.gradleProperty("RECIBOZEN_API_BASE_URL")
 // and entitlements stay on the Orange Pi because app.cfe.mx answers 403 to
 // datacenter addresses.
 val aiBaseUrl = providers.gradleProperty("RECIBOZEN_AI_BASE_URL")
-    .orElse("https://recibozen-ia.emilianohdzvi.workers.dev")
+    .orElse("https://ia-recibozen.simapp.uk")
 val playCloudProjectNumber = providers.gradleProperty("RECIBOZEN_PLAY_CLOUD_PROJECT_NUMBER")
     .orElse("0")
 

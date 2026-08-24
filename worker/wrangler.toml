@@ -8,7 +8,16 @@ account_id = "4833d23e417f8449b2b69536e3bc81bd"
 #
 # workers.dev stays on until ia-recibozen.simapp.uk is routed; then it goes to
 # false so there is one entrance instead of two.
-workers_dev = true
+# Off now that ia-recibozen.simapp.uk is verified serving: one entrance instead
+# of two. No published APK ever pointed at the workers.dev name, so nothing
+# breaks by closing it.
+workers_dev = false
+
+# The hostname the APK carries. A URL compiled into an installed app is
+# effectively permanent — a household that never updates keeps calling it — so it
+# has to be a name we own. With this in place the AI can move hosts by changing a
+# DNS record; on workers.dev it would take a new release and everyone updating.
+routes = [{ pattern = "ia-recibozen.simapp.uk", custom_domain = true }]
 
 # Preview URLs publish a separate public hostname for every version deployed.
 # Useful when you stage releases; here it is extra surface for a Worker that
