@@ -30,13 +30,25 @@ fun RzPrimaryButton(
     Button(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.height(52.dp),
+        // A floor, not a fixed height. This was `height(52.dp)`, which is the
+        // one button of the three that did not grow: RzSecondaryButton and
+        // RzTextButton both already used defaultMinSize. A household running a
+        // large system font size got every primary action in the app -- confirm
+        // a reading, save, continue -- with its label cut off, and the longer
+        // Spanish labels wrap to two lines well before that.
+        //
+        // At the default font size nothing moves: the label plus padding comes
+        // to well under 52dp, so the floor still decides the height.
+        modifier = modifier.defaultMinSize(minHeight = 52.dp),
         shape = RzExtraShapes.control,
         colors = ButtonDefaults.buttonColors(
             containerColor = containerColor,
             contentColor = contentColor,
         ),
-        contentPadding = PaddingValues(horizontal = RzSpacing.xl),
+        // Vertical padding so a label that does grow is not flush against the
+        // border. There was none, which is invisible while the height is fixed
+        // and ugly the moment it is not.
+        contentPadding = PaddingValues(horizontal = RzSpacing.xl, vertical = RzSpacing.sm),
     ) {
         Text(text, style = MaterialTheme.typography.labelLarge)
     }
@@ -59,7 +71,7 @@ fun RzSecondaryButton(
             contentColor = MaterialTheme.colorScheme.onSurface,
         ),
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        contentPadding = PaddingValues(horizontal = RzSpacing.xl),
+        contentPadding = PaddingValues(horizontal = RzSpacing.xl, vertical = RzSpacing.sm),
     ) {
         Text(text, style = MaterialTheme.typography.labelLarge)
     }

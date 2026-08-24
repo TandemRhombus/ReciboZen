@@ -52,6 +52,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import app.recibozen.android.R
 import app.recibozen.android.core.calculation.MeterProfile
+import app.recibozen.android.core.designsystem.rzPrefersStackedLayout
 import app.recibozen.android.core.calculation.TariffCatalog
 import app.recibozen.android.core.components.RzBannerTone
 import app.recibozen.android.core.components.RzCard
@@ -205,33 +206,59 @@ fun OnboardingScreen(
                 }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface)
-                    .imePadding()
-                    .padding(horizontal = RzSpacing.screenHorizontal, vertical = RzSpacing.md),
-                horizontalArrangement = Arrangement.spacedBy(RzSpacing.sm),
-            ) {
+            // Neither button carries a fixed height any more -- that would
+            // override the floor each one sets for itself -- and past a large
+            // font size they stop sharing a row at all. Side by side at 2x,
+            // "Configurar después" broke mid-word into "Configur / ar / después"
+            // inside its half, and the two buttons ended up visibly different
+            // heights next to each other.
+            val backLabel = stringResource(
+                if (uiState.step > 0) R.string.onboarding_action_back
+                else R.string.onboarding_action_configure_later,
+            )
+            val primaryEnabled = when (uiState.step) {
+                0 -> profileComplete
+                2 -> uiState.meterType.isNotBlank()
+                3 -> uiState.goalMxn > 0 && TariffCatalog.find(uiState.tariff) != null
+                else -> true
+            }
+            val back: @Composable (Modifier) -> Unit = { buttonModifier ->
                 RzSecondaryButton(
-                    text = stringResource(
-                        if (uiState.step > 0) R.string.onboarding_action_back
-                        else R.string.onboarding_action_configure_later,
-                    ),
+                    text = backLabel,
                     onClick = if (uiState.step > 0) onPrevious else onSkip,
-                    modifier = Modifier.weight(1f).height(52.dp),
+                    modifier = buttonModifier,
                 )
+            }
+            val forward: @Composable (Modifier) -> Unit = { buttonModifier ->
                 RzPrimaryButton(
                     text = stringResource(primaryLabel(uiState.step, uiState.hasImportedBill)),
                     onClick = onPrimaryClick,
-                    enabled = when (uiState.step) {
-                        0 -> profileComplete
-                        2 -> uiState.meterType.isNotBlank()
-                        3 -> uiState.goalMxn > 0 && TariffCatalog.find(uiState.tariff) != null
-                        else -> true
-                    },
-                    modifier = Modifier.weight(1.6f).height(52.dp),
+                    enabled = primaryEnabled,
+                    modifier = buttonModifier,
                 )
+            }
+            val footerModifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surface)
+                .imePadding()
+                .padding(horizontal = RzSpacing.screenHorizontal, vertical = RzSpacing.md)
+            if (rzPrefersStackedLayout()) {
+                // Primary on top when stacked: it is the action the step expects.
+                Column(
+                    modifier = footerModifier,
+                    verticalArrangement = Arrangement.spacedBy(RzSpacing.sm),
+                ) {
+                    forward(Modifier.fillMaxWidth())
+                    back(Modifier.fillMaxWidth())
+                }
+            } else {
+                Row(
+                    modifier = footerModifier,
+                    horizontalArrangement = Arrangement.spacedBy(RzSpacing.sm),
+                ) {
+                    back(Modifier.weight(1f))
+                    forward(Modifier.weight(1.6f))
+                }
             }
         }
     }
@@ -369,7 +396,7 @@ private fun ReceiptStep(uiState: OnboardingUiState, onImportBill: () -> Unit) {
                     else R.string.onboarding_action_upload_pdf,
                 ),
                 onClick = onImportBill,
-                modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.md).height(48.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.md),
             )
         }
         RzDashedCard(modifier = Modifier.fillMaxWidth()) {

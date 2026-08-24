@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -640,7 +642,10 @@ private fun ProjectedBillCard(uiState: HomeUiState) {
             )
         }
 
-        Row(modifier = Modifier.padding(top = RzSpacing.lg)) {
+        // IntrinsicSize.Min so the dividers can match the tallest column. They
+        // were a fixed 28dp, which is the right length only at the default font
+        // size and a short stub next to two-line labels at any larger one.
+        Row(modifier = Modifier.padding(top = RzSpacing.lg).height(IntrinsicSize.Min)) {
             StatColumn(
                 label = stringResource(R.string.home_stat_goal_label),
                 value = uiState.goalMxn.takeIf { it > 0 }?.let { "$$it" } ?: "—",
@@ -708,7 +713,7 @@ private fun VerticalDivider() {
     Box(
         modifier = Modifier
             .width(1.dp)
-            .height(28.dp)
+            .fillMaxHeight()
             .background(MaterialTheme.colorScheme.outlineVariant),
     )
 }

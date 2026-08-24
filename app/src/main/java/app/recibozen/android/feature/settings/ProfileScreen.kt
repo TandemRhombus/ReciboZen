@@ -43,6 +43,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import app.recibozen.android.R
+import app.recibozen.android.core.components.RzAvatarCircle
 import app.recibozen.android.core.components.RzCard
 import app.recibozen.android.core.components.RzFlowTopBar
 import app.recibozen.android.core.components.RzFilterChip
@@ -52,6 +53,7 @@ import app.recibozen.android.core.model.ElectricServiceValidator
 import app.recibozen.android.core.model.EntitlementTier
 import app.recibozen.android.core.designsystem.RzExtraShapes
 import app.recibozen.android.core.designsystem.RzIcons
+import app.recibozen.android.core.designsystem.rzPrefersStackedLayout
 import app.recibozen.android.core.designsystem.RzSpacing
 import app.recibozen.android.core.designsystem.ReciboZenTheme
 import app.recibozen.android.demo.repository.ReciboZenRepository
@@ -196,15 +198,11 @@ fun ProfileScreen(
         ) {
             RzCard(modifier = Modifier.fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(RzSpacing.lg)) {
-                    Box(
-                        modifier = Modifier
-                            .size(52.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(uiState.userInitial, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
-                    }
+                    RzAvatarCircle(
+                        initial = uiState.userInitial,
+                        baseDiameter = 52.dp,
+                        textStyle = MaterialTheme.typography.titleLarge,
+                    )
                     Column {
                         val tariffLabel = if (uiState.tariff.isBlank()) {
                             stringResource(R.string.profile_missing_tariff)
@@ -562,13 +560,30 @@ private fun ProfileRow(
         horizontalArrangement = Arrangement.spacedBy(RzSpacing.md),
     ) {
         Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f),
-        )
-        if (trailing != null) {
+        // The value sits beside the label until the reader's font size makes
+        // that impossible, and then it moves underneath.
+        //
+        // Beside is not a graceful squeeze. The trailing Text carries no weight,
+        // so a Row hands it its full intrinsic width before the weighted label
+        // gets any, and at a 2x font scale that left "Cómo se lee tu medidor"
+        // roughly one character wide -- rendered as a vertical column of single
+        // letters. Nothing moves below the threshold.
+        val stacked = rzPrefersStackedLayout()
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            if (trailing != null && stacked) {
+                Text(
+                    text = trailing,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+            }
+        }
+        if (trailing != null && !stacked) {
             Text(text = trailing, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
         }
         if (onClick != null) {

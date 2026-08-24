@@ -40,7 +40,7 @@
     <string name="profile_service_meter_number">Número de medidor (opcional)</string>
     <string name="profile_service_tariff">Tarifa del recibo</string>
     <string name="profile_row_meter">Cómo se lee tu medidor</string>
-    <string name="profile_row_meter_undeclared">Falta el número de dígitos</string>
+    <string name="profile_row_meter_undeclared">Faltan datos</string>
     <string name="profile_row_meter_summary">%1$d dígitos · ×%2$d</string>
     <string name="profile_meter_title">Cómo se lee tu medidor</string>
     <string name="profile_meter_hint">Estos dos datos deciden cuánto consumiste. Sin ellos no podemos saber si tu medidor dio la vuelta ni cuántos kWh cuenta cada unidad del registro.</string>
