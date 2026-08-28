@@ -43,9 +43,9 @@ ruta: /home/orangepi/recibozen/backend
 Notas del servidor:
 
 - Los contenedores `sim-*` son de **otro proyecto del usuario**. No los toques.
-- El backend **siempre** se levanta con los dos archivos compose, o pierde la configuración de billing:
+- El backend **siempre** se levanta con los dos archivos compose, o pierde la configuración de billing. Y **siempre con `--build`**: la imagen se construye desde el `Dockerfile` y no monta `src/` como volumen, así que sin reconstruir el contenedor arranca con el código viejo y no lo dice:
   ```bash
-  cd /home/orangepi/recibozen/backend && docker compose -f compose.yaml -f compose.billing.yaml up -d --no-deps api
+  cd /home/orangepi/recibozen/backend && docker compose -f compose.yaml -f compose.billing.yaml up -d --build --no-deps api
   ```
 - Los secretos en `backend/secrets/` deben ser `640` y del grupo `10001` (el contenedor corre como UID 10001; con `600` entra en bucle de reinicio). Documentado en `compose.billing.yaml`.
 - `sudo` **pide contraseña**. No la necesitas para nada de lo descrito aquí.
