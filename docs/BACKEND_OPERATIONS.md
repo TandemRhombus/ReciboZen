@@ -2,6 +2,24 @@
 
 Estado: desplegado y saludable el 11 de agosto de 2026.
 
+## Máquinas de trabajo
+
+| | Ruta del repo |
+|---|---|
+| PC principal (`emili`) | `C:UsersemiliAndroidStudioProjectsReciboZen` |
+| PC secundaria (`DESKTOP-FRUFKUU`, 192.168.3.200) | `C:UsersPC FACTOR WHITEsourceeposReciboZen` |
+
+Las dos tienen la llave de firma, la llave SSH de la Orange Pi y `ssh-agent`
+habilitado. Entre ellas hay SSH por llave; el shell remoto de la secundaria es
+`cmd.exe`, no bash.
+
+Desde Windows usa el binario nativo, no el de Git Bash — ese falla con
+`Permission denied`:
+
+```bash
+/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes orangepi@192.168.192.242 "comando"
+```
+
 ## Aislamiento actual
 
 - Directorio remoto: `/home/orangepi/recibozen/backend`.
