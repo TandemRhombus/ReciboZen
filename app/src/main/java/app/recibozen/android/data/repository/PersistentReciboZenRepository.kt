@@ -190,6 +190,17 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
                         mutableTariffCalibration.value = bills
                             .maxByOrNull { it.periodEndEpochDay }
                             ?.let(::calibrationFrom)
+                        // When the household first brought a bill into the app,
+                        // not the dates printed on it. A bill imported today can
+                        // cover a period from a year ago.
+                        mutableFirstBillImportEpochDay.value = bills
+                            .minOfOrNull { it.importedAtEpochMillis }
+                            ?.let {
+                                java.time.Instant.ofEpochMilli(it)
+                                    .atZone(java.time.ZoneId.systemDefault())
+                                    .toLocalDate()
+                                    .toEpochDay()
+                            }
                     }
             }
 

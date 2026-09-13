@@ -54,6 +54,27 @@
     <string name="history_no_bills">Todavía no hay recibos importados. Usa “Importar recibo PDF” para cargar valores reales.</string>
     <string name="history_amount_mxn">$%1$s</string>
 
+    <string name="history_savings_title">Tu consumo contra antes de ReciboZen</string>
+    <string name="history_savings_headline_saved">Llevas $%1$d menos</string>
+    <string name="history_savings_headline_spent">Llevas $%1$d más</string>
+    <string name="history_savings_headline_even">Vas igual que antes</string>
+    <string name="history_savings_kwh_saved">%1$d kWh menos desde %2$s</string>
+    <string name="history_savings_kwh_spent">%1$d kWh más desde %2$s</string>
+    <string name="history_savings_row_label">%1$s contra %2$s</string>
+    <string name="history_savings_row_detail">%1$d kWh contra %2$d kWh ajustados a los mismos días</string>
+    <string name="history_savings_row_saved">−$%1$d</string>
+    <string name="history_savings_row_spent">+$%1$d</string>
+    <plurals name="history_savings_periods">
+        <item quantity="one">Comparamos %1$d recibo con el mismo periodo de antes de que usaras ReciboZen.</item>
+        <item quantity="other">Comparamos %1$d recibos, cada uno con el mismo periodo de antes de que usaras ReciboZen.</item>
+    </plurals>
+    <plurals name="history_savings_without_baseline">
+        <item quantity="one">%1$d recibo no tiene su mismo periodo de antes de ReciboZen para comparar, así que no se cuenta.</item>
+        <item quantity="other">%1$d recibos no tienen su mismo periodo de antes de ReciboZen para comparar, así que no se cuentan.</item>
+    </plurals>
+    <string name="history_savings_pending">Aún no llega tu primer recibo desde que usas ReciboZen (%1$s). Cuando lo importes, lo comparamos con el mismo periodo del año anterior.</string>
+    <string name="history_savings_method">Ajustamos cada periodo por sus días y cobramos los dos consumos con tu tarifa de hoy, así que ni un periodo más corto ni un cambio de tarifa o de temporada cuentan como ahorro. Lo que no podemos saber es la causa: solo medimos cuánto menos consumiste.</string>
+
     <string name="history_period_comparison_title">Periodo %1$s</string>
     <string name="history_estimate_label">Estimación previa</string>
     <string name="history_actual_label">Recibo real</string>
