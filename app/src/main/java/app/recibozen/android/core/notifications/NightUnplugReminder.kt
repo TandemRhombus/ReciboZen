@@ -10,29 +10,26 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.edit
-import androidx.work.CoroutineWorker
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
-import androidx.work.WorkerParameters
 import app.recibozen.android.R
 import app.recibozen.android.core.calculation.NightUnplugAdvice
 import app.recibozen.android.core.calculation.NightUnplugAdvisor
 import app.recibozen.android.core.model.EntitlementTier
-import app.recibozen.android.core.security.PremiumAccessStore
 import app.recibozen.android.data.repository.readStoredSession
-import java.time.Duration
 import java.time.LocalDateTime
 import java.time.LocalTime
-import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * A nightly nudge to unplug the appliances the household leaves in standby.
  *
  * Separate from [ReadingReminderSettings] on purpose: that one repeats every N
- * days at no particular time, because a meter reading is not tied to an hour.
- * This one is tied to an hour and to nothing else -- "before I go to bed" is the
- * whole point, and a reminder that lands at noon is worse than none.
+ * days and only needs to land at a civilised hour, because a meter reading is
+ * not tied to a moment. This one is tied to an hour and to nothing else --
+ * "before I go to bed" is the whole point, and a reminder that lands at noon is
+ * worse than none.
+ *
+ * That requirement is also why neither of them is WorkManager work any more; see
+ * [ReminderAlarms].
  */
 data class NightUnplugSettings(
     val enabled: Boolean = false,
@@ -58,8 +55,16 @@ class NightUnplugStore(context: Context) {
         minute = preferences.getInt(KEY_MINUTE, 0).coerceIn(0, 59),
     )
 
+    /**
+     * Written with commit(), not apply(). These settings are read from a
+     * different process instance than the one that wrote them -- the alarm
+     * receiver is started cold, hours later -- so an asynchronous write that has
+     * not reached disk yet reads back as "disabled" and the reminder cancels
+     * itself. Observed: an emulator run where the writing process was killed
+     * right after the toggle and the alarm fired to find the setting off.
+     */
     fun save(settings: NightUnplugSettings) {
-        preferences.edit {
+        preferences.edit(commit = true) {
             putBoolean(KEY_ENABLED, settings.enabled)
             putInt(KEY_HOUR, settings.hour.coerceIn(0, 23))
             putInt(KEY_MINUTE, settings.minute.coerceIn(0, 59))
@@ -75,20 +80,6 @@ class NightUnplugStore(context: Context) {
 }
 
 object NightUnplugScheduler {
-    private const val UNIQUE_WORK_NAME = "night-unplug-reminder-v1"
-
-    /**
-     * Delay from [now] until the next occurrence of [target].
-     *
-     * Exposed for tests. A reminder set for an hour that has already passed
-     * today belongs to tomorrow, and getting that wrong either fires it
-     * immediately on save or skips the first night silently.
-     */
-    fun delayUntilNext(target: LocalTime, now: LocalDateTime): Duration {
-        val todayAtTarget = now.toLocalDate().atTime(target)
-        val next = if (todayAtTarget.isAfter(now)) todayAtTarget else todayAtTarget.plusDays(1)
-        return Duration.between(now, next)
-    }
 
     fun apply(
         context: Context,
@@ -96,126 +87,121 @@ object NightUnplugScheduler {
         tier: EntitlementTier,
         now: LocalDateTime = LocalDateTime.now(),
     ) {
-        val workManager = WorkManager.getInstance(context.applicationContext)
         if (!settings.enabled || !PremiumFeaturePolicy.notificationsAllowed(tier)) {
-            workManager.cancelUniqueWork(UNIQUE_WORK_NAME)
+            ReminderAlarms.cancel(context, ReminderKind.NIGHT)
             return
         }
-        val request = PeriodicWorkRequestBuilder<NightUnplugWorker>(1, TimeUnit.DAYS)
-            .setInitialDelay(delayUntilNext(settings.time, now).toMillis(), TimeUnit.MILLISECONDS)
-            .build()
-        // CANCEL_AND_REENQUEUE, not UPDATE. Changing the hour has to re-anchor
-        // the schedule; UPDATE can keep the already-computed next run, which
-        // would leave the reminder firing at the old time until it lapses.
-        workManager.enqueueUniquePeriodicWork(
-            UNIQUE_WORK_NAME,
-            ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE,
-            request,
+        // Arming replaces whatever alarm was already there for this kind, so
+        // changing the hour re-anchors the schedule instead of leaving the old
+        // one to fire once more before it lapses.
+        ReminderAlarms.arm(
+            context = context,
+            kind = ReminderKind.NIGHT,
+            at = ReminderSchedule.nextNight(settings.time, now),
         )
     }
 }
 
-class NightUnplugWorker(
-    appContext: Context,
-    workerParameters: WorkerParameters,
-) : CoroutineWorker(appContext, workerParameters) {
+/**
+ * The notification itself. Called from [ReminderFiring], which owns the decision
+ * of whether it should go out at all.
+ */
+internal suspend fun postNightUnplugReminder(context: Context) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+    ) return
 
-    override suspend fun doWork(): Result {
-        val settings = NightUnplugStore(applicationContext).load()
-        val tier = PremiumAccessStore(applicationContext).effectiveTier()
-        if (!settings.enabled || !PremiumFeaturePolicy.notificationsAllowed(tier)) return Result.success()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            applicationContext.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) return Result.success()
-
-        val session = runCatching { readStoredSession(applicationContext) }.getOrNull()
-        val advice = session?.let {
-            NightUnplugAdvisor.advise(it.customAppliances, it.applianceHoursPerWeek)
-        }
-
-        notify(
-            title = applicationContext.getString(R.string.notifications_night_title),
-            body = bodyFor(advice),
-        )
-        return Result.success()
+    // A broadcast receiver has seconds, not minutes. If the inventory cannot be
+    // read in time the reminder still goes out with the generic wording it
+    // already has for households with no inventory -- better than a receiver
+    // that never finishes, which is an ANR.
+    val session = withTimeoutOrNull(SESSION_READ_TIMEOUT_MS) {
+        runCatching { readStoredSession(context) }.getOrNull()
     }
-
-    /**
-     * With an inventory the reminder names the appliances and what they draw,
-     * because that is what makes anyone actually get up and unplug something.
-     * Without one it still fires -- the household asked to be reminded -- but it
-     * says plainly that it has nothing specific yet instead of inventing a
-     * saving or listing appliances nobody registered.
-     */
-    private fun bodyFor(advice: NightUnplugAdvice?): String {
-        if (advice == null) return applicationContext.getString(R.string.notifications_night_body_generic)
-        val named = advice.items.take(MAX_NAMED)
-        val list = named.joinToString(", ") {
-            applicationContext.getString(R.string.notifications_night_item, it.name, it.standbyWatts)
-        }
-        val remaining = advice.items.size - named.size
-        val listWithTail = if (remaining > 0) {
-            applicationContext.resources.getQuantityString(
-                R.plurals.notifications_night_more,
-                remaining,
-                list,
-                remaining,
-            )
-        } else {
-            list
-        }
-        return applicationContext.getString(
-            R.string.notifications_night_body,
-            listWithTail,
-            advice.totalStandbyWatts,
-            NightUnplugAdvisor.ASSUMED_NIGHT_HOURS.toInt(),
-            String.format(java.util.Locale.forLanguageTag("es-MX"), "%.2f", advice.nightlyKwh),
-        )
+    val advice = session?.let {
+        NightUnplugAdvisor.advise(it.customAppliances, it.applianceHoursPerWeek)
     }
+    notifyNightUnplug(
+        context = context,
+        title = context.getString(R.string.notifications_night_title),
+        body = bodyFor(context, advice),
+    )
+}
 
-    private fun notify(title: String, body: String) {
-        // Re-checked here and not only in doWork(). The guard and the post used
-        // to sit in different functions, which is exactly the shape a caller
-        // added later would get wrong -- and which lint flags, correctly.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            applicationContext.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) return
-        val notificationManager = applicationContext.getSystemService(NotificationManager::class.java)
-        notificationManager.createNotificationChannel(
-            NotificationChannel(
-                CHANNEL_ID,
-                applicationContext.getString(R.string.notifications_channel_night),
-                NotificationManager.IMPORTANCE_DEFAULT,
-            ).apply {
-                description = applicationContext.getString(R.string.notifications_channel_night_description)
+/**
+ * With an inventory the reminder names the appliances and what they draw,
+ * because that is what makes anyone actually get up and unplug something.
+ * Without one it still fires -- the household asked to be reminded -- but it
+ * says plainly that it has nothing specific yet instead of inventing a saving or
+ * listing appliances nobody registered.
+ */
+private fun bodyFor(context: Context, advice: NightUnplugAdvice?): String {
+    if (advice == null) return context.getString(R.string.notifications_night_body_generic)
+    val named = advice.items.take(MAX_NAMED)
+    val list = named.joinToString(", ") {
+        context.getString(R.string.notifications_night_item, it.name, it.standbyWatts)
+    }
+    val remaining = advice.items.size - named.size
+    val listWithTail = if (remaining > 0) {
+        context.resources.getQuantityString(
+            R.plurals.notifications_night_more,
+            remaining,
+            list,
+            remaining,
+        )
+    } else {
+        list
+    }
+    return context.getString(
+        R.string.notifications_night_body,
+        listWithTail,
+        advice.totalStandbyWatts,
+        NightUnplugAdvisor.ASSUMED_NIGHT_HOURS.toInt(),
+        String.format(java.util.Locale.forLanguageTag("es-MX"), "%.2f", advice.nightlyKwh),
+    )
+}
+
+private fun notifyNightUnplug(context: Context, title: String, body: String) {
+    // Re-checked here and not only by the caller. The guard and the post used to
+    // sit in different functions, which is exactly the shape a caller added
+    // later would get wrong -- and which lint flags, correctly.
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+    ) return
+    val notificationManager = context.getSystemService(NotificationManager::class.java)
+    notificationManager.createNotificationChannel(
+        NotificationChannel(
+            CHANNEL_ID,
+            context.getString(R.string.notifications_channel_night),
+            NotificationManager.IMPORTANCE_DEFAULT,
+        ).apply {
+            description = context.getString(R.string.notifications_channel_night_description)
+        },
+    )
+    val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        .setSmallIcon(android.R.drawable.ic_popup_reminder)
+        .setContentTitle(title)
+        .setContentText(body)
+        // The list of appliances does not fit on one line, and truncating it to
+        // "Tele, Cons..." removes the only part worth reading.
+        .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+        .setContentIntent(
+            context.packageManager.getLaunchIntentForPackage(context.packageName)?.let { launchIntent ->
+                PendingIntent.getActivity(
+                    context,
+                    NOTIFICATION_ID,
+                    launchIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
             },
         )
-        val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_popup_reminder)
-            .setContentTitle(title)
-            .setContentText(body)
-            // The list of appliances does not fit on one line, and truncating it
-            // to "Tele, Cons..." removes the only part worth reading.
-            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
-            .setContentIntent(
-                applicationContext.packageManager.getLaunchIntentForPackage(applicationContext.packageName)?.let { launchIntent ->
-                    PendingIntent.getActivity(
-                        applicationContext,
-                        NOTIFICATION_ID,
-                        launchIntent,
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-                    )
-                },
-            )
-            .setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .build()
-        NotificationManagerCompat.from(applicationContext).notify(NOTIFICATION_ID, notification)
-    }
-
-    private companion object {
-        const val CHANNEL_ID = "night_unplug_reminders"
-        const val NOTIFICATION_ID = 3102
-        const val MAX_NAMED = 3
-    }
+        .setAutoCancel(true)
+        .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+        .build()
+    NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
 }
+
+private const val CHANNEL_ID = "night_unplug_reminders"
+private const val NOTIFICATION_ID = 3102
+private const val MAX_NAMED = 3
+private const val SESSION_READ_TIMEOUT_MS = 5_000L

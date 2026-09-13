@@ -36,11 +36,11 @@
     <string name="notifications_premium_body">Los recordatorios automáticos requieren una compra verificada.</string>
     <string name="notifications_view_premium">Ver Premium</string>
     <string name="notifications_reading_setting">Recordarme registrar una lectura</string>
-    <string name="notifications_reading_setting_body">Recibe un aviso periódico para mantener actualizada tu proyección.</string>
+    <string name="notifications_reading_setting_body">Un aviso cada 3 o 7 días, por la mañana, para mantener actualizada tu proyección.</string>
     <string name="notifications_frequency">Frecuencia</string>
     <string name="notifications_every_three_days">Cada 3 días</string>
     <string name="notifications_every_seven_days">Cada 7 días</string>
-    <string name="notifications_delivery_note">Android puede retrasar avisos para ahorrar batería. Si quitas el permiso, dejamos de enviarlos.</string>
+    <string name="notifications_delivery_note">Llegan a la hora que elijas aunque la app esté cerrada. Si el teléfono lleva horas sin usarse, Android puede retrasarlos hasta cerca de una hora para ahorrar batería. Algunas marcas bloquean avisos en segundo plano: si no te llegan, permite que ReciboZen se ejecute en segundo plano. Si quitas el permiso, dejamos de enviarlos.</string>
     <string name="notifications_channel_readings">Recordatorios de lectura</string>
     <string name="notifications_channel_readings_description">Avisos para registrar una nueva lectura del medidor.</string>
     <string name="notifications_reading_title">Actualiza tu consumo</string>
