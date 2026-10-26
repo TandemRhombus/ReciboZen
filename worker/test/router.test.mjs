@@ -125,7 +125,7 @@ test("anything outside /v1/ai is not found", async () => {
 
 // --- Layers 3, 4 and 8 through the router ---
 
-const USAGE = { model: "claude-haiku-4-5", cachedTokensIn: 1200, tokensIn: 30, tokensOut: 250 };
+const USAGE = { model: "claude-haiku-5-5", tokensIn: 1930, tokensOut: 310 };
 
 function envWithModel(runner, overrides = {}) {
   return {
@@ -163,8 +163,8 @@ test("tokens and cost land in the subject's ledger", async () => {
   await identify(environment);
   await identify(environment);
   const snapshot = await environment.SUBJECT_QUOTA.getByName("install-42").snapshot();
-  assert.equal(snapshot.tokensIn, 60);
-  assert.equal(snapshot.tokensOut, 500);
+  assert.equal(snapshot.tokensIn, 3860);
+  assert.equal(snapshot.tokensOut, 620);
   assert.ok(snapshot.costUsd > 0, "a real call must not record zero cost");
 });
 
@@ -185,9 +185,9 @@ test("the quota runs out and the answer says when it comes back", async () => {
 test("the global ceiling switches the AI off for everyone, not just the spender", async () => {
   let called = 0;
   const environment = envWithModel(async () => { called += 1; return { ok: true, body: {}, usage: USAGE }; },
-    { MONTHLY_CEILING_USD: "0.002" });
-  assert.equal((await identify(environment)).status, 200);   // ~$0.0014, still under
-  assert.equal((await identify(environment)).status, 200);   // ~$0.0028, now over
+    { MONTHLY_CEILING_USD: "0.0005" });
+  assert.equal((await identify(environment)).status, 200);   // ~$0.00035, still under
+  assert.equal((await identify(environment)).status, 200);   // ~$0.0007, now over
   const blocked = await identify(environment);
   assert.equal(blocked.status, 503);
   assert.equal((await blocked.json()).error, "global_ceiling_reached");

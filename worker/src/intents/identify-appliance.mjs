@@ -33,15 +33,16 @@ export function validate(body) {
 
 // Stable across every call, and deliberately NOT cached.
 //
-// Prompt caching on Claude Haiku 4.5 needs a 4,096-token prefix — four times
-// Sonnet's threshold. Tools plus this prompt measured 1,477 tokens against a
-// live call, so nothing was ever cached and nothing ever said so:
-// cache_creation_input_tokens simply comes back zero.
+// On Claude Haiku 4.5 caching needed a 4,096-token prefix and tools plus this
+// prompt measured 1,477, so nothing was ever cached and nothing ever said so:
+// cache_creation_input_tokens simply came back zero.
 //
-// Padding the prompt to clear 4,096 would make it worse, not better. A cache
-// write is billed at 125% and the entry lives five minutes; an app where one
-// household adds one appliance now and then would pay the write almost every
-// time and read it almost never.
+// Claude Haiku 5.5 caches from a much shorter prefix (512 tokens at launch),
+// so this prompt now qualifies. It is still left uncached on purpose: a cache
+// write is billed at 125% and the entry lives five minutes, and an app where
+// one household adds one appliance now and then would pay the write almost
+// every time and read it almost never. Turn it on only once traffic shows
+// calls landing inside the same five minutes.
 //
 // Stability is still worth keeping — it costs nothing and it is what any future
 // caching would need — so per-request text stays in the user message.
@@ -118,8 +119,15 @@ export const OUTPUT_TOOL = {
 
 export function buildRequest({ brand, model, category }) {
   return {
-    model: "claude-haiku-4-5",
+    model: "claude-haiku-5-5",
     max_tokens: 1024,
+    // Haiku 5.5 thinks by default, and thinking is billed as output. Filling in
+    // a fixed schema needs no reasoning, and an unplanned thinking block would
+    // quietly break the per-call cost the quotas are sized on. Disabled is only
+    // accepted at effort `high` or below. Effort is pinned to the model's own
+    // default so a change of default upstream cannot move the bill either.
+    thinking: { type: "disabled" },
+    output_config: { effort: "medium" },
     system: SYSTEM_PROMPT,
     tools: [OUTPUT_TOOL],
     tool_choice: { type: "tool", name: OUTPUT_TOOL.name },
