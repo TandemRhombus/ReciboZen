@@ -139,7 +139,21 @@ test("the global store accumulates across calls", async () => {
 });
 
 test("the price table turns tokens into the dollars the ceiling compares against", () => {
-  const identify = costUsd({ model: "claude-haiku-4-5", cachedTokensIn: 1200, tokensIn: 30, tokensOut: 250 });
-  assert.ok(Math.abs(identify - 0.0014) < 0.00001, `${identify}`);
+  // An identification on Haiku 5.5: $0.10 in, $0.50 out per million.
+  const identify = costUsd({ model: "claude-haiku-5-5", tokensIn: 1930, tokensOut: 310 });
+  assert.ok(Math.abs(identify - 0.000348) < 1e-9, `${identify}`);
+  // Cache reads at 10% of input, writes at 125%.
+  const cached = costUsd({ model: "claude-haiku-5-5", cachedTokensIn: 10_000, cacheWriteTokens: 10_000 });
+  assert.ok(Math.abs(cached - (10_000 * 0.01 + 10_000 * 0.125) / 1e6) < 1e-9, `${cached}`);
   assert.equal(costUsd({ model: "un-modelo-que-no-existe", tokensOut: 1e9 }), null);
+});
+
+test("a Haiku 5.5 prompt over 100K tokens moves the whole request to the higher card", () => {
+  const at = costUsd({ model: "claude-haiku-5-5", tokensIn: 100_000, tokensOut: 1000 });
+  assert.ok(Math.abs(at - (0.01 + 0.0005)) < 1e-9, `${at}`);
+  const over = costUsd({ model: "claude-haiku-5-5", tokensIn: 100_001, tokensOut: 1000 });
+  assert.ok(Math.abs(over - (100_001 * 0.5 + 1000 * 2.5) / 1e6) < 1e-9, `${over}`);
+  // Cache reads and writes count toward the prompt length too.
+  const cachedOver = costUsd({ model: "claude-haiku-5-5", tokensIn: 10, cachedTokensIn: 100_000 });
+  assert.ok(Math.abs(cachedOver - (10 * 0.5 + 100_000 * 0.05) / 1e6) < 1e-9, `${cachedOver}`);
 });

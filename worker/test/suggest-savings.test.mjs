@@ -112,7 +112,7 @@ test("the inventory reaches the model with its share already computed", () => {
 
 test("the model is pinned and forced through the tool", () => {
   const request = buildRequest(input());
-  assert.equal(request.model, "claude-haiku-4-5");
+  assert.equal(request.model, "claude-haiku-5-5");
   assert.deepEqual(request.tool_choice, { type: "tool", name: OUTPUT_TOOL.name });
   assert.ok(request.max_tokens <= 2048);
   assert.equal(JSON.stringify(request).includes("cache_control"), false);

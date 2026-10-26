@@ -87,49 +87,47 @@ Cada llamada guarda tokens de entrada y salida en el Durable Object. Puedes ver 
 
 ---
 
-## 3. Los números: Haiku 4.5 sí aguanta tu modelo de negocio
+## 3. Los números: Haiku 5.5
 
-Precio oficial hoy: **$1 por millón de tokens de entrada, $5 de salida**. Lectura de caché: **$0.10/MTok** — importante, porque el prompt de sistema es idéntico en todas las llamadas y se cachea.
+Desde el 2026-10-26 el Worker usa **Claude Haiku 5.5** (`claude-haiku-5-5`). Precio oficial, para prompts de hasta 100,000 tokens: **$0.10 por millón de entrada, $0.50 de salida**; lectura de caché $0.01, escritura $0.125. Arriba de 100,000 tokens la petición entera se cobra cinco veces más ($0.50 / $2.50). Ninguna intención se acerca a ese límite, pero `worker/src/pricing.mjs` lo modela igual, para que el techo global no dependa de que así siga.
 
-**Identificar un aparato — medido en producción el 2026-08-24**, no estimado:
+Tres cosas del cambio que tocan el costo:
 
-| Concepto | Tokens | Costo |
-|---|---|---|
-| Entrada (prompt de sistema + esquema de la herramienta + datos) | ~1,480 | $0.00148 |
-| Salida (JSON con la ficha) | ~240 | $0.00119 |
-| **Total** | | **$0.0027** |
+- **Haiku 5.5 piensa por defecto, y el pensamiento se cobra como salida.** Las dos intenciones lo apagan (`thinking: {type: "disabled"}`, con `effort: "medium"` fijo). Así cada token de salida es la ficha o el plan, como en el modelo de costos.
+- **El tokenizador es nuevo: el mismo texto cuenta ~30% más tokens.** Los conteos medidos en Haiku 4.5 no se pueden reutilizar tal cual.
+- **Si el modelo se niega** (`stop_reason: "refusal"`), el Worker responde 422 `model_refused`, la app lo muestra como "no se pudo estimar" y los tokens se cuentan igual. Haiku 5.5 no tiene respaldo automático del lado del servidor.
 
-> **Corrección importante:** la estimación original de este documento era **$0.0014, la mitad del costo real**, porque daba por hecho que el prompt de sistema se cachearía a $0.10/MTok. **No se cachea.** Claude Haiku 4.5 exige un prefijo de **4,096 tokens** para activar el caché — cuatro veces el umbral de Sonnet — y el prefijo real mide 1,477. Nada se cacheó nunca, y nada lo avisa: `cache_creation_input_tokens` simplemente vuelve en cero.
->
-> Inflar el prompt hasta pasar los 4,096 sería peor, no mejor: escribir el caché se cobra al **125%** y la entrada dura cinco minutos. Con un hogar que da de alta un aparato de vez en cuando, se pagaría la escritura casi siempre y se leería casi nunca. Por eso `cache_control` se retiró del código.
+**Costo por operación:**
 
-Con el costo real, sobre un ingreso neto de $2.59 USD por suscriptor Plus (a 19 MXN/USD):
-
-| Perfil | Identificaciones/mes | Costo | % del neto |
-|---|---|---|---|
-| Usuario real | 20 | $0.053 | **2.1%** |
-| Usuario activo | 60 | $0.160 | 6.2% |
-| Al tope de la cuota | 150 | $0.401 | 15.5% |
-
-El costo se duplicó y el negocio no se movió: la IA sigue siendo el 2% de lo que deja un suscriptor normal. Con el techo de $20 al mes alcanza para unas 7,500 identificaciones, o unos 373 usuarios reales a pleno uso.
-
-**Explicar un recibo** (los números los calcula tu motor; Haiku solo los redacta): **≈ $0.0023**.
-
-> **Ojo con esta sección:** las cuotas de abajo están calculadas con Plus a **$49 MXN**, y el precio decidido es **$69 MXN**. Los costos por operación siguen vigentes (los precios de Haiku no se movieron); lo que hay que recalcular es el porcentaje del ingreso neto, y para eso falta el tipo de cambio.
-
-Con Plus a $49 MXN te quedan ~$2.10 USD después de la comisión de Google. Un usuario que hace **150 identificaciones + 80 explicaciones al mes** te cuesta **≈ $0.40**, o sea **19% del ingreso neto**.
-
-Cuotas que propongo:
-
-| Plan | Identificaciones/mes | Explicaciones/mes | Costo aprox. | % del neto |
+| Operación | Entrada | Salida | Costo | Origen |
 |---|---|---|---|---|
-| Gratis | 0 | 0 | $0 | — |
-| Plus | 150 | 80 | ~$0.40 | ~19% |
-| Familiar | 400 | 200 | ~$1.02 | ~27% |
+| Identificar un aparato | ~1,920 | ~310 | **≈ $0.00035** | Estimado: lo medido en 4.5 el 2026-08-24 (1,480 / 240) × 1.3 por el tokenizador |
+| Explicar un recibo (`explain-bill`, aún no existe en el Worker) | — | — | **≈ $0.0003** | Estimado: los $0.0023 de 4.5 × 0.1 por precio × 1.3 por tokenizador |
+| Plan de ahorro (`suggest-savings`) | ~2,750 | ≤ 2,048 | **≤ $0.0013** | Cota superior: entrada escalada por tamaño del prompt, salida al tope de `max_tokens`. Nunca se ha medido |
 
-Son generosas a propósito: un usuario normal no llega ni a 20 identificaciones, y el que llegue a 150 es tu mejor cliente, no tu problema.
+> **El modelo financiero del 2026-10-26 se queda corto en ~30%.** Supone **$0.00027** por identificación y **$0.00023** por explicación. Esas cifras son los tokens de Haiku 4.5 a precios de Haiku 5.5: les falta el tokenizador nuevo. Con él quedan en **≈ $0.00035** y **≈ $0.0003**. En pesos casi no cambia nada. Un suscriptor con 20 identificaciones y 10 explicaciones cuesta **≈ $0.0099 USD ≈ $0.19 MXN** al mes (a 19 MXN/USD), contra los $0.14 MXN del modelo.
+>
+> **Ninguna de estas cifras está medida en Haiku 5.5.** Para medirlas, una llamada real por intención, armada igual que en producción:
+>
+> ```
+> cd worker && ANTHROPIC_API_KEY=sk-ant-... node scripts/measure-cost.mjs
+> ```
+>
+> Imprime tokens de entrada y salida, costo en USD y los tipos de bloque de la respuesta. Si aparece un bloque `thinking`, el pensamiento se coló y el costo está mal. Las dos llamadas juntas cuestan menos de un décimo de centavo de dólar. Cuando corra, reemplaza las estimaciones de esta tabla.
 
-**Lo que necesito que decidas:** tu techo global en dólares al mes. Con $30 USD compras ~21,000 identificaciones — suficiente para varios cientos de usuarios activos.
+**Al tope de la cuota** (las cuotas de `worker/src/quota-policy.mjs`; plan de ahorro a su cota superior):
+
+| Plan | Identificaciones | Planes de ahorro | Explicaciones | Costo/mes | % del precio de lista |
+|---|---|---|---|---|---|
+| Gratis | 0 | 0 | 0 | $0 | — |
+| Plus ($99 MXN) | 150 | 30 | 80 | ≈ $0.12 USD ≈ $2.19 MXN | ≈ 2.2% |
+| Familiar ($199 MXN) | 400 | 80 | 200 | ≈ $0.30 USD ≈ $5.75 MXN | ≈ 2.9% |
+
+El porcentaje es sobre el precio de lista, antes de la comisión de Google. Aun así, la IA es ruido incluso para quien agota la cuota.
+
+**El techo global** sigue en $20 USD al mes (`MONTHLY_CEILING_USD`). Ahora alcanza para unas **57,000 identificaciones**, contra 7,500 con Haiku 4.5.
+
+> **Historia — por qué no hay caché.** En Haiku 4.5 el caché exigía un prefijo de 4,096 tokens y el real medía 1,477, así que nada se cacheó nunca. La primera estimación de este documento ($0.0014) contaba con ese caché y era la mitad del costo real. Haiku 5.5 cachea desde un prefijo mucho más corto (512 tokens al lanzamiento), así que el prompt ya calificaría. Sigue sin cachearse a propósito: escribir el caché cuesta **125%** y dura cinco minutos, y con hogares que dan de alta un aparato de vez en cuando se pagaría la escritura casi siempre y se leería casi nunca. Vale la pena encenderlo solo cuando el tráfico muestre llamadas dentro de la misma ventana de cinco minutos.
 
 ---
 

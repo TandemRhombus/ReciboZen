@@ -34,6 +34,13 @@ export function createAnthropicRunner(intent, { apiKey, client } = {}) {
     }
 
     const usage = usageFromResponse(request.model, response.usage);
+    if (response.stop_reason === "refusal") {
+      // A safety classifier declined the request. Haiku 5.5 has no server-side
+      // fallback, and the same input will be declined again, so this is not a
+      // broken upstream the app should retry: it is "no estimate for this",
+      // which is a 422 to the app. Whatever was generated is still booked.
+      return { ok: false, error: "model_refused", status: 422, usage };
+    }
     const toolUse = response.content?.find((block) => block.type === "tool_use");
     if (!toolUse) {
       // Forced tool_choice should make this impossible. It is still checked,

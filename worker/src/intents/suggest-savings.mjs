@@ -194,8 +194,12 @@ export function buildRequest({ appliances, periodDays, kwhProjected, dacRisk }) 
     .join("\n");
 
   return {
-    model: "claude-haiku-4-5",
+    model: "claude-haiku-5-5",
     max_tokens: 2048,
+    // Same reasoning as identify-appliance: no thinking, so every output token
+    // is the tool call the quotas were priced on.
+    thinking: { type: "disabled" },
+    output_config: { effort: "medium" },
     system: SYSTEM_PROMPT,
     tools: [OUTPUT_TOOL],
     tool_choice: { type: "tool", name: OUTPUT_TOOL.name },
