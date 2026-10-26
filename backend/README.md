@@ -46,7 +46,11 @@ por el contexto Docker.
 ## Activar la verificación de Google Play
 
 1. Crear en Play Console las suscripciones `recibozen_plus_monthly` y
-   `recibozen_family_monthly`.
+   `recibozen_family_monthly`, cada una con dos planes base de renovación
+   automática: `mensual` (cada mes) y `anual` (cada año). Precios en MXN, con
+   IVA incluido: Plus $99 y $990; Familiar $199 y $1,990. La app no guarda
+   precios: muestra los que devuelve Play y calcula el ahorro del plan anual con
+   ellos, así que un cambio de precio se hace sólo aquí.
 2. Vincular el proyecto de Google Cloud, habilitar Android Publisher API y Play
    Integrity API, y dar a la cuenta de servicio sólo los permisos necesarios.
 3. Guardar su JSON como `secrets/google-play-service-account.json` y la clave

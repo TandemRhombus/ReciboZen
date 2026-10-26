@@ -8,6 +8,13 @@
     <string name="premium_benefit_services">Más suministros: hasta 2 en Plus y 5 en Familiar.</string>
     <string name="premium_benefit_future">Nuevas automatizaciones y alertas avanzadas conforme estén disponibles.</string>
     <string name="premium_buy">Continuar con Google Play</string>
+    <string name="premium_period_monthly">Pago mensual</string>
+    <string name="premium_period_annual">Pago anual</string>
+    <plurals name="premium_period_months">
+        <item quantity="one">Pago cada %1$d mes</item>
+        <item quantity="other">Pago cada %1$d meses</item>
+    </plurals>
+    <string name="premium_annual_comparison">Equivale a %1$s al mes: %2$s menos que pagar mes a mes el mismo tiempo.</string>
     <string name="premium_restore">Restaurar compra</string>
     <string name="premium_retry">Reintentar conexión</string>
     <string name="premium_security_note">ReciboZen no recibe ni guarda los datos de tu tarjeta. Google Play procesa el pago.</string>

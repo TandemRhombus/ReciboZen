@@ -115,7 +115,14 @@ El costo se duplicó y el negocio no se movió: la IA sigue siendo el 2% de lo q
 
 **Explicar un recibo** (los números los calcula tu motor; Haiku solo los redacta): **≈ $0.0023**.
 
-> **Ojo con esta sección:** las cuotas de abajo están calculadas con Plus a **$49 MXN**, y el precio decidido es **$69 MXN**. Los costos por operación siguen vigentes (los precios de Haiku no se movieron); lo que hay que recalcular es el porcentaje del ingreso neto, y para eso falta el tipo de cambio.
+> **Precio vigente desde el 2026-10-26: Plus a $99 MXN al mes y $990 al año; Familiar a $199 al mes y $1,990 al año** (sustituye a Plus a $49/$490, decidido el 2026-09-12). Los netos de esta sección siguen calculados sobre los $49 anteriores y además están mal: hay que rehacerlos antes de usarlos para decidir algo. La tabla de arriba usa $2.59 USD, que son los $49 brutos entre 19: no resta ni la comisión ni el IVA. La línea de abajo resta la comisión, pero tampoco el IVA.
+>
+> Dos hechos verificados en la ayuda de Play Console ([impuestos](https://support.google.com/googleplay/android-developer/answer/138000), [comisiones](https://support.google.com/googleplay/android-developer/answer/112622)):
+>
+> - México es un país con **precios con IVA incluido**. Un desarrollador **ubicado en México** tiene que determinar, cobrar y enterar el IVA por su cuenta; Google solo lo entera cuando el desarrollador está fuera de México. Además, Google aplica 16% de IVA sobre su comisión, desglosado aparte.
+> - La comisión de suscripciones es **15%**. La de 10% empezó el 30 de junio de 2026 solo en EE. UU., el EEE y el Reino Unido; al [resto del mundo](https://support.google.com/googleplay/android-developer/answer/16954621) llega hasta el 30 de septiembre de 2027.
+>
+> Cuánto queda realmente depende de sobre qué base se calcula la comisión en un precio con IVA incluido y del régimen fiscal de quien publica. Eso lo confirma un contador, no este documento. Los costos por operación de IA sí siguen vigentes, porque los precios de Haiku no cambiaron.
 
 Con Plus a $49 MXN te quedan ~$2.10 USD después de la comisión de Google. Un usuario que hace **150 identificaciones + 80 explicaciones al mes** te cuesta **≈ $0.40**, o sea **19% del ingreso neto**.
 
