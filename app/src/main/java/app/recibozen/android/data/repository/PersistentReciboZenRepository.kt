@@ -34,8 +34,7 @@ import app.recibozen.android.core.importer.ParsedCfeBill
 import app.recibozen.android.core.importer.BillImportResult
 import app.recibozen.android.core.model.EntitlementPolicy
 import app.recibozen.android.core.security.PremiumAccessStore
-import app.recibozen.android.core.notifications.ReadingReminderScheduler
-import app.recibozen.android.core.notifications.ReadingReminderStore
+import app.recibozen.android.core.notifications.ReminderRearm
 import app.recibozen.android.demo.data.DemoReciboZenData
 import app.recibozen.android.core.calculation.MeterProfile
 import app.recibozen.android.core.calculation.TariffBlock
@@ -101,7 +100,7 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
             val preferences = appContext.reciboZenDataStore.data.first()
             val stored = preferences[stateKey]
             val trustedTier = premiumAccessStore.effectiveTier()
-            ReadingReminderScheduler.apply(appContext, ReadingReminderStore(appContext).load(), trustedTier)
+            ReminderRearm.applyAll(appContext, trustedTier)
             val hydrated = SessionJsonCodec.decode(stored).copy(
                 entitlementTier = trustedTier,
                 isHydrated = true,
@@ -191,6 +190,17 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
                         mutableTariffCalibration.value = bills
                             .maxByOrNull { it.periodEndEpochDay }
                             ?.let(::calibrationFrom)
+                        // When the household first brought a bill into the app,
+                        // not the dates printed on it. A bill imported today can
+                        // cover a period from a year ago.
+                        mutableFirstBillImportEpochDay.value = bills
+                            .minOfOrNull { it.importedAtEpochMillis }
+                            ?.let {
+                                java.time.Instant.ofEpochMilli(it)
+                                    .atZone(java.time.ZoneId.systemDefault())
+                                    .toLocalDate()
+                                    .toEpochDay()
+                            }
                     }
             }
 
@@ -327,7 +337,7 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
     override fun acceptPremiumLease(signedLease: String): EntitlementTier? {
         val acceptedTier = premiumAccessStore.acceptSignedLease(signedLease) ?: return null
         mutableSession.update { it.copy(entitlementTier = acceptedTier) }
-        ReadingReminderScheduler.apply(appContext, ReadingReminderStore(appContext).load(), acceptedTier)
+        ReminderRearm.applyAll(appContext, acceptedTier)
         return acceptedTier
     }
 

@@ -136,6 +136,8 @@ open class DemoReciboZenRepository : ReciboZenRepository {
     override val electricServices: StateFlow<List<ElectricServiceIdentity>> = mutableElectricServices.asStateFlow()
     protected val mutableImportedBillHistory = MutableStateFlow<List<BillPeriod>>(emptyList())
     override val importedBillHistory: StateFlow<List<BillPeriod>> = mutableImportedBillHistory.asStateFlow()
+    protected val mutableFirstBillImportEpochDay = MutableStateFlow<Long?>(null)
+    override val firstBillImportEpochDay: StateFlow<Long?> = mutableFirstBillImportEpochDay.asStateFlow()
 
     override fun appliances(state: ReciboZenSessionState): List<Appliance> {
         val energy = energySummary(state)
@@ -587,6 +589,9 @@ open class DemoReciboZenRepository : ReciboZenRepository {
 
     override fun estimateCostMxn(kwh: Int): Int =
         activeTariffEngine().estimate(kwh.coerceAtLeast(0)).totalMxn
+
+    override fun estimateExactCostMxn(kwh: Int): Double =
+        activeTariffEngine().estimate(kwh.coerceAtLeast(0)).exactTotalMxn
 
     override fun activeTariffBlocks(): List<app.recibozen.android.core.calculation.TariffBlock> {
         val currentTariff = TariffCatalog.normalize(mutableSession.value.tariff)

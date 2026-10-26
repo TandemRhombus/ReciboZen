@@ -21,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
@@ -72,9 +73,15 @@ data class PremiumOffer(
     val productId: String,
     val title: String,
     val price: String,
+    val plan: BasePlanPrice,
+    /** Present only for a multi-month plan that undercuts its own monthly plan. */
+    val annualComparison: AnnualComparison?,
     val productDetails: ProductDetails,
     val offerToken: String,
 )
+
+/** Plus before Familiar, and within a product the shortest billing period first. */
+private val PRODUCT_ORDER = listOf(PLUS_PRODUCT_ID, FAMILY_PRODUCT_ID)
 
 enum class PremiumPurchaseStatus { LOADING, READY, PROCESSING, PENDING, ACTIVE, UNAVAILABLE, ERROR }
 
@@ -148,7 +155,22 @@ fun PremiumScreen(
             purchaseState.offers.forEach { offer ->
                 RzCard(modifier = Modifier.fillMaxWidth()) {
                     Text(offer.title, style = MaterialTheme.typography.titleLarge)
+                    periodLabel(offer.plan.billingPeriod)?.let { label ->
+                        Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                     Text(offer.price, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = RzSpacing.xs))
+                    offer.annualComparison?.let { comparison ->
+                        Text(
+                            stringResource(
+                                R.string.premium_annual_comparison,
+                                PlanPricing.formatMicros(comparison.monthlyEquivalentMicros, offer.plan.currencyCode),
+                                PlanPricing.formatMicros(comparison.savingMicros, offer.plan.currencyCode),
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = RzSpacing.xs),
+                        )
+                    }
                     RzPrimaryButton(
                         text = stringResource(R.string.premium_buy),
                         onClick = { onBuy(offer) },
@@ -172,6 +194,15 @@ fun PremiumScreen(
             Text(stringResource(R.string.premium_security_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
         }
     }
+}
+
+/** Null for a period the app does not know how to name, rather than a wrong name. */
+@Composable
+private fun periodLabel(billingPeriod: String): String? = when (val months = PlanPricing.months(billingPeriod)) {
+    null -> null
+    1 -> stringResource(R.string.premium_period_monthly)
+    12 -> stringResource(R.string.premium_period_annual)
+    else -> pluralStringResource(R.plurals.premium_period_months, months, months)
 }
 
 @Composable
@@ -239,17 +270,50 @@ class PremiumPurchaseCoordinator(
                 unavailable()
                 return@queryProductDetailsAsync
             }
-            val offers = queryResult.productDetailsList.mapNotNull { details ->
-                val subscriptionOffer = details.subscriptionOfferDetails?.firstOrNull() ?: return@mapNotNull null
-                val phase = subscriptionOffer.pricingPhases.pricingPhaseList.lastOrNull() ?: return@mapNotNull null
-                PremiumOffer(
-                    productId = details.productId,
-                    title = details.name.ifBlank { details.title },
-                    price = phase.formattedPrice,
-                    productDetails = details,
-                    offerToken = subscriptionOffer.offerToken,
-                )
+            // Every offer of every product, reduced to plain data, then selected by
+            // PlanPricing. Taking the first offer per product was right only while
+            // each product had one base plan.
+            val candidates = queryResult.productDetailsList.flatMap { details ->
+                details.subscriptionOfferDetails.orEmpty().mapNotNull { offer ->
+                    val phase = offer.pricingPhases.pricingPhaseList.lastOrNull() ?: return@mapNotNull null
+                    Triple(
+                        details,
+                        phase.formattedPrice,
+                        OfferCandidate(
+                            price = BasePlanPrice(
+                                productId = details.productId,
+                                basePlanId = offer.basePlanId,
+                                billingPeriod = phase.billingPeriod,
+                                priceMicros = phase.priceAmountMicros,
+                                currencyCode = phase.priceCurrencyCode,
+                            ),
+                            offerId = offer.offerId,
+                            offerToken = offer.offerToken,
+                        ),
+                    )
+                }
             }
+            val kept = PlanPricing.basePlanOffers(candidates.map { it.third })
+            val prices = kept.map { it.price }
+            val offers = candidates
+                .filter { it.third in kept }
+                .map { (details, formattedPrice, candidate) ->
+                    PremiumOffer(
+                        productId = details.productId,
+                        title = details.name.ifBlank { details.title },
+                        price = formattedPrice,
+                        plan = candidate.price,
+                        annualComparison = PlanPricing.annualComparison(candidate.price, prices),
+                        productDetails = details,
+                        offerToken = candidate.offerToken,
+                    )
+                }
+                .sortedWith(
+                    compareBy<PremiumOffer>(
+                        { PRODUCT_ORDER.indexOf(it.productId) },
+                        { PlanPricing.months(it.plan.billingPeriod) ?: Int.MAX_VALUE },
+                    ),
+                )
             mutableState.value = PremiumPurchaseUiState(
                 status = if (offers.isEmpty()) PremiumPurchaseStatus.UNAVAILABLE else PremiumPurchaseStatus.READY,
                 offers = offers,

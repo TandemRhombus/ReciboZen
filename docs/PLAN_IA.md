@@ -125,6 +125,15 @@ Tres cosas del cambio que tocan el costo:
 
 El porcentaje es sobre el precio de lista, antes de la comisión de Google. Aun así, la IA es ruido incluso para quien agota la cuota.
 
+> **Precio vigente desde el 2026-10-26: Plus a $99 MXN al mes y $990 al año; Familiar a $199 al mes y $1,990 al año** (sustituye a Plus a $49/$490, decidido el 2026-09-12).
+>
+> Dos hechos verificados en la ayuda de Play Console ([impuestos](https://support.google.com/googleplay/android-developer/answer/138000), [comisiones](https://support.google.com/googleplay/android-developer/answer/112622)):
+>
+> - México es un país con **precios con IVA incluido**. Un desarrollador **ubicado en México** tiene que determinar, cobrar y enterar el IVA por su cuenta; Google solo lo entera cuando el desarrollador está fuera de México. Además, Google aplica 16% de IVA sobre su comisión, desglosado aparte.
+> - La comisión de suscripciones es **15%**. La de 10% empezó el 30 de junio de 2026 solo en EE. UU., el EEE y el Reino Unido; al [resto del mundo](https://support.google.com/googleplay/android-developer/answer/16954621) llega hasta el 30 de septiembre de 2027.
+>
+> Cuánto queda realmente depende de sobre qué base se calcula la comisión en un precio con IVA incluido y del régimen fiscal de quien publica. Eso lo confirma un contador, no este documento.
+
 **El techo global** sigue en $20 USD al mes (`MONTHLY_CEILING_USD`). Ahora alcanza para unas **57,000 identificaciones**, contra 7,500 con Haiku 4.5.
 
 > **Historia — por qué no hay caché.** En Haiku 4.5 el caché exigía un prefijo de 4,096 tokens y el real medía 1,477, así que nada se cacheó nunca. La primera estimación de este documento ($0.0014) contaba con ese caché y era la mitad del costo real. Haiku 5.5 cachea desde un prefijo mucho más corto (512 tokens al lanzamiento), así que el prompt ya calificaría. Sigue sin cachearse a propósito: escribir el caché cuesta **125%** y dura cinco minutos, y con hogares que dan de alta un aparato de vez en cuando se pagaría la escritura casi siempre y se leería casi nunca. Vale la pena encenderlo solo cuando el tráfico muestre llamadas dentro de la misma ventana de cinco minutos.

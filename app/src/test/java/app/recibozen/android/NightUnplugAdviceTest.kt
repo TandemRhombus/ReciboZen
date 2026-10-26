@@ -4,14 +4,12 @@ import app.recibozen.android.core.calculation.NightUnplugAdvisor
 import app.recibozen.android.core.model.Appliance
 import app.recibozen.android.core.model.ApplianceUsageModel
 import app.recibozen.android.core.model.ConfidenceLevel
-import app.recibozen.android.core.notifications.NightUnplugScheduler
-import java.time.Duration
+import app.recibozen.android.core.notifications.ReminderSchedule
 import java.time.LocalDateTime
 import java.time.LocalTime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -148,34 +146,33 @@ class NightUnplugAdviceTest {
 
     @Test
     fun anHourStillToComeTodaySchedulesForTonight() {
-        val delay = NightUnplugScheduler.delayUntilNext(
+        val next = ReminderSchedule.nextNight(
             target = LocalTime.of(22, 0),
             now = LocalDateTime.of(2026, 8, 23, 19, 30),
         )
 
-        assertEquals(Duration.ofHours(2).plusMinutes(30), delay)
+        assertEquals(LocalDateTime.of(2026, 8, 23, 22, 0), next)
     }
 
     @Test
     fun anHourAlreadyPastBelongsToTomorrowInsteadOfFiringImmediately() {
-        val delay = NightUnplugScheduler.delayUntilNext(
+        val next = ReminderSchedule.nextNight(
             target = LocalTime.of(22, 0),
             now = LocalDateTime.of(2026, 8, 23, 23, 15),
         )
 
         // Saving the setting at 23:15 for a 22:00 reminder must not pop a
         // notification the same second, nor skip the whole next day.
-        assertEquals(Duration.ofHours(22).plusMinutes(45), delay)
-        assertTrue(delay < Duration.ofDays(1))
+        assertEquals(LocalDateTime.of(2026, 8, 24, 22, 0), next)
     }
 
     @Test
     fun theExactMinuteCountsAsPastSoTheReminderDoesNotDoubleFire() {
-        val delay = NightUnplugScheduler.delayUntilNext(
+        val next = ReminderSchedule.nextNight(
             target = LocalTime.of(22, 0),
             now = LocalDateTime.of(2026, 8, 23, 22, 0),
         )
 
-        assertEquals(Duration.ofDays(1), delay)
+        assertEquals(LocalDateTime.of(2026, 8, 24, 22, 0), next)
     }
 }

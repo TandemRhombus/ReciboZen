@@ -2,6 +2,24 @@
 
 Estado: desplegado y saludable el 11 de agosto de 2026.
 
+## Máquinas de trabajo
+
+| | Ruta del repo |
+|---|---|
+| PC principal (`emili`) | `C:UsersemiliAndroidStudioProjectsReciboZen` |
+| PC secundaria (`DESKTOP-FRUFKUU`, 192.168.3.200) | `C:UsersPC FACTOR WHITEsourceeposReciboZen` |
+
+Las dos tienen la llave de firma, la llave SSH de la Orange Pi y `ssh-agent`
+habilitado. Entre ellas hay SSH por llave; el shell remoto de la secundaria es
+`cmd.exe`, no bash.
+
+Desde Windows usa el binario nativo, no el de Git Bash — ese falla con
+`Permission denied`:
+
+```bash
+/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes orangepi@192.168.192.242 "comando"
+```
+
 ## Aislamiento actual
 
 - Directorio remoto: `/home/orangepi/recibozen/backend`.
@@ -34,8 +52,11 @@ Integrity, la compra y la cuenta en el backend, no de mantener secreta la URL.
 Desde una sesión SSH en el servidor:
 
 ```bash
+# Los dos archivos compose, siempre: sin compose.billing.yaml el contenedor
+# arranca sin la llave de entitlements ni la cuenta de servicio de Play, y
+# /readyz lo reporta como playBillingConfigured:false.
 cd /home/orangepi/recibozen/backend
-docker compose ps
+docker compose -f compose.yaml -f compose.billing.yaml ps
 docker compose logs --tail=100 api
 docker compose logs --tail=100 tunnel
 curl --fail --silent --show-error http://127.0.0.1:8787/healthz
@@ -102,11 +123,11 @@ los archivos versionados; `secrets/` permanece en el host. En el servidor:
 ```bash
 cd /home/orangepi/recibozen/backend
 node --test
-docker compose config --quiet
-docker compose build api
-docker compose up -d --no-deps api
-docker compose up -d --no-deps tunnel
-docker compose ps
+docker compose -f compose.yaml -f compose.billing.yaml config --quiet
+docker compose -f compose.yaml -f compose.billing.yaml build api
+docker compose -f compose.yaml -f compose.billing.yaml up -d --no-deps api
+docker compose -f compose.yaml -f compose.billing.yaml up -d --no-deps tunnel
+docker compose -f compose.yaml -f compose.billing.yaml ps
 ```
 
 El último comando debe mostrar `healthy`. Después se vuelve a comprobar SIM y

@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -54,6 +55,8 @@ import app.recibozen.android.core.designsystem.RzExtraShapes
 import app.recibozen.android.core.designsystem.RzIcons
 import app.recibozen.android.core.designsystem.RzSpacing
 import app.recibozen.android.core.designsystem.RzTheme
+import app.recibozen.android.core.calculation.RealizedSavings
+import app.recibozen.android.core.calculation.RealizedSavingsCalculator
 import app.recibozen.android.core.model.BillPeriod
 import app.recibozen.android.core.model.HistoryReadingEntry
 import app.recibozen.android.core.model.HistoryUnit
@@ -69,7 +72,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 data class HistoryUiState(
@@ -84,6 +90,11 @@ data class HistoryUiState(
     val pastBills: List<BillPeriod> = emptyList(),
     val historyUnit: HistoryUnit = HistoryUnit.MXN,
     val comparison: PastPeriodComparison? = null,
+    /**
+     * Consumption since the household started using ReciboZen against the same
+     * periods before it. Null until there is a start date to measure from.
+     */
+    val savings: RealizedSavings? = null,
     val readingsCountLabel: String = "0 lecturas recientes",
     val readings: List<HistoryReadingEntry> = emptyList(),
 )
@@ -92,7 +103,8 @@ class HistoryViewModel(private val repository: ReciboZenRepository) : ViewModel(
     val uiState: StateFlow<HistoryUiState> = combine(
         repository.session,
         repository.importedBillHistory,
-    ) { state, importedBills ->
+        repository.firstBillImportEpochDay,
+    ) { state, importedBills, firstBillImport ->
             val history = repository.billHistory(state)
             val projected = history.lastOrNull { it.isProjected }
             val energy = repository.energySummary(state)
@@ -107,6 +119,11 @@ class HistoryViewModel(private val repository: ReciboZenRepository) : ViewModel(
                 historyUnit = state.historyUnit,
                 readingsCountLabel = "${state.readings.size} lecturas recientes",
                 readings = state.readings,
+                savings = RealizedSavingsCalculator.compute(
+                    bills = importedBills,
+                    trackingStartEpochDay = RealizedSavingsCalculator.trackingStart(firstBillImport, state.readings),
+                    costOf = repository::estimateExactCostMxn,
+                ),
             )
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HistoryUiState())
@@ -185,6 +202,8 @@ fun HistoryScreen(
                     onClick = onImportBill,
                     modifier = Modifier.rzCoachAnchor(RzTourAnchors.HISTORY_IMPORT).fillMaxWidth(),
                 )
+
+                uiState.savings?.let { savings -> RealizedSavingsCard(savings) }
 
                 uiState.currentPeriod?.let { currentPeriod ->
                     CurrentPeriodProjectionCard(
@@ -422,6 +441,126 @@ private fun LegendSwatch(color: Color, modifier: Modifier = Modifier) {
             .size(10.dp)
             .background(color, RoundedCornerShape(2.dp)),
     ) {}
+}
+
+private val SINCE_FORMAT: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("MMMM 'de' yyyy", Locale.forLanguageTag("es-MX"))
+
+/**
+ * What the household consumed less since it started using ReciboZen, in pesos.
+ *
+ * Increases are shown and subtracted, never dropped: a card that only ever went
+ * up would be the one number in the app nobody could trust. And the method note
+ * is always visible, because "consumiste menos" is measurable and "ReciboZen te
+ * ahorró" is not.
+ */
+@Composable
+private fun RealizedSavingsCard(savings: RealizedSavings) {
+    val since = remember(savings.trackingStartEpochDay) {
+        LocalDate.ofEpochDay(savings.trackingStartEpochDay).format(SINCE_FORMAT)
+    }
+    RzCard(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            stringResource(R.string.history_savings_title),
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (savings.periods.isEmpty()) {
+            if (savings.periodsWithoutBaseline == 0) {
+                Text(
+                    stringResource(R.string.history_savings_pending, since),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(top = RzSpacing.sm),
+                )
+            }
+        } else {
+            val total = savings.totalSavedMxn
+            Text(
+                when {
+                    savings.isEven -> stringResource(R.string.history_savings_headline_even)
+                    total > 0 -> stringResource(R.string.history_savings_headline_saved, total)
+                    else -> stringResource(R.string.history_savings_headline_spent, abs(total))
+                },
+                style = MaterialTheme.typography.headlineSmall,
+                color = when {
+                    savings.isEven -> MaterialTheme.colorScheme.onSurface
+                    total > 0 -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.error
+                },
+                modifier = Modifier.padding(top = RzSpacing.xs),
+            )
+            val kwh = savings.totalSavedKwh
+            if (kwh != 0) {
+                Text(
+                    stringResource(
+                        if (kwh > 0) R.string.history_savings_kwh_saved else R.string.history_savings_kwh_spent,
+                        abs(kwh),
+                        since,
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+            savings.periods.forEach { period ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = RzSpacing.md),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            stringResource(R.string.history_savings_row_label, period.label, period.baselineLabel),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            stringResource(R.string.history_savings_row_detail, period.kwh, period.baselineKwh),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                    }
+                    Text(
+                        when {
+                            period.savedMxn > 0 -> stringResource(R.string.history_savings_row_saved, period.savedMxn)
+                            period.savedMxn < 0 -> stringResource(R.string.history_savings_row_spent, abs(period.savedMxn))
+                            else -> stringResource(R.string.history_amount_mxn, "0")
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                        color = when {
+                            period.savedMxn > 0 -> MaterialTheme.colorScheme.primary
+                            period.savedMxn < 0 -> MaterialTheme.colorScheme.error
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
+            }
+            Text(
+                pluralStringResource(R.plurals.history_savings_periods, savings.periods.size, savings.periods.size),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = RzSpacing.md),
+            )
+        }
+        if (savings.periodsWithoutBaseline > 0) {
+            Text(
+                pluralStringResource(
+                    R.plurals.history_savings_without_baseline,
+                    savings.periodsWithoutBaseline,
+                    savings.periodsWithoutBaseline,
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = RzSpacing.sm),
+            )
+        }
+        Text(
+            stringResource(R.string.history_savings_method),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.padding(top = RzSpacing.md),
+        )
+    }
 }
 
 @Composable

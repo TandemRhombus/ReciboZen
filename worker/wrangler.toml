@@ -35,7 +35,7 @@ LEASE_AUDIENCE = "app.recibozen.android"
 # It is a PUBLIC key: it belongs in the repo. That same endpoint warns against
 # fetching it at runtime, and it is right — asking the server you want to verify
 # for the key that verifies it verifies nothing.
-ENTITLEMENT_PUBLIC_KEY_B64 = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEwWgSF1fLrNI/7ZXzdSmQiS1eRV3pRS4HXdyZy4fr/9p6E9rgCkRyjP8D5atgiB4aXZxaWpPfi4vIZADObwqAkg=="
+ENTITLEMENT_PUBLIC_KEY_B64 = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEoUVlJmsoMx48pM7p75AHyXRz4qN4ckmc3WHIalprQVjZ5gx07byhUGMWGiWiX0SYMsEIB+SBK10G2cnE6vsV+g=="
 
 # Layer 4. A string because Workers vars are strings; the router parses it.
 # Empty or zero means the Worker refuses to spend anything at all — an

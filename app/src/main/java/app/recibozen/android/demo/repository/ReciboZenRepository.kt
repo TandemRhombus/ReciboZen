@@ -29,6 +29,13 @@ interface ReciboZenRepository {
     val importedBillHistory: StateFlow<List<BillPeriod>>
 
     /**
+     * Day the first bill of the active service was imported, or null when none
+     * has been. One half of when the household started using ReciboZen; the other
+     * half is its first hand-taken reading, which lives in the session.
+     */
+    val firstBillImportEpochDay: StateFlow<Long?>
+
+    /**
      * Tariff rates derived from the user's own imported bill, or null while no
      * bill has been imported (the estimate then falls back to generic blocks).
      * Screens read this to say whether a number came from real rates.
@@ -55,6 +62,13 @@ interface ReciboZenRepository {
      * it depends on which tier you are already in.
      */
     fun estimateCostMxn(kwh: Int): Int
+
+    /**
+     * Same tariff as [estimateCostMxn], unrounded. A difference between two
+     * rounded totals carries a peso that belongs to neither, and a sum of those
+     * differences carries one per bill.
+     */
+    fun estimateExactCostMxn(kwh: Int): Double
     fun activeTariffBlocks(): List<TariffBlock>
 
     /**
