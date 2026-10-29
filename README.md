@@ -1,5 +1,7 @@
 # ReciboZen
 
+[Read in English](README.en.md)
+
 Aplicación Android para consumidores domésticos de CFE en México. Calcula cuánto va a costar el próximo recibo, avisa antes de caer en la tarifa DAC y explica de dónde sale cada número.
 
 > **ReciboZen es un proyecto independiente.** No representa, no está afiliado ni respaldado por la Comisión Federal de Electricidad ni por ninguna entidad gubernamental. Las tarifas provienen de la [publicación oficial de CFE](https://app.cfe.mx/Aplicaciones/CCFE/Tarifas/TarifasCREHogar/Tarifas). Los montos son estimaciones para orientar; el recibo real lo determina CFE.
@@ -234,7 +236,7 @@ Detalles de operación en [`docs/BACKEND_OPERATIONS.md`](docs/BACKEND_OPERATIONS
 
 ## Estado
 
-En preparación para prueba cerrada en Google Play. La suscripción Plus existe en la consola pero **el candado está levantado a propósito** ([`Paywall.kt`](app/src/main/java/app/recibozen/android/core/model/Paywall.kt)): mientras no se pueda comprar, bloquear funciones le quitaría capacidades a todos sin cobrarle a nadie. Se reactiva en la misma versión que active los planes base.
+En prueba cerrada en Google Play. La suscripción Plus existe en la consola pero **el candado está levantado a propósito** ([`Paywall.kt`](app/src/main/java/app/recibozen/android/core/model/Paywall.kt)): mientras no se pueda comprar, bloquear funciones le quitaría capacidades a todos sin cobrarle a nadie. Se reactiva en la misma versión que active los planes base.
 
 Pendientes conocidos y honestos:
 
@@ -246,4 +248,4 @@ Pendientes conocidos y honestos:
 
 ## Licencia
 
-Sin licencia pública. Todos los derechos reservados.
+Todos los derechos reservados. El código es visible, pero no se concede permiso de uso, copia ni modificación. Ver [`LICENSE`](LICENSE).
