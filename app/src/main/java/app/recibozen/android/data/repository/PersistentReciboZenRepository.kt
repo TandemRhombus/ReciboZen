@@ -334,6 +334,9 @@ class PersistentReciboZenRepository(context: Context) : DemoReciboZenRepository(
 
     override fun premiumSubject(): String = premiumAccessStore.subject
 
+    /** Expiry of the lease that verifies right now, or null when there is none. */
+    fun premiumLeaseExpiresAtEpochSeconds(): Long? = premiumAccessStore.leaseExpiresAtEpochSeconds()
+
     override fun acceptPremiumLease(signedLease: String): EntitlementTier? {
         val acceptedTier = premiumAccessStore.acceptSignedLease(signedLease) ?: return null
         mutableSession.update { it.copy(entitlementTier = acceptedTier) }

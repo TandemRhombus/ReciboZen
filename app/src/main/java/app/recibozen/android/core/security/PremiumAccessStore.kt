@@ -46,6 +46,20 @@ class PremiumAccessStore(context: Context) {
     }
 
     /**
+     * When the stored lease stops being valid, or null when there is no lease
+     * that verifies right now -- missing, expired, or not ours. Null is what
+     * tells the renewer to go and ask Play.
+     */
+    fun leaseExpiresAtEpochSeconds(): Long? {
+        val lease = signedLease() ?: return null
+        val pinned = quotaSubject ?: return null
+        return when (val result = authority.verify(lease, pinned)) {
+            is EntitlementLeaseVerification.Accepted -> result.lease.expiresAtEpochSeconds
+            is EntitlementLeaseVerification.Rejected -> null
+        }
+    }
+
+    /**
      * Persists a lease and, the first time, the quota subject it carries.
      *
      * After that first lease the subject is pinned: a later one has to match.
