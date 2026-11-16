@@ -66,8 +66,8 @@ import org.json.JSONObject
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-private const val PLUS_PRODUCT_ID = "recibozen_plus_monthly"
-private const val FAMILY_PRODUCT_ID = "recibozen_family_monthly"
+internal const val PLUS_PRODUCT_ID = "recibozen_plus_monthly"
+internal const val FAMILY_PRODUCT_ID = "recibozen_family_monthly"
 
 data class PremiumOffer(
     val productId: String,
@@ -424,7 +424,7 @@ class PremiumPurchaseCoordinator(
     }
 }
 
-private class PremiumIntegrityClient(context: Context) {
+internal class PremiumIntegrityClient(context: Context) {
     private val manager = IntegrityManagerFactory.createStandard(context.applicationContext)
     private var provider: StandardIntegrityManager.StandardIntegrityTokenProvider? = null
 
@@ -453,7 +453,7 @@ private class PremiumIntegrityClient(context: Context) {
         }
 }
 
-private class PremiumExchangeClient {
+internal class PremiumExchangeClient {
     suspend fun exchange(subject: String, productId: String, purchaseToken: String, integrityToken: String): String =
         withContext(Dispatchers.IO) {
             val connection = (URL("${BuildConfig.API_BASE_URL.trimEnd('/')}/v1/entitlements/exchange").openConnection() as HttpURLConnection).apply {

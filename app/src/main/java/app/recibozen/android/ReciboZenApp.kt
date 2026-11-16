@@ -12,8 +12,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
@@ -24,6 +26,8 @@ import app.recibozen.android.core.components.RzCoachStep
 import app.recibozen.android.core.components.rememberRzCoachMarkState
 import app.recibozen.android.core.designsystem.ReciboZenTheme
 import app.recibozen.android.data.repository.PersistentReciboZenRepository
+import app.recibozen.android.feature.premium.PremiumLeaseRenewer
+import kotlinx.coroutines.launch
 import app.recibozen.android.demo.repository.ReciboZenRepository
 import app.recibozen.android.navigation.ReciboZenNavHost
 import app.recibozen.android.navigation.Routes
@@ -47,6 +51,9 @@ fun ReciboZenApp(repository: ReciboZenRepository? = null) {
             }
             return@ReciboZenTheme
         }
+        // Only once hydrated: hydration writes the tier it read at startup, and a
+        // renewal landing before it would be overwritten by that older value.
+        (effectiveRepository as? PersistentReciboZenRepository)?.let { PremiumLeaseRenewalEffect(it) }
         val navController = rememberNavController()
         val backStackEntry by navController.currentBackStackEntryAsState()
         val currentRoute = backStackEntry?.destination?.route
@@ -109,3 +116,28 @@ internal val tourSteps = listOf(
     RzCoachStep(RzTourAnchors.PLAN_ACTIONS, R.string.coach_plan_title, R.string.coach_plan_body, Routes.Plan),
     RzCoachStep(RzTourAnchors.HISTORY_IMPORT, R.string.coach_history_title, R.string.coach_history_body, Routes.History),
 )
+
+/**
+ * Renews the premium lease every time the app comes to the foreground, if it is
+ * missing or close to expiring. See [PremiumLeaseRenewer] for why this cannot be
+ * left to the Premium screen.
+ */
+@Composable
+private fun PremiumLeaseRenewalEffect(repository: PersistentReciboZenRepository) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val renewer = remember(repository) {
+        PremiumLeaseRenewer(
+            context = context.applicationContext,
+            subject = repository::premiumSubject,
+            leaseExpiresAtEpochSeconds = repository::premiumLeaseExpiresAtEpochSeconds,
+            onSignedLease = repository::acceptPremiumLease,
+        )
+    }
+    LifecycleStartEffect(renewer) {
+        // Main, like the Premium screen: Billing calls back there, and the exchange
+        // moves itself to IO for the network.
+        val job = scope.launch { renewer.renewIfNeeded() }
+        onStopOrDispose { job.cancel() }
+    }
+}
