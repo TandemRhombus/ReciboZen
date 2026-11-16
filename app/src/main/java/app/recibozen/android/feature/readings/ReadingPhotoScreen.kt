@@ -56,6 +56,8 @@ import app.recibozen.android.core.designsystem.RzTheme
 import app.recibozen.android.core.model.ReadingMethod
 import app.recibozen.android.core.calculation.MeterProfile
 import app.recibozen.android.core.ocr.MeterReadingParser
+import app.recibozen.android.core.ocr.OcrRows
+import app.recibozen.android.core.ocr.OcrWord
 import app.recibozen.android.demo.repository.ReciboZenRepository
 import app.recibozen.android.navigation.Routes
 import app.recibozen.android.navigation.rzViewModel
@@ -103,9 +105,19 @@ class ReadingPhotoViewModel(private val repository: ReciboZenRepository) : ViewM
         recognizer.process(image)
             .addOnSuccessListener { text ->
                 val session = repository.session.value
+                val words = text.textBlocks.flatMap { it.lines }.flatMap { it.elements }.mapNotNull { element ->
+                    element.boundingBox?.let { box -> OcrWord(element.text, box.left, box.top, box.right, box.bottom) }
+                }
                 val reading = MeterReadingParser.parse(
-                    text = text.text,
-                    previousReadingKwh = session.lastConfirmedReadingKwh,
+                    // The recognizer's own text and the rows rebuilt from word
+                    // positions are read together. Candidates are de-duplicated,
+                    // so agreement costs nothing and a disagreement is refused.
+                    text = text.text + "\n" + OcrRows.reassemble(words),
+                    // Zero with no history is the session default, not a reading
+                    // anyone took. Passed as a number it would reject any meter
+                    // past 10,000 kWh on its first photo.
+                    previousReadingKwh = session.lastConfirmedReadingKwh
+                        .takeIf { it > 0 || session.readings.isNotEmpty() },
                     meterDigitCount = MeterProfile.digitCount(session.meterType, session.meterDigitCount),
                 )
                 if (reading != null) {

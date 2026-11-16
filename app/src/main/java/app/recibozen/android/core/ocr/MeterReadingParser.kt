@@ -34,12 +34,16 @@ object MeterReadingParser {
     /** Standalone unit tokens that mark a rating line, not a reading. */
     private val RATING_UNITS = setOf("W", "V", "A", "HZ", "KW", "VA", "KVA", "PH", "FASES")
 
-    fun parse(text: String, previousReadingKwh: Int, meterDigitCount: Int? = null): Int? {
+    /**
+     * @param previousReadingKwh the last confirmed reading, or null when the
+     *   household has none yet. Null widens the window to anything the register
+     *   can show; it must not be passed as 0, which would reject every meter
+     *   that has already counted past [MAX_FORWARD_KWH].
+     */
+    fun parse(text: String, previousReadingKwh: Int?, meterDigitCount: Int? = null): Int? {
         val candidates = text.lineSequence()
             .filterNot(::describesTheMeter)
-            .flatMap { line -> line.split(Regex("\\s+")).asSequence() }
-            .map(::normalizeToken)
-            .map { it.filter(Char::isDigit) }
+            .flatMap(::numberCandidates)
             .filter { it.isNotEmpty() && it.length == (meterDigitCount ?: it.length) }
             .filter { it.length in MIN_DIGITS..MAX_DIGITS }
             .mapNotNull { it.toIntOrNull() }
@@ -60,6 +64,50 @@ object MeterReadingParser {
         return credible.single()
     }
 
+    /**
+     * Every number a line could be offering as the reading: each token on its
+     * own, plus each run of consecutive digit-only tokens glued back together.
+     *
+     * The runs are for drum registers. Each digit sits behind its own window,
+     * and the recognizer reads the frame between windows as a space, so
+     * `04521` arrives as `0 4 5 2 1`. Taken token by token that is five
+     * one-digit numbers, all discarded, and the photo of a perfectly legible
+     * meter "has no reading". Gluing a run can only add candidates; the digit
+     * count, the plausible window and the refusal on ambiguity still decide.
+     */
+    private fun numberCandidates(line: String): Sequence<String> {
+        val tokens = line.split(WHITESPACE).filter(String::isNotEmpty)
+        val singles = tokens.map { normalizeToken(it).filter(Char::isDigit) }
+        val runs = mutableListOf<String>()
+        val run = StringBuilder()
+        var pieces = 0
+        fun closeRun() {
+            if (pieces >= 2) runs += run.toString()
+            run.setLength(0)
+            pieces = 0
+        }
+        for (token in tokens) {
+            val digits = registerPiece(token)
+            if (digits == null) closeRun() else {
+                run.append(digits)
+                pieces++
+            }
+        }
+        closeRun()
+        return (singles + runs).asSequence()
+    }
+
+    /**
+     * The digits [token] contributes to a split register, or null when it is
+     * not a piece of one. A lone `O` or `I` between windows is a misread 0 or 1
+     * far more often than a word, so single characters get the same repair that
+     * [normalizeToken] only applies to tokens already carrying two digits.
+     */
+    private fun registerPiece(token: String): String? {
+        val repaired = if (token.length == 1) normalizeChar(token.uppercase().single()).toString() else normalizeToken(token)
+        return repaired.takeIf { it.all(Char::isDigit) }
+    }
+
     private fun describesTheMeter(line: String): Boolean {
         val upper = line.uppercase()
         if (NAMEPLATE_MARKERS.any { upper.contains(it) }) return true
@@ -68,23 +116,30 @@ object MeterReadingParser {
 
     private fun normalizeToken(token: String): String {
         if (token.count(Char::isDigit) < 2) return token
-        return token.uppercase()
-            .replace('O', '0')
-            .replace('Q', '0')
-            .replace('I', '1')
-            .replace('L', '1')
-            .replace('S', '5')
-            .replace('B', '8')
+        return token.uppercase().map(::normalizeChar).joinToString("")
+    }
+
+    private fun normalizeChar(char: Char): Char = when (char) {
+        'O', 'Q' -> '0'
+        'I', 'L' -> '1'
+        'S' -> '5'
+        'B' -> '8'
+        else -> char
     }
 
     /**
      * A register only ever moves forward, so anything below the previous reading
      * is either a wrap or a misread, and neither is this function's call to make.
      * The upper bound keeps a stray long number from passing as a reading.
+     *
+     * With no previous reading there is nothing to anchor a window to, so every
+     * value is admitted and the digit count and the ambiguity check do the work.
      */
-    private fun plausibleRange(previousReadingKwh: Int): IntRange =
-        previousReadingKwh..(previousReadingKwh + MAX_FORWARD_KWH)
+    private fun plausibleRange(previousReadingKwh: Int?): IntRange =
+        if (previousReadingKwh == null) 0..Int.MAX_VALUE
+        else previousReadingKwh..(previousReadingKwh + MAX_FORWARD_KWH)
 
+    private val WHITESPACE = Regex("\\s+")
     private const val MIN_DIGITS = 4
     private const val MAX_DIGITS = 7
     private const val MAX_FORWARD_KWH = 10_000

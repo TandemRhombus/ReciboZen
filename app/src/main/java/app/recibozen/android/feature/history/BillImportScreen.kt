@@ -30,7 +30,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -40,7 +39,6 @@ import app.recibozen.android.core.importer.BillImportResult
 import app.recibozen.android.core.importer.BillParseResult
 import app.recibozen.android.core.importer.CfeBillTextParser
 import app.recibozen.android.core.importer.CfePdfDocumentExtractor
-import app.recibozen.android.core.importer.CfePhotoDocumentExtractor
 import app.recibozen.android.core.importer.ParsedCfeBill
 import app.recibozen.android.core.importer.ParsedBillHistoryRow
 import app.recibozen.android.core.calculation.TariffCatalog
@@ -54,7 +52,6 @@ import app.recibozen.android.core.designsystem.RzSpacing
 import app.recibozen.android.core.designsystem.RzTheme
 import app.recibozen.android.demo.repository.ReciboZenRepository
 import app.recibozen.android.navigation.rzViewModel
-import java.io.File
 import java.time.LocalDate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -71,36 +68,16 @@ sealed interface BillImportUiState {
 
 class BillImportViewModel(context: Context, private val repository: ReciboZenRepository) : ViewModel() {
     private val extractor = CfePdfDocumentExtractor(context.applicationContext)
-    private val photoExtractor = CfePhotoDocumentExtractor(context.applicationContext)
     private val parser = CfeBillTextParser()
     private val mutableUiState = MutableStateFlow<BillImportUiState>(BillImportUiState.Idle)
     val uiState: StateFlow<BillImportUiState> = mutableUiState.asStateFlow()
     private var sourceHash: String? = null
 
-    /**
-     * Photographed paper bill. Same parser and same editable review as the PDF
-     * path; only the text source differs. Always flagged as OCR so the review
-     * screen tells the user to double-check.
-     */
-    fun processPhoto(uri: Uri) {
-        mutableUiState.value = BillImportUiState.Processing
-        viewModelScope.launch {
-            photoExtractor.extract(uri).fold(
-                onSuccess = { document ->
-                    sourceHash = document.sha256
-                    mutableUiState.value = when (val parsed = parser.parse(document.text)) {
-                        is BillParseResult.Success -> BillImportUiState.Review(parsed.bill, usedOcr = true)
-                        is BillParseResult.Failure -> BillImportUiState.Error(parsed.reasons.joinToString("\n"))
-                    }
-                },
-                onFailure = { error ->
-                    mutableUiState.value = BillImportUiState.Error(
-                        error.message ?: "No se pudo leer la fotografía del recibo.",
-                    )
-                },
-            )
-        }
-    }
+    // There is no photographed-bill path. It fed photo OCR into the parser
+    // written for the PDF text layer, which expects each value next to its
+    // label; a photo's text comes back in column blocks, so a required field
+    // was nearly always missing and the import failed. The PDF and manual
+    // entry cover the same need reliably.
 
     fun process(uri: Uri) {
         mutableUiState.value = BillImportUiState.Processing
@@ -163,22 +140,10 @@ fun BillImportRoute(navController: NavHostController, repository: ReciboZenRepos
         uri?.let(viewModel::process)
     }
 
-    var pendingPhotoUri by remember { mutableStateOf<Uri?>(null) }
-    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { captured ->
-        if (captured) pendingPhotoUri?.let(viewModel::processPhoto) else pendingPhotoUri = null
-    }
-
     BillImportScreen(
         uiState = uiState,
         onBack = { navController.popBackStack() },
         onChoosePdf = { launcher.launch(arrayOf("application/pdf")) },
-        onPhotographBill = {
-            val directory = File(context.cacheDir, "bill_photos").apply { mkdirs() }
-            val target = File(directory, "bill_${System.currentTimeMillis()}.jpg")
-            val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", target)
-            pendingPhotoUri = uri
-            cameraLauncher.launch(uri)
-        },
         onConfirm = viewModel::confirm,
         onRetry = viewModel::reset,
         onDone = { navController.popBackStack() },
@@ -193,7 +158,6 @@ fun BillImportScreen(
     onConfirm: (ParsedCfeBill) -> Unit,
     onRetry: () -> Unit,
     onDone: () -> Unit,
-    onPhotographBill: () -> Unit = {},
 ) {
     Scaffold(topBar = { RzFlowTopBar(title = stringResource(R.string.bill_import_title), onBack = onBack) }) { padding ->
         Column(
@@ -208,12 +172,6 @@ fun BillImportScreen(
                 BillImportUiState.Idle -> {
                     Text(stringResource(R.string.bill_import_intro), style = MaterialTheme.typography.bodyLarge)
                     RzPrimaryButton(stringResource(R.string.bill_import_choose), onChoosePdf, Modifier.fillMaxWidth())
-                    RzSecondaryButton(stringResource(R.string.bill_import_photograph), onPhotographBill, Modifier.fillMaxWidth())
-                    Text(
-                        stringResource(R.string.bill_import_photograph_hint),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                     Text(stringResource(R.string.bill_import_privacy), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
                 }
                 BillImportUiState.Processing -> {
@@ -260,8 +218,8 @@ fun BillImportScreen(
 }
 
 /**
- * Editable review step. Text recognition — especially from a photo of a paper
- * bill — routinely confuses O/0, 1/7 and S/5, so every value that feeds the
+ * Editable review step. Text recognition — the fallback for a scanned PDF with
+ * no text layer — routinely confuses O/0, 1/7 and S/5, so every value that feeds the
  * estimate has to be correctable here. Confirming an uncorrectable misread
  * would persist a wrong number wearing the face of verified data.
  */
