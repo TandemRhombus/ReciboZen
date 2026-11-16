@@ -66,6 +66,47 @@ class MeterReadingParserTest {
         assertNull(MeterReadingParser.parse(listOf("18420", "18426").joinToString(System.lineSeparator()), 18_397))
     }
 
+    // --- Drum registers: one window per digit ---
+
+    @Test
+    fun aDrumRegisterReadDigitByDigitIsGluedBackIntoOneReading() {
+        // The frame between windows comes back as a space. Token by token this
+        // is five one-digit numbers and the photo "has no reading".
+        assertEquals(4_521, MeterReadingParser.parse("kWh\n0 4 5 2 1", 4_480, meterDigitCount = 5))
+        assertEquals(18_426, MeterReadingParser.parse("1 8 4 2 6", 18_397))
+    }
+
+    @Test
+    fun aLoneLetterBetweenWindowsIsRepairedAsTheDigitItResembles() {
+        assertEquals(4_521, MeterReadingParser.parse("O 4 5 2 I", 4_480, meterDigitCount = 5))
+    }
+
+    @Test
+    fun gluingAddsCandidatesButNeverOverridesTheAmbiguityRefusal() {
+        // The glued run and the standalone value are both credible.
+        assertNull(MeterReadingParser.parse("1 8 4 2 6\n18430", 18_397))
+    }
+
+    @Test
+    fun aGluedRunOnANameplateLineIsStillDiscarded() {
+        assertNull(MeterReadingParser.parse("SERIE 0 4 5 2 1", 4_480, meterDigitCount = 5))
+    }
+
+    // --- First reading: there is no previous value to anchor a window to ---
+
+    @Test
+    fun theFirstReadingIsNotConfinedToTenThousandAboveZero() {
+        // The session default of 0 used to be passed as the previous reading,
+        // so a meter past 10,000 kWh could never be read on its first photo.
+        assertEquals(34_512, MeterReadingParser.parse("LECTURA 34512", null, meterDigitCount = 5))
+        assertEquals(34_512, MeterReadingParser.parse("3 4 5 1 2", null))
+    }
+
+    @Test
+    fun theFirstReadingStillRefusesTwoCandidates() {
+        assertNull(MeterReadingParser.parse("34512\n87120", null, meterDigitCount = 5))
+    }
+
     @Test
     fun aValueBelowThePreviousReadingIsNotTreatedAsAReading() {
         // It may be a wrapped register, but that is MeterDelta's call to make on

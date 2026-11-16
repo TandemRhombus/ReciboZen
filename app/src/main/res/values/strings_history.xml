@@ -4,8 +4,6 @@
     <string name="bill_import_intro">Elige tu recibo de CFE en PDF. Sacamos los datos y los revisas antes de guardar.</string>
     <string name="bill_import_choose">Elegir PDF</string>
     <string name="bill_import_privacy">El archivo se procesa en este teléfono. No guardamos el PDF original ni enviamos su texto a analítica.</string>
-    <string name="bill_import_photograph">Fotografiar recibo impreso</string>
-    <string name="bill_import_photograph_hint">¿No tienes el PDF? Toma una foto del recibo. Se lee menos preciso, pero puedes corregir cada dato.</string>
     <string name="bill_import_processing">Leyendo y validando el recibo…</string>
     <string name="bill_import_review_title">Revisa lo detectado</string>
     <string name="bill_import_service">Servicio</string>
